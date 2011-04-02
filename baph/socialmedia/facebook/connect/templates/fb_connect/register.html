@@ -1,0 +1,13 @@
+<!DOCTYPE html>{# vim: set ft=htmljinja : #}
+<html>
+    <head>
+        <title>{% trans %}Register via Facebook Connect{% endtrans %}</title>
+    </head>
+    <body>
+        {% include "fb_connect/login-button.html" %}
+        {% include "fb_connect/javascript.html" %}
+        <script type="text/javascript">
+        facebook_connect(document.getElementById('fb-connect'));
+        </script>
+    </body>
+</html>

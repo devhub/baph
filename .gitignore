@@ -1,0 +1,5 @@
+*.egg-info
+*.pyc
+.*.sw?
+build
+docs/build
