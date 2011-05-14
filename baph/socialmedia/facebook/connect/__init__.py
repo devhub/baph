@@ -51,7 +51,12 @@ class FacebookConnectBackend(object):
                                                 session=session)
                     user_obj.first_name = fb_user['first_name']
                     user_obj.last_name = fb_user['last_name']
-                    profile = FacebookProfile(user=user_obj, uid=uid)
+                    profile = FacebookProfile(
+                        user=user_obj,
+                        uid=uid,
+                        access_token=params['access_token'],
+                        expires_in=params['expires'],
+                    )
                     session.add(profile)
                     session.commit()
                 else:
