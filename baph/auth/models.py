@@ -237,6 +237,30 @@ settings''')
         else:
             user.set_unusable_password()
         session.add(user)
+        '''Create user profile if defined'''
+        from django.conf import settings
+        if getattr(settings, 'AUTH_PROFILE_MODULE', False) and \
+           getattr(settings, 'AUTH_PROFILE_AUTO_CREATE', False):
+            try:
+                app_label, model_name = settings.AUTH_PROFILE_MODULE \
+                                                .rsplit('.', 1)
+            except ValueError:
+                raise SiteProfileNotAvailable('''\
+app_label and model_name should be separated by a dot in the
+AUTH_PROFILE_MODULE setting''')
+            try:
+                module = import_module(app_label)
+                model_cls = getattr(module, model_name, None)
+                if model_cls is None:
+                    raise SiteProfileNotAvailable('''\
+Unable to load the profile model, check AUTH_PROFILE_MODULE in your project
+settings''')
+                session.commit()
+                profile = model_cls(user_id=user.id)
+                session.add(profile)
+                session.commit()
+            except (ImportError, ImproperlyConfigured):
+                raise SiteProfileNotAvailable
         session.commit()
         return user
 
