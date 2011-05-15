@@ -224,12 +224,14 @@ settings''')
         return unicode(self.username)
 
     @classmethod
-    def create_user(cls, username, email, password=None, session=None):
+    def create_user(cls, username, email, password=None, session=None,
+                    first_name=None, last_name=None):
         '''Creates a new User.'''
         if not session:
             session = orm.sessionmaker()
-        user = cls(username=username, email=email, is_staff=False,
-                   is_active=True, is_superuser=False)
+        user = cls(username=username, email=email, first_name=first_name,
+                   last_name=last_name, is_staff=False, is_active=True,
+                   is_superuser=False)
         if password:
             user.set_password(password)
         else:
