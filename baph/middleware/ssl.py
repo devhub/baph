@@ -43,7 +43,8 @@ class SSLRedirect(object):
             secure = False
 
         if secure != self.is_secure(request) and \
-           request.META.get('HTTP_HOST') in settings.SSL_DOMAINS:
+           request.META.get('HTTP_HOST') in getattr(settings,
+                                                    'SSL_DOMAINS', []):
             return self.redirect(request, secure)
 
     def is_secure(self, request):
