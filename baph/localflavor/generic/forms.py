@@ -38,7 +38,6 @@ STATE_PROVINCE_CHOICES = \
                        [_get_country_divisions(country, 'state')
                         for country in COUNTRY_STATES])))
 
-
 class CountryField(forms.ChoiceField):
     '''A country field, an uppercase two-letter ISO 3166-1 standard country
     code. Countries are defined in
@@ -49,15 +48,12 @@ class CountryField(forms.ChoiceField):
     .. _`Country Code List`: http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2
     '''
 
-    widget = forms.Select(attrs={
-        'class': 'localflavor-generic-country',
-    })
-
     def __init__(self, *args, **kwargs):
         from . import COUNTRIES
-
         kwargs.setdefault('choices', COUNTRIES)
-
+        kwargs['widget'] = forms.Select(attrs={
+            'class': 'localflavor-generic-country',
+        })
         super(CountryField, self).__init__(*args, **kwargs)
 
 
@@ -107,14 +103,11 @@ class StateProvinceField(forms.ChoiceField):
     not required, because there are countries without political divisions.
     '''
 
-    widget = StateProvinceSelect(attrs={
-        'class': 'localflavor-generic-stateprovince',
-    })
-
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('choices', STATE_PROVINCE_CHOICES)
-        kwargs.setdefault('required', False)
-
+        kwargs['widget'] = StateProvinceSelect(attrs={
+            'class': 'localflavor-generic-stateprovince',
+        })
         super(StateProvinceField, self).__init__(*args, **kwargs)
 
     def check_value(self, division, country):
