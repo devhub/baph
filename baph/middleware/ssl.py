@@ -48,7 +48,8 @@ class SSLRedirect(object):
             return self.redirect(request, secure)
 
     def is_secure(self, request):
-        return request.is_secure()
+        return request.is_secure() or \
+            request.META.get('X_HTTP_CONNECTION_TYPE') == 'https'
 
     def redirect(self, request, secure):
         protocol = 'https' if secure else 'http'
