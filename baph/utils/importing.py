@@ -18,24 +18,16 @@ def import_any_module(modules, raise_error=True):
     :returns: A module or :const:`None`, if no module could be found and
               ``raise_error`` is :const:`False`.
     '''
-    # This hack avoids ImproperlyConfigured errors due to usage of backends
-    # that Django doesn't know about but SQLAlchemy does.
-    old_default = settings.DATABASES['default']
-    settings.DATABASES['default'] = {'ENGINE': ''}
-    try:
-        mod = None
-        for module in modules:
-            try:
-                mod = import_module(module)
-            except ImportError:
-                pass
-            else:
-                break
-        if mod is None and raise_error:
-            raise ImportError('Could not import any of %s' % (modules,))
-    finally:
-        # Revert the hack from above
-        settings.DATABASES['default'] = old_default
+    mod = None
+    for module in modules:
+        try:
+            mod = import_module(module)
+        except ImportError:
+            pass
+        else:
+            break
+    if mod is None and raise_error:
+        raise ImportError('Could not import any of %s' % (modules,))
 
     return mod
 
