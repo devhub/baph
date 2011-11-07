@@ -30,6 +30,11 @@ from django.conf import settings
                 ['AnonymousUser', 'check_password', 'get_hexdigest',
                  'SiteProfileNotAvailable', 'UNUSABLE_PASSWORD'])
 from django.core.exceptions import ImproperlyConfigured
+try:
+    # global variable needed for django 1.3
+    from django.utils.crypto import constant_time_compare
+except:
+    pass
 from django.utils.encoding import smart_str
 from django.utils.importlib import import_module
 from django.utils.translation import ugettext as _
