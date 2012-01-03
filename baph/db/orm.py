@@ -42,6 +42,11 @@ class ORM(object):
 The database ORM connection requires, at minimum, an engine type.''')
         if '.' in data['ENGINE']:
             data['ENGINE'] = data['ENGINE'].rsplit('.', 1)[-1]
+
+        # django needs sqlite3 but sqlalchemy references sqlite
+        if data['ENGINE'] == 'sqlite3':
+            data['ENGINE'] = 'sqlite'
+
         self.engine = self._create_engine(data)
         ro_values = dict([(k[9:], v) for k, v in data.iteritems()
                              if k.startswith('READONLY_')])
