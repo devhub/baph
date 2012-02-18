@@ -46,6 +46,8 @@ The database ORM connection requires, at minimum, an engine type.''')
         # django needs sqlite3 but sqlalchemy references sqlite
         if data['ENGINE'] == 'sqlite3':
             data['ENGINE'] = 'sqlite'
+        elif data['ENGINE'] == 'postgresql_psycopg2':
+            data['ENGINE'] = 'postgresql'
 
         self.engine = self._create_engine(data)
         ro_values = dict([(k[9:], v) for k, v in data.iteritems()
