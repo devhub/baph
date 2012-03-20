@@ -100,7 +100,7 @@ class RegistrationProfile(orm.Base, Model):
         ``site``
             An object representing the site on which the user
             registered; depending on whether :mod:`baph.sites` is installed,
-            this may be an instance of either :class:`baph.sites.models.Site`
+            this may be an instance of either :class:`baph.sites.models.DjangoSite`
             (if the sites application is installed) or
             :class:`baph.sites.models.RequestSite` (if not). Consult the
             documentation for the Django/Baph sites framework for details
@@ -177,7 +177,7 @@ class RegistrationProfile(orm.Base, Model):
         :param password: The password of the user.
         :type password: :class:`unicode`
         :param site: The site associated with the user.
-        :type site: :class:`baph.sites.models.Site` or
+        :type site: :class:`baph.sites.models.DjangoSite` or
                     :class:`baph.sites.models.RequestSite`
         :param send_email: Whether an activation email will be sent to the new
                            user.
