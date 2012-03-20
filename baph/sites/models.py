@@ -11,14 +11,14 @@ from baph.utils.importing import import_attr
 RequestSite = import_attr(['django.contrib.sites.models'], 'RequestSite')
 from sqlalchemy import Column, Integer, String, Unicode
 
-__all__ = ['orm', 'RequestSite', 'Site']
+__all__ = ['orm', 'RequestSite', 'DjangoSite']
 
 orm = ORM.get()
 SITE_CACHE = {}
 
 
-class Site(orm.Base, Model):
-    '''A port of :class:`django.contrib.sites.models.Site`.'''
+class DjangoSite(orm.Base, Model):
+    '''A port of :class:`django.contrib.sites.models.DjangoSite`.'''
     __tablename__ = 'django_site'
 
     id = Column(Integer, primary_key=True)
@@ -33,7 +33,7 @@ class Site(orm.Base, Model):
 
     @sqlalchemy_session
     def save(self, session=None):
-        '''Commits the changes to the :class:`Site` and invalidates the cached
+        '''Commits the changes to the :class:`DjangoSite` and invalidates the cached
         version, if any.
         '''
         session.commit()
@@ -52,8 +52,8 @@ class Site(orm.Base, Model):
     @classmethod
     @sqlalchemy_session
     def get_current(cls, session=None):
-        '''Returns the current :class:`Site` based on the :setting:`SITE_ID`
-        in the project's settings. The :class:`Site` object is cached the
+        '''Returns the current :class:`DjangoSite` based on the :setting:`SITE_ID`
+        in the project's settings. The :class:`DjangoSite` object is cached the
         first time it's retrieved from the database.
         '''
         from django.conf import settings
@@ -72,7 +72,7 @@ this error.''')
 
     @staticmethod
     def clear_cache():
-        '''Clears the :class:`Site` object cache.'''
+        '''Clears the :class:`DjangoSite` object cache.'''
         global SITE_CACHE
         SITE_CACHE = {}
 
@@ -80,10 +80,10 @@ this error.''')
 @sqlalchemy_session
 def get_current_site(request, session=None):
     '''Checks if :mod:`baph.sites` is installed and returns either the current
-    :class:`Site` object or a :class:`RequestSite` object based on the request.
+    :class:`DjangoSite` object or a :class:`RequestSite` object based on the request.
     '''
-    if Site.__table__.exists():
-        current_site = Site.get_current(session=session)
+    if DjangoSite.__table__.exists():
+        current_site = DjangoSite.get_current(session=session)
     else:
         current_site = RequestSite(request)
     return current_site
