@@ -74,6 +74,8 @@ The database ORM connection requires, at minimum, an engine type.''')
                 netloc += '@%s' % data['HOST']
             else:
                 netloc += '@localhost'
+            if data.get('PORT', '') != '':
+                netloc += ':%s' % data['PORT']
         elif data.get('HOST', '') != '':
             netloc = data['HOST']
         url_parts = (data['ENGINE'], netloc, data.get('NAME', ''), '', '', '')
