@@ -24,10 +24,10 @@ from baph.db.types import UUID
 from baph.utils.importing import import_attr
 from datetime import datetime
 from django.conf import settings
-(AnonymousUser, check_password, base_get_hexdigest, SiteProfileNotAvailable,
+(AnonymousUser, check_password, SiteProfileNotAvailable,
  UNUSABLE_PASSWORD) = \
     import_attr(['django.contrib.auth.models'],
-                ['AnonymousUser', 'check_password', 'get_hexdigest',
+                ['AnonymousUser', 'check_password',
                  'SiteProfileNotAvailable', 'UNUSABLE_PASSWORD'])
 from django.core.exceptions import ImproperlyConfigured
 try:
@@ -48,7 +48,7 @@ import uuid
 orm = ORM.get()
 
 AUTH_USER_FIELD_TYPE = getattr(settings, 'AUTH_USER_FIELD_TYPE', 'UUID')
-AUTH_USER_FIELD = UUID if AUTH_USER_FIELD_TYPE == 'UUID' else Integer(10)
+AUTH_USER_FIELD = UUID if AUTH_USER_FIELD_TYPE == 'UUID' else Integer
 
 
 def get_hexdigest(algorithm, salt, raw_password):
@@ -59,10 +59,10 @@ def get_hexdigest(algorithm, salt, raw_password):
     '''
     if (hasattr(hashlib, 'algorithms') and algorithm in hashlib.algorithms):
         return hashlib.new(algorithm, salt + raw_password).hexdigest()
-    elif algorithm in ('sha224', 'sha256', 'sha384', 'sha512'):
+    elif algorithm in ('sha1', 'sha224', 'sha256', 'sha384', 'sha512', 'md5'):
         return getattr(hashlib, algorithm)(salt + raw_password).hexdigest()
     else:
-        return base_get_hexdigest(algorithm, salt, raw_password)
+        raise Exception('Unsupported algorithm "%s"' % algorithm)
 
 # fun with monkeypatching
 exec inspect.getsource(check_password)
@@ -72,7 +72,7 @@ def _generate_user_id_column():
         return Column(AUTH_USER_FIELD, primary_key=True)
     return Column(UUID, primary_key=True, default=uuid.uuid4)
 
-class User(orm.Base, Model):
+class BaseUser(orm.Base, Model):
     '''The SQLAlchemy model for Django's ``auth_user`` table.
     Users within the Django authentication system are represented by this
     model.
@@ -292,3 +292,26 @@ settings''')
         session.add(user)
         session.commit()
         return user
+        
+user_cls = getattr(settings, 'BAPH_USER_CLASS', None)
+if user_cls:
+    try:
+        app_label, model_name = user_cls.rsplit('.', 1)
+    except ValueError:
+        raise exceptions.ImproperlyConfigured('''\
+    app_label and model_name should be separated by a dot in the
+    BAPH_USER_CLASS setting''')
+
+    try:
+        module = import_module(app_label)
+        model_cls = getattr(module, model_name, None)
+        if model_cls is None:
+            raise exceptions.ImproperlyConfigured('''\
+    Unable to load the user profile model, check BAPH_USER_CLASS in your project
+    settings''')
+    except (ImportError, ImproperlyConfigured):
+        raise Exception
+
+    User = model_cls
+else:
+    User = BaseUser
