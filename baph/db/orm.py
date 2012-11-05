@@ -10,7 +10,9 @@
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.encoding import smart_str
+from django.utils.importlib import import_module
 from sqlalchemy import create_engine, MetaData, Table
+from sqlalchemy import event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import mapper, sessionmaker, scoped_session
 from sqlalchemy.pool import NullPool
@@ -18,6 +20,54 @@ from sqlalchemy.sql.expression import Join
 import urllib
 from urlparse import urlunparse
 
+
+def get_connection_settings(name):
+    data = {}
+    ro_data = {}
+    if hasattr(settings, 'DATABASES') and name in settings.DATABASES:
+        data = settings.DATABASES[name]
+    if data.get('ENGINE', '') == '':
+        raise ImproperlyConfigured('''\
+The database ORM connection requires, at minimum, an engine type.''')
+    if '.' in data['ENGINE']:
+        data['ENGINE'] = data['ENGINE'].rsplit('.', 1)[-1]
+
+    # django needs sqlite3 but sqlalchemy references sqlite
+    if data['ENGINE'] == 'sqlite3':
+        data['ENGINE'] = 'sqlite'
+    elif data['ENGINE'] == 'postgresql_psycopg2':
+        data['ENGINE'] = 'postgresql'
+
+    ro_values = dict([(k[9:], v) for k, v in data.iteritems()
+                         if k.startswith('READONLY_')])
+    if len(ro_values):
+        ro_data = dict(data).copy()
+        ro_data.update(ro_values)
+
+    return data, ro_data
+
+def get_declarative_base():
+    base_cls = getattr(settings, 'BAPH_ORM_BASE', None)
+    if base_cls:
+        try:
+            app_label, model_name = base_cls.rsplit('.', 1)
+        except ValueError:
+            raise exceptions.ImproperlyConfigured('''\
+                app_label and model_name should be separated by a dot in the
+                BAPH_ORM_BASE setting''')
+
+        try:
+            module = import_module(app_label)
+            Base = getattr(module, model_name, None)
+            if Base is None:
+                raise exceptions.ImproperlyConfigured('''\
+        Unable to load the Base model, check BAPH_ORM_BASE in your project
+        settings''')
+        except (ImportError, ImproperlyConfigured):
+            raise 
+    else:
+        Base = declarative_base()
+    return Base
 
 class ORM(object):
     '''A wrapper class for dealing with the various aspects of SQLAlchemy.
@@ -33,35 +83,17 @@ class ORM(object):
     def __init__(self, name=None):
         if not name:
             name = 'default'
-        data = {}
-        if hasattr(settings, 'DATABASES') and \
-           name in settings.DATABASES:
-            data = settings.DATABASES[name]
-        if data.get('ENGINE', '') == '':
-            raise ImproperlyConfigured('''\
-The database ORM connection requires, at minimum, an engine type.''')
-        if '.' in data['ENGINE']:
-            data['ENGINE'] = data['ENGINE'].rsplit('.', 1)[-1]
-
-        # django needs sqlite3 but sqlalchemy references sqlite
-        if data['ENGINE'] == 'sqlite3':
-            data['ENGINE'] = 'sqlite'
-        elif data['ENGINE'] == 'postgresql_psycopg2':
-            data['ENGINE'] = 'postgresql'
-
+        
+        data, ro_data = get_connection_settings(name)
         self.engine = self._create_engine(data)
-        ro_values = dict([(k[9:], v) for k, v in data.iteritems()
-                             if k.startswith('READONLY_')])
-        if len(ro_values):
-            ro_data = dict(data)
-            ro_data.update(ro_values)
+        self._sessionmaker = scoped_session(sessionmaker(bind=self.engine))
+        if len(ro_data):
             self.readonly_engine = self._create_engine(ro_data)
-        self.metadata = MetaData(self.engine)
-        self.Base = declarative_base(metadata=self.metadata)
-        if hasattr(self, 'readonly_engine'):
             self._readonly_sessionmaker = \
                 scoped_session(sessionmaker(bind=self.readonly_engine))
-        self._sessionmaker = scoped_session(sessionmaker(bind=self.engine))
+        self.metadata = MetaData(self.engine)
+        self.Base = get_declarative_base()
+        self.Base.metadata = self.metadata
 
     @staticmethod
     def _create_url(data):
