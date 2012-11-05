@@ -106,6 +106,8 @@ class ORM(object):
                 netloc += '@%s' % data['HOST']
             else:
                 netloc += '@localhost'
+            if data.get('PORT', '') != '':
+                netloc += ':%s' % data['PORT']
         elif data.get('HOST', '') != '':
             netloc = data['HOST']
         url_parts = (data['ENGINE'], netloc, data.get('NAME', ''), '', '', '')
