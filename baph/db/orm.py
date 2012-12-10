@@ -125,7 +125,8 @@ class ORM(object):
     def _create_engine(cls, data):
         '''Creates an SQLAlchemy engine.'''
         return create_engine(cls._create_url(data), convert_unicode=True,
-                             encoding='utf8', poolclass=NullPool)
+                             encoding='utf8', poolclass=NullPool,
+                             echo=getattr(settings, 'BAPH_DB_ECHO', False))
 
     @classmethod
     def get(cls, name=None):
