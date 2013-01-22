@@ -89,7 +89,7 @@ class BaseUser(orm.Base, Model):
     '''See :attr:`django.contrib.auth.models.User.first_name`.'''
     last_name = Column(Unicode(30), nullable=True)
     '''See :attr:`django.contrib.auth.models.User.last_name`.'''
-    _email = Column('email', String(settings.EMAIL_FIELD_LENGTH), index=True,
+    email = Column(String(settings.EMAIL_FIELD_LENGTH), index=True,
                     nullable=False)
     '''See :attr:`django.contrib.auth.models.User.email`.'''
     password = Column(String(256), nullable=False)
@@ -105,22 +105,6 @@ class BaseUser(orm.Base, Model):
     '''See :attr:`django.contrib.auth.models.User.last_login`.'''
     date_joined = Column(DateTime, default=datetime.now, nullable=False)
     '''See :attr:`django.contrib.auth.models.User.date_joined`.'''
-
-    def _get_email(self):
-        '''See :attr:`django.contrib.auth.models.User.email`.'''
-        return self._email
-
-    def _set_email(self, value):
-        # Normalize the address by lowercasing the domain part of the email
-        # address.
-        try:
-            email_name, domain_part = value.strip().split('@', 1)
-        except ValueError:
-            raise ValueError(_('The email address supplied is invalid.'))
-        else:
-            self._email = '@'.join([email_name, domain_part.lower()])
-
-    email = synonym('_email', descriptor=property(_get_email, _set_email))
 
     def get_absolute_url(self):
         '''The absolute path to a user's profile.
