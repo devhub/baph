@@ -74,7 +74,7 @@ class Model(object):
         except AttributeError:
             length = None
 
-        if column is not None and value and not isinstance(value, int):
+        if column is not None and value is not None and not isinstance(value, int):
             if isinstance(column.type, String):
                 value = smart_unicode(self._truncate_invalid_chars(value,
                                                                    length))
