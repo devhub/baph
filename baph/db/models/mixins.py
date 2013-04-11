@@ -8,7 +8,7 @@ class TimestampMixin(object):
 
     @declared_attr
     def added(cls):
-        return Column(DateTime, default=datetime.datetime.now, nullable=False,
+        return Column(DateTime, default=datetime.datetime.now,
             info={'readonly': True})
 
     @declared_attr
