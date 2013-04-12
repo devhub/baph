@@ -15,14 +15,14 @@ Setting: AUTH_DIGEST_ALGORITHM
 
 The default hash algorithm used to set passwords with. Defaults to ``sha1``.
 '''
-
-import inspect
-
-from baph.db.models import Model
-from baph.db.orm import ORM
-from baph.db.types import UUID
-from baph.utils.importing import import_attr
 from datetime import datetime
+import hashlib
+from oauth import oauth
+import random
+import urllib
+import uuid
+
+from baph.utils.importing import import_attr
 from django.conf import settings
 (AnonymousUser, check_password, SiteProfileNotAvailable,
  UNUSABLE_PASSWORD) = \
@@ -38,12 +38,15 @@ except:
 from django.utils.encoding import smart_str
 from django.utils.importlib import import_module
 from django.utils.translation import ugettext as _
-import hashlib
-import random
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Unicode
-from sqlalchemy.orm import synonym
-import urllib
-import uuid
+from sqlalchemy import *
+from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy.orm import synonym, relationship, backref
+
+from baph.db.models import Model
+from baph.db.orm import ORM, Base
+from baph.db.types import UUID, Dict
+from baph.utils.strings import random_string
+import inspect
 
 orm = ORM.get()
 
@@ -72,7 +75,7 @@ def _generate_user_id_column():
         return Column(AUTH_USER_FIELD, primary_key=True)
     return Column(UUID, primary_key=True, default=uuid.uuid4)
 
-class BaseUser(orm.Base, Model):
+class BaseUser(Base, Model):
     '''The SQLAlchemy model for Django's ``auth_user`` table.
     Users within the Django authentication system are represented by this
     model.
@@ -82,29 +85,21 @@ class BaseUser(orm.Base, Model):
     __tablename__ = 'auth_user'
 
     id = _generate_user_id_column()
-    '''Unique ID of the :class:`User`.'''
     username = Column(Unicode(75), nullable=False, unique=True)
-    '''See :attr:`django.contrib.auth.models.User.username`.'''
     first_name = Column(Unicode(30), nullable=True)
-    '''See :attr:`django.contrib.auth.models.User.first_name`.'''
     last_name = Column(Unicode(30), nullable=True)
-    '''See :attr:`django.contrib.auth.models.User.last_name`.'''
     email = Column(String(settings.EMAIL_FIELD_LENGTH), index=True,
                     nullable=False)
-    '''See :attr:`django.contrib.auth.models.User.email`.'''
     password = Column(String(256), nullable=False)
-    '''See :attr:`django.contrib.auth.models.User.password`.'''
     is_staff = Column(Boolean, default=False, nullable=False)
-    '''See :attr:`django.contrib.auth.models.User.is_staff`.'''
     is_active = Column(Boolean, default=True, nullable=False)
-    '''See :attr:`django.contrib.auth.models.User.is_active`.'''
     is_superuser = Column(Boolean, default=False, nullable=False)
-    '''See :attr:`django.contrib.auth.models.User.is_superuser`.'''
     last_login = Column(DateTime, default=datetime.now, nullable=False,
                         onupdate=datetime.now)
-    '''See :attr:`django.contrib.auth.models.User.last_login`.'''
     date_joined = Column(DateTime, default=datetime.now, nullable=False)
-    '''See :attr:`django.contrib.auth.models.User.date_joined`.'''
+
+    groups = association_proxy('user_groups', 'group',
+        creator=lambda v: UserGroup(group=v))
 
     def get_absolute_url(self):
         '''The absolute path to a user's profile.
@@ -276,7 +271,8 @@ settings''')
         session.add(user)
         session.commit()
         return user
-        
+
+
 user_cls = getattr(settings, 'BAPH_USER_CLASS', None)
 if user_cls:
     try:
@@ -299,3 +295,101 @@ if user_cls:
     User = model_cls
 else:
     User = BaseUser
+    
+MAX_KEY_LEN = 255
+MAX_SECRET_LEN = 255
+KEY_LEN = 32
+SECRET_LEN = 32
+
+class OAuthConsumer(Base, Model):
+    __tablename__ = 'auth_oauth_consumer'
+    id = Column(Integer, ForeignKey(User.id), primary_key=True)
+    key = Column(String(MAX_KEY_LEN))
+    secret = Column(String(MAX_SECRET_LEN))
+
+    user = relationship(User, lazy=True, uselist=False)
+
+    def __init__(self, **kwargs):
+        super(OAuthConsumer, self).__init__(**kwargs)
+        if not self.key:
+            self.key = random_string(length=KEY_LEN)
+        if not self.secret:
+            self.secret = random_string(length=SECRET_LEN)
+
+    @classmethod
+    def create(cls, user_id, **kwargs):
+        kwargs['id'] = user_id
+        return cls(**kwargs)
+
+    def as_consumer(self):
+        '''Creates an oauth.OAuthConsumer object from the DB data.
+        :rtype: oauth.OAuthConsumer
+        '''
+        return oauth.OAuthConsumer(self.key, self.secret)
+
+class OAuthNonce(Base, Model):
+    __tablename__ = 'auth_oauth_nonce'
+    id = Column(Integer, primary_key=True)
+    token_key = Column(String(32))
+    consumer_key = Column(String(MAX_KEY_LEN), ForeignKey(OAuthConsumer.key))
+    key = Column(String(255), nullable=False, unique=True)
+
+class Group(Base, Model):
+    '''Groups'''
+    __tablename__ = 'groups'
+    __table_args__ = {'schema': 'users'}
+
+    id = Column(Integer, primary_key=True)
+    whitelabel = Column(Unicode(100), info={'readonly': True})
+    name = Column(Unicode(100))
+
+    users = association_proxy('user_groups', 'user',
+        creator=lambda v: UserGroup(user=v))
+
+class UserGroup(Base, Model):
+    '''User groups'''
+    __tablename__ = 'user_groups'
+    __table_args__ = {'schema': 'users'}
+
+    user_id = Column(Integer, ForeignKey(User.id), primary_key=True)
+    group_id = Column(Integer, ForeignKey(Group.id), primary_key=True)
+
+    user = relationship(User, lazy=True, uselist=False,
+        backref=backref('user_groups', lazy=True, uselist=True))
+    
+    group = relationship(Group, lazy=True, uselist=False,
+        backref=backref('user_groups', lazy=True, uselist=True))
+
+class NamedPermission(Base, Model):
+    __tablename__ = 'baph_auth_permissions'
+    id = Column(Integer, primary_key=True)
+    name = Column(Unicode(100))
+    codename = Column(String(100), unique=True)
+    resource = Column(String(50))
+    action = Column(String(16))
+    key = Column(String(100))
+    value = Column(String(50))
+    
+class PermissionSet(Base, Model):
+    __tablename__ = 'baph_auth_permission_sets'
+    id = Column(Integer, primary_key=True)
+    name = Column(Unicode(100))
+    perm_id = Column(Integer, ForeignKey(NamedPermission.id))
+    
+    permissions = relationship(NamedPermission)
+    
+class UserPermissionSet(Base, Model):
+    __tablename__ = 'baph_auth_user_permission_sets'
+    user_id = Column(Integer, ForeignKey(User.id), primary_key=True)
+    permset_id = Column(Integer, ForeignKey(PermissionSet.id), primary_key=True)
+    ctx = Column(Dict)
+    
+    user = relationship(User, backref='user_permission_sets')
+    permission_set = relationship(PermissionSet, backref='user_permission_sets')
+
+class PermissionAssociation(Base, Model):
+    __tablename__ = 'baph_auth_permission_assoc'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey(User.id))
+    group_id = Column(Integer, ForeignKey(Group.id))
+    perm_id = Column(Integer, ForeignKey(NamedPermission.id))

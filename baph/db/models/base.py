@@ -57,6 +57,12 @@ class Model(object):
     def create(cls, *args, **kwargs):
         return cls(*args, **kwargs)
 
+    def permission_context(self, request):
+        return {
+            'user_id': request.user.id,
+            'user_whitelabel': request.user.whitelabel,
+            }
+
     def update(self, data):
         for key, value in data.iteritems():
             if hasattr(self, key) and getattr(self, key) != value:
@@ -281,8 +287,14 @@ class ModelBase(DeclarativeMeta):
         else:
             meta = attr_meta
         base_meta = getattr(new_class, '_meta', None)
-        new_class._meta = Options(meta)
+        new_class.add_to_class('_meta', Options(meta))
         return new_class
+
+    def add_to_class(cls, name, value):
+        if hasattr(value, 'contribute_to_class'):
+            value.contribute_to_class(cls, name)
+        else:
+            setattr(cls, name, value)
 
     @property
     def all_properties(cls):
