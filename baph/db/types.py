@@ -5,14 +5,10 @@
 
 .. moduleauthor:: Mark Lee <markl@evomediagroup.com>
 '''
-try:
-    import json
-except ImportError:
-    import simplejson as json
-import uuid
 
 from sqlalchemy import types
 from sqlalchemy.databases import mysql, postgresql
+import uuid
 
 
 class UUID(types.TypeDecorator):
@@ -64,34 +60,3 @@ class UUID(types.TypeDecorator):
 
     def is_mutable(self):
         return False
-        
-
-class Json(types.TypeDecorator):
-    impl = types.Unicode
-
-    def process_bind_param(self, value, dialect):
-        if value is None:
-            return None
-        return json.dumps(value)
-
-    def process_result_value(self, value, dialect):
-        if not value:
-            return None
-        return json.loads(value)
-
-JsonType = Json
-
-class JsonText(JsonType):
-    impl = types.UnicodeText
-
-class List(JsonText):
-
-    @property
-    def python_type(self):
-        return list
-
-class Dict(JsonText):
-
-    @property
-    def python_type(self):
-        return dict
