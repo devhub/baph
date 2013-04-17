@@ -4,11 +4,11 @@
 from setuptools import setup, find_packages
 
 setup(name='baph',
-      version='0.2.8',
+      version='0.2.9',
       install_requires=[
           'Coffin',
           'Django >= 1.3',
-          'SQLAlchemy >= 0.7.8',
+          'SQLAlchemy >= 0.8.0',
       ],
       package_data={
           '': ['*.rst'],

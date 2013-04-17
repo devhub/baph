@@ -3,11 +3,12 @@ import re
 
 from django.conf import settings
 from django.core.cache import get_cache
-from sqlalchemy import event, Column
-from sqlalchemy.ext.associationproxy import AssociationProxy
-from sqlalchemy.ext.declarative import declarative_base, declared_attr, DeclarativeMeta
-from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import mapper, object_session
+from sqlalchemy import event, Column, inspect
+from sqlalchemy.ext.associationproxy import AssociationProxy, ASSOCIATION_PROXY
+from sqlalchemy.ext.declarative import (declarative_base, declared_attr,
+    DeclarativeMeta)
+from sqlalchemy.ext.hybrid import HYBRID_PROPERTY, HYBRID_METHOD, hybrid_property
+from sqlalchemy.orm import mapper, object_session, configure_mappers
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.orm.attributes import instance_dict, get_history
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
@@ -296,49 +297,51 @@ class ModelBase(DeclarativeMeta):
         else:
             setattr(cls, name, value)
 
+    def get_prop_from_proxy(cls, proxy):
+        if proxy.scalar:
+            # column
+            col = proxy.remote_attr.property.columns
+            data_type = type(col[0].type)
+            prop = proxy.remote_attr.property
+        elif proxy.remote_attr.extension_type == ASSOCIATION_PROXY:
+            prop = cls.get_prop_from_proxy(proxy.remote_attr)
+        elif isinstance(proxy.remote_attr.property, RelationshipProperty):
+            data_type = proxy.remote_attr.property.collection_class or object
+            readonly = proxy.remote_attr.info.get('readonly', False)
+            prop = proxy.remote_attr.property
+        else:
+            col = proxy.remote_attr.property.columns
+            data_type = type(col[0].type)
+            prop = proxy.remote_attr.property
+        return prop
+
     @property
     def all_properties(cls):
         if not cls.__mapper__.configured:
-            cls.__mapper__.compile()
-        keys = set()
-        for supercls in cls.__mro__:
-            for k,attr in vars(supercls).items():
-                if k in keys:
-                    continue
-
-                if isinstance(attr, InstrumentedAttribute):
-                    prop = attr.property
-                elif isinstance(attr, AssociationProxy):
-                    proxy = getattr(supercls, k)
-                    if proxy.scalar:
-                        prop = proxy.remote_attr.property
-                    else:
-                        prop = proxy.local_attr.property
-                elif isinstance(attr, hybrid_property):
-                    prop = attr
-                else:
-                    continue
-                keys.add(k)
-                yield (k,prop)
-
-    @property
-    def _properties(cls):
-        if not cls.__mapper__.configured:
-            cls.__mapper__.compile()
-        props = OrderedDict({})
-        for k in dir(cls):
-            attr = getattr(cls, k)
-            if hasattr(attr, 'property'):
+            configure_mappers()
+        for key, attr in inspect(cls).all_orm_descriptors.items():
+            if attr.is_mapper:
+                continue
+            elif attr.extension_type == HYBRID_METHOD:
+                # not a property
+                continue
+            elif attr.extension_type == HYBRID_PROPERTY:
+                data_type = type(attr.expr(cls).type)
+                readonly = not attr.fset
+                prop = attr
+            elif attr.extension_type == ASSOCIATION_PROXY:
+                proxy = getattr(cls, key)
+                prop = cls.get_prop_from_proxy(proxy)
+            elif isinstance(attr.property, ColumnProperty):
+                data_type = type(attr.property.columns[0].type)
+                readonly = attr.info.get('readonly', False)
                 prop = attr.property
-                if isinstance(prop, MergedRelationship):
-                    continue
-                yield (k,prop)
-            elif isinstance(attr, AssociationProxy):
-                prop = attr.remote_attr.property
-                if isinstance(prop, ColumnProperty):
-                    yield (k,prop)
-                else:
-                    yield (k,attr)
+            elif isinstance(attr.property, RelationshipProperty):
+                data_type = attr.property.collection_class or object
+                readonly = attr.info.get('readonly', False)
+                prop = attr.property
+            yield (key, prop)
+
 
 Base = declarative_base(cls=Model, 
     metaclass=ModelBase,

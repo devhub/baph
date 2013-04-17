@@ -40,13 +40,15 @@ from django.utils.importlib import import_module
 from django.utils.translation import ugettext as _
 from sqlalchemy import *
 from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import synonym, relationship, backref
 
 from baph.db.models import Model
 from baph.db.orm import ORM, Base
-from baph.db.types import UUID, Dict
+from baph.db.types import UUID, Dict, List
 from baph.utils.strings import random_string
 import inspect
+
 
 orm = ORM.get()
 
@@ -98,8 +100,8 @@ class BaseUser(Base, Model):
                         onupdate=datetime.now)
     date_joined = Column(DateTime, default=datetime.now, nullable=False)
 
-    groups = association_proxy('user_groups', 'group',
-        creator=lambda v: UserGroup(group=v))
+    permissions = association_proxy('permission_assocs', 'permission')
+    codenames = association_proxy('permission_assocs', 'codename')
 
     def get_absolute_url(self):
         '''The absolute path to a user's profile.
@@ -133,39 +135,6 @@ class BaseUser(Base, Model):
         '''
         full_name = u'%s %s' % (self.first_name, self.last_name)
         return full_name.strip()
-
-    def get_profile(self, session=None):
-        '''Returns site-specific profile for this user. Raises
-        :exc:`~django.contrib.auth.models.SiteProfileNotAvailable` if this
-        site does not allow profiles.
-        '''
-        if not hasattr(self, '_profile_cache'):
-            from django.conf import settings
-            if not getattr(settings, 'AUTH_PROFILE_MODULE', False):
-                raise SiteProfileNotAvailable('''\
-You need to set AUTH_PROFILE_MODULE in your project settings''')
-            try:
-                app_label, model_name = settings.AUTH_PROFILE_MODULE \
-                                                .rsplit('.', 1)
-            except ValueError:
-                raise SiteProfileNotAvailable('''\
-app_label and model_name should be separated by a dot in the
-AUTH_PROFILE_MODULE setting''')
-
-            try:
-                module = import_module(app_label)
-                model_cls = getattr(module, model_name, None)
-                if model_cls is None:
-                    raise SiteProfileNotAvailable('''\
-Unable to load the profile model, check AUTH_PROFILE_MODULE in your project
-settings''')
-                if not session:
-                    session = orm.sessionmaker()
-                self._profile_cache = session.query(model_cls) \
-                                             .get(self.id)
-            except (ImportError, ImproperlyConfigured):
-                raise SiteProfileNotAvailable
-        return self._profile_cache
 
     def has_usable_password(self):
         '''Determines whether the user has a password.'''
@@ -221,30 +190,6 @@ settings''')
         else:
             user.set_unusable_password()
         session.add(user)
-        '''Create user profile if defined'''
-        from django.conf import settings
-        if getattr(settings, 'AUTH_PROFILE_MODULE', False) and \
-           getattr(settings, 'AUTH_PROFILE_AUTO_CREATE', False):
-            try:
-                app_label, model_name = settings.AUTH_PROFILE_MODULE \
-                                                .rsplit('.', 1)
-            except ValueError:
-                raise SiteProfileNotAvailable('''\
-app_label and model_name should be separated by a dot in the
-AUTH_PROFILE_MODULE setting''')
-            try:
-                module = import_module(app_label)
-                model_cls = getattr(module, model_name, None)
-                if model_cls is None:
-                    raise SiteProfileNotAvailable('''\
-Unable to load the profile model, check AUTH_PROFILE_MODULE in your project
-settings''')
-                session.commit()
-                profile = model_cls(user_id=user.id)
-                session.add(profile)
-                session.commit()
-            except (ImportError, ImproperlyConfigured):
-                raise SiteProfileNotAvailable
         session.commit()
         return user
 
@@ -296,6 +241,62 @@ if user_cls:
 else:
     User = BaseUser
     
+
+class Group(Base, Model):
+    '''Groups'''
+    __tablename__ = 'groups'
+    __table_args__ = {'schema': 'users'}
+
+    id = Column(Integer, primary_key=True)
+    whitelabel = Column(Unicode(100), info={'readonly': True})
+    name = Column(Unicode(100))
+
+    users = association_proxy('user_groups', 'user',
+        creator=lambda v: UserGroup(user=v))
+
+    permissions = association_proxy('permission_assocs', 'permission')
+    codenames = association_proxy('permission_assocs', 'codename')
+
+class UserGroup(Base, Model):
+    '''User groups'''
+    __tablename__ = 'user_groups'
+    __table_args__ = {'schema': 'users'}
+
+    user_id = Column(Integer, ForeignKey(User.id), primary_key=True)
+    group_id = Column(Integer, ForeignKey(Group.id), primary_key=True)
+    context = Column(Dict)
+
+    user = relationship(User, lazy=True, uselist=False,
+        backref=backref('user_groups', lazy=True, uselist=True))
+    
+    group = relationship(Group, lazy=True, uselist=False,
+        backref=backref('user_groups', lazy=True, uselist=True))
+
+class Permission(Base, Model):
+    __tablename__ = 'baph_auth_permissions'
+    id = Column(Integer, primary_key=True)
+    name = Column(Unicode(100))
+    codename = Column(String(100), unique=True)
+    resource = Column(String(50))
+    base_resource = Column(String(24))
+    action = Column(String(16))
+    key = Column(String(100))
+    value = Column(String(50))
+
+class PermissionAssociation(Base, Model):
+    __tablename__ = 'baph_auth_permission_assoc'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey(User.id))
+    group_id = Column(Integer, ForeignKey(Group.id))
+    perm_id = Column(Integer, ForeignKey(Permission.id))
+
+    user = relationship(User, backref='permission_assocs')
+    group = relationship(Group, backref='permission_assocs')
+    permission = relationship(Permission, lazy='joined')
+
+    codename = association_proxy('permission', 'codename')
+
+
 MAX_KEY_LEN = 255
 MAX_SECRET_LEN = 255
 KEY_LEN = 32
@@ -334,62 +335,3 @@ class OAuthNonce(Base, Model):
     consumer_key = Column(String(MAX_KEY_LEN), ForeignKey(OAuthConsumer.key))
     key = Column(String(255), nullable=False, unique=True)
 
-class Group(Base, Model):
-    '''Groups'''
-    __tablename__ = 'groups'
-    __table_args__ = {'schema': 'users'}
-
-    id = Column(Integer, primary_key=True)
-    whitelabel = Column(Unicode(100), info={'readonly': True})
-    name = Column(Unicode(100))
-
-    users = association_proxy('user_groups', 'user',
-        creator=lambda v: UserGroup(user=v))
-
-class UserGroup(Base, Model):
-    '''User groups'''
-    __tablename__ = 'user_groups'
-    __table_args__ = {'schema': 'users'}
-
-    user_id = Column(Integer, ForeignKey(User.id), primary_key=True)
-    group_id = Column(Integer, ForeignKey(Group.id), primary_key=True)
-
-    user = relationship(User, lazy=True, uselist=False,
-        backref=backref('user_groups', lazy=True, uselist=True))
-    
-    group = relationship(Group, lazy=True, uselist=False,
-        backref=backref('user_groups', lazy=True, uselist=True))
-
-class NamedPermission(Base, Model):
-    __tablename__ = 'baph_auth_permissions'
-    id = Column(Integer, primary_key=True)
-    name = Column(Unicode(100))
-    codename = Column(String(100), unique=True)
-    resource = Column(String(50))
-    action = Column(String(16))
-    key = Column(String(100))
-    value = Column(String(50))
-    
-class PermissionSet(Base, Model):
-    __tablename__ = 'baph_auth_permission_sets'
-    id = Column(Integer, primary_key=True)
-    name = Column(Unicode(100))
-    perm_id = Column(Integer, ForeignKey(NamedPermission.id))
-    
-    permissions = relationship(NamedPermission)
-    
-class UserPermissionSet(Base, Model):
-    __tablename__ = 'baph_auth_user_permission_sets'
-    user_id = Column(Integer, ForeignKey(User.id), primary_key=True)
-    permset_id = Column(Integer, ForeignKey(PermissionSet.id), primary_key=True)
-    ctx = Column(Dict)
-    
-    user = relationship(User, backref='user_permission_sets')
-    permission_set = relationship(PermissionSet, backref='user_permission_sets')
-
-class PermissionAssociation(Base, Model):
-    __tablename__ = 'baph_auth_permission_assoc'
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey(User.id))
-    group_id = Column(Integer, ForeignKey(Group.id))
-    perm_id = Column(Integer, ForeignKey(NamedPermission.id))
