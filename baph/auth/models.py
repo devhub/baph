@@ -278,10 +278,10 @@ class Permission(Base, Model):
     name = Column(Unicode(100))
     codename = Column(String(100), unique=True)
     resource = Column(String(50))
-    base_resource = Column(String(24))
     action = Column(String(16))
     key = Column(String(100))
     value = Column(String(50))
+
 
 class PermissionAssociation(Base, Model):
     __tablename__ = 'baph_auth_permission_assoc'
