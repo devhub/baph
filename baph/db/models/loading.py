@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import imp
 import os
 import sys
@@ -87,7 +88,7 @@ class AppCache(object):
         short = app_label.split('.',1)[0]
         for app_name in settings.INSTALLED_APPS:
             if app_name.rsplit('.',1)[-1] == short:
-                return short
+                return app_name
 
         return None
 
