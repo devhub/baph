@@ -1,7 +1,7 @@
 from StringIO import StringIO
 
-from dhplatform.core.serializers.python import Serializer as PythonSerializer
-from dhplatform.core.serializers.python import Deserializer as PythonDeserializer
+from baph.core.serializers.python import Serializer as PythonSerializer
+from baph.core.serializers.python import Deserializer as PythonDeserializer
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import simplejson
 

@@ -58,40 +58,49 @@ def _get_custom_permissions(opts):
         if not isinstance(scope_ids, (list, tuple)):
             raise Exception('%s.Meta.permissions["%s"] is not iterable'
                 % (resource, action))
+
         for scope_id in scope_ids:
-            if scope_id is None:
-                # boolean permission
-                perms.append(auth_app.Permission(
-                    name='Can %s %s' % (action, opts.verbose_name),
-                    codename=_get_permission_codename(action, opts),
-                    resource=opts.object_name,
-                    action=action,
-                    ))
-            elif scope_id not in scopes:
+            if scope_id and scope_id not in scopes:
                 # undefined scope
                 raise Exception('scope_id "%s" was not found in '
                     'scope_permissions (found %s)' % (scope_id,
                         ', '.join(scopes.keys())))
+
+            kwargs = {
+                'resource': opts.object_name,
+                'action': action,
+                'key': None,
+                'value': None,
+                }
+
+            if scope_id is None:
+                # boolean permission
+                kwargs.update({
+                    'name': 'Can %s %s' % (action, opts.verbose_name),
+                    'codename': _get_permission_codename(action, opts),
+                    })
             else:
                 # filter permission
                 scope = scopes[scope_id]
                 if len(scope) == 2:
                     label = '%s %s' % (scope_id, opts.model_name)
-                elif len(scope) == 3:
+                elif len(scope) >= 3:
                     label = scope[2]
                 else:
-                    raise Exception('scope %s (%s) must contain exactly 2 or '
-                        '3 items' % (scope_id, ','.join(scope)))
-                key = scope[0]
-                value = scope[1]
-                perms.append(auth_app.Permission(
-                    name='Can %s %s' % (action, label),
-                    codename=_get_permission_codename(action, opts, label),
-                    resource=opts.object_name,
-                    action=action,
-                    key=key,
-                    value=value,
-                    ))
+                    raise Exception('scope %s (%s) must contain at least 2 '
+                        'items')
+
+                if len(scope) >= 4:
+                    kwargs['resource'] = scope[3]
+
+                kwargs.update({
+                    'name': 'Can %s %s' % (action, label),
+                    'codename': _get_permission_codename(action, opts, label),
+                    'key': scope[0],
+                    'value': scope[1],
+                    })
+            perms.append(auth_app.Permission(**kwargs))
+
     return perms
     
 def _check_permission_clashing(custom, builtin):

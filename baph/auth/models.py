@@ -242,6 +242,15 @@ else:
     User = BaseUser
     
 
+def get_or_fail(codename):
+    session = orm.sessionmaker()
+    try:
+        perm = session.query(Permission).filter_by(codename=codename).one()
+    except:
+        raise ValueError('%s is not a valid permission codename' % codename)
+    return PermissionAssociation(permission=perm)
+
+
 class Group(Base, Model):
     '''Groups'''
     __tablename__ = 'groups'
@@ -255,7 +264,10 @@ class Group(Base, Model):
         creator=lambda v: UserGroup(user=v))
 
     permissions = association_proxy('permission_assocs', 'permission')
-    codenames = association_proxy('permission_assocs', 'codename')
+    codenames = association_proxy('permission_assocs', 'codename',
+        creator=get_or_fail)
+
+
 
 class UserGroup(Base, Model):
     '''User groups'''

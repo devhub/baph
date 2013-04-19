@@ -1,9 +1,10 @@
-from baph.db.orm import ORM
-from dhplatform.test.loading import get_apps
+from django.core.serializers import base
 from django.core.serializers.python import Serializer as _Serializer
 from django.db import DEFAULT_DB_ALIAS
 
-orm = ORM.get()
+from baph.db.models import get_apps
+from baph.db.orm import Base
+
 
 class Serializer(_Serializer):
     pass
@@ -38,7 +39,7 @@ def _get_model(model_identifier):
     """
     Helper to look up a model from an "app_label.module_name" string.
     """
-    registry = orm.Base._decl_class_registry
+    registry = Base._decl_class_registry
     Model = registry.get(model_identifier, None)
     if Model is None:
         raise base.DeserializationError(u"Invalid model identifier: '%s'" \
