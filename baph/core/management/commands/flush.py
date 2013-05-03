@@ -1,14 +1,15 @@
+# -*- coding: utf-8 -*-
 from optparse import make_option
 
 from django.conf import settings
-from django.db import connections, router, transaction, DEFAULT_DB_ALIAS
 from django.core.management import call_command
 from django.core.management.color import no_style
-from django.core.management.sql import sql_flush, emit_post_sync_signal
 from django.utils.importlib import import_module
 
 from baph.core.management.base import NoArgsCommand, CommandError
-from baph.db.orm import ORM, Base
+from baph.core.management.sql import emit_post_sync_signal #, sql_flush
+from baph.db import connections, Session, DEFAULT_DB_ALIAS
+from baph.db.models import Base, signals, get_apps, get_models
 
 
 class Command(NoArgsCommand):
@@ -51,8 +52,7 @@ Are you sure you want to do this?
 
         if confirm == 'yes':
             try:
-                orm = ORM.get()
-                session = orm.sessionmaker()
+                session = Session()
                 for table in reversed(Base.metadata.sorted_tables):
                     if table.name == 'baph_auth_permissions':
                         # TODO: this is terrible, fix it
@@ -72,10 +72,20 @@ Are you sure you want to do this?
 Hint: Look at the output of 'django-admin.py sqlflush'. That's the SQL this command wasn't able to run.
 The full error: %s""")
 
+            # Emit the post sync signal. This allows individual
+            # applications to respond as if the database had been
+            # sync'd from scratch.
+            all_models = []
+            for app in get_apps():
+                all_models.extend([
+                    m for m in get_models(app, include_auto_created=True)
+                ])
+            emit_post_sync_signal(set(all_models), verbosity, interactive, None) 
+
             # Reinstall the initial_data fixture.
-            kwargs = options.copy()
-            #kwargs['database'] = db
-            call_command('loaddata', 'initial_data', **kwargs)
+            if options.get('load_initial_data'):
+                # Reinstall the initial_data fixture.
+                call_command('loaddata', 'initial_data', **options)
 
         else:
-            print "Flush cancelled."
+            self.stdout.write("Flush cancelled.\n")

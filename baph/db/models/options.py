@@ -62,6 +62,10 @@ class Options(object):
         self.pk = None
         self.meta = meta
 
+        self.swappable = None
+        self.auto_created = False
+        self.required_fields = None
+
     def contribute_to_class(self, cls, name):
         cls._meta = self
         self.model = cls
@@ -98,3 +102,42 @@ class Options(object):
         else:
             self.verbose_name_plural = string_concat(self.verbose_name, 's')
         del self.meta
+        
+    def verbose_name_raw(self):
+        """
+        There are a few places where the untranslated verbose name is needed
+        (so that we get the same value regardless of currently active
+        locale).
+        """
+        lang = get_language()
+        deactivate_all()
+        raw = force_text(self.verbose_name)
+        activate(lang)
+        return raw
+    verbose_name_raw = property(verbose_name_raw)
+
+    def _swapped(self):
+        """
+        Has this model been swapped out for another? If so, return the model
+        name of the replacement; otherwise, return None.
+
+        For historical reasons, model name lookups using get_model() are
+        case insensitive, so we make sure we are case insensitive here.
+        """
+        if self.swappable:
+            model_label = '%s.%s' % (self.app_label, self.model_name)
+            swapped_for = getattr(settings, self.swappable, None)
+            if swapped_for:
+                try:
+                    swapped_label, swapped_object = swapped_for.split('.')
+                except ValueError:
+                    # setting not in the format app_label.model_name
+                    # raising ImproperlyConfigured here causes problems with
+                    # test cleanup code - instead it is raised in get_user_model
+                    # or as part of validation.
+                    return swapped_for
+
+                if '%s.%s' % (swapped_label, swapped_object.lower()) not in (None, model_label):
+                    return swapped_for
+        return None
+    swapped = property(_swapped)

@@ -11,17 +11,9 @@ from sqlalchemy import String, Unicode, UnicodeText
 from unicodedata import bidirectional
 
 from baph.db.models import signals
+from baph.db.models.base import Base
 from baph.db.models.loading import (get_apps, get_app, get_models, get_model,
     get_app_errors, register_models)
-
-
-RTL_TYPES = [
-    'R',
-    'AL',
-    'RLE',
-    'RLO',
-    'AN',
-]
 
 
 class Model(object):
@@ -38,54 +30,6 @@ class Model(object):
     def __init__(self, **kwargs):
         for name, value in kwargs.iteritems():
             setattr(self, name, value)
-
-    @staticmethod
-    def _truncate_invalid_chars(value, length):
-        '''Safety check: make sure we aren't truncating within the boundaries
-        of a multibyte character. Also, add a LTR BOM if the last character
-        is RTL.
-        '''
-        value = smart_str(value)
-        if length:
-            value = value[:length]
-            valid = False
-            while not valid and len(value):
-                try:
-                    test = value.decode('utf8')
-
-                    # check for RTL encoding without order marker terminator
-                    direction = bidirectional(test[-1])
-                    if direction in RTL_TYPES:
-                        # this is RTL, we need 3 bytes for the BOM
-                        if len(value) > (length - 3):
-                            # not enough room - keep chopping
-                            raise ValueError('Not enough room to truncate')
-                        else:
-                            test += u'\u200e'  # LTR BOM
-                            return smart_str(test)
-                    else:
-                        valid = True
-                        del test
-                except (UnicodeDecodeError, ValueError):
-                    # chop a letter off the end and try again
-                    value = value[:-1]
-        return value
-
-    def __setattr__(self, name, value):
-        column = getattr(self.__table__.c, name, None)
-        try:
-            length = column.type.length
-        except AttributeError:
-            length = None
-
-        if column is not None and value is not None and not isinstance(value, int):
-            if isinstance(column.type, String):
-                value = smart_unicode(self._truncate_invalid_chars(value,
-                                                                   length))
-                if not isinstance(column.type, (Unicode, UnicodeText)):
-                    value = value.encode('utf8')
-
-        super(Model, self).__setattr__(name, value)
 
     def update(self, data):
         '''Updates an SQLAlchemy model object's properties using a dictionary.
