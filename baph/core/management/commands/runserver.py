@@ -1,15 +1,12 @@
 from cStringIO import StringIO
-import sys
 
-from django.conf import settings
-from django.core.management.commands.runserver import Command as Command_
+from django.contrib.staticfiles.management.commands.runserver \
+    import Command as RunserverCommand
 
-from baph.core.management.base import handle_default_options, OutputWrapper
 from baph.core.management.validation import get_validation_errors
-from baph.utils.importing import import_any_module
 
 
-class Command(Command_):
+class Command(RunserverCommand):
     def validate(self, app=None, display_num_errors=False):
         s = StringIO()
         num_errors = get_validation_errors(s, app)

@@ -133,7 +133,6 @@ def build_test(label):
     app_module = get_app(parts[0])
     test_module = get_tests(app_module)
     TestClass = getattr(app_module, parts[1], None)
-    print app_module, test_module, TestClass
 
     # Couldn't find the test class in models.py; look in tests.py
     if TestClass is None:
@@ -200,12 +199,10 @@ class BaphTestSuiteRunner(object):
         if test_labels:
             for label in test_labels:
                 app_name = extract_app_name(label)
-                print app_name
                 if app_name == label:
                     app = get_app(label)
                     suite.addTest(build_suite(app))
                 else:
-                    print 'is sub of app'
                     suite.addTest(build_test(label))
         else:
             for app in get_apps():

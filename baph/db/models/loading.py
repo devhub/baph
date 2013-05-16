@@ -193,11 +193,14 @@ class AppCache(object):
             else:
                 app_list = []
         else:
+            app_list = self.app_models.values()
+            """
             if only_installed:
                 app_list = [self.app_models.get(app_label, SortedDict())
                             for app_label in six.iterkeys(self.app_labels)]
             else:
                 app_list = six.itervalues(self.app_models)
+            """
         model_list = []
         for app in app_list:
             model_list.extend(
