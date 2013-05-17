@@ -272,11 +272,15 @@ class Group(Base, Model):
 class UserGroup(Base, Model):
     '''User groups'''
     __tablename__ = 'user_groups'
-    __table_args__ = {'schema': 'users'}
+    __table_args__ = (
+        Index('idx_context', 'key', 'value'),
+        {'schema': 'users'}
+        )
 
     user_id = Column(Integer, ForeignKey(User.id), primary_key=True)
     group_id = Column(Integer, ForeignKey(Group.id), primary_key=True)
-    context = Column(Dict)
+    key = Column(String(32))
+    value = Column(String(32))
 
     user = relationship(User, lazy=True, uselist=False,
         backref=backref('user_groups', lazy=True, uselist=True))
