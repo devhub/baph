@@ -253,8 +253,7 @@ def get_or_fail(codename):
 
 class Group(Base, Model):
     '''Groups'''
-    __tablename__ = 'groups'
-    __table_args__ = {'schema': 'users'}
+    __tablename__ = 'baph_auth_groups'
 
     id = Column(Integer, primary_key=True)
     whitelabel = Column(Unicode(100), info={'readonly': True})
@@ -271,10 +270,9 @@ class Group(Base, Model):
 
 class UserGroup(Base, Model):
     '''User groups'''
-    __tablename__ = 'user_groups'
+    __tablename__ = 'baph_auth_user_groups'
     __table_args__ = (
         Index('idx_context', 'key', 'value'),
-        {'schema': 'users'}
         )
 
     user_id = Column(Integer, ForeignKey(User.id), primary_key=True)
