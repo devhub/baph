@@ -15,6 +15,7 @@ from baph.db import Session
 IGNORABLE_KEYS = (
     'modified',
     'last_modified',
+    'added',
     )
 
 class TimestampMixin(object):

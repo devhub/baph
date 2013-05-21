@@ -103,6 +103,9 @@ class BaseUser(Base, Model):
     permissions = association_proxy('permission_assocs', 'permission')
     codenames = association_proxy('permission_assocs', 'codename')
 
+    groups = association_proxy('user_groups', 'group',
+        creator=lambda group: UserGroup(group=group))
+
     def get_absolute_url(self):
         '''The absolute path to a user's profile.
 
@@ -266,8 +269,6 @@ class Group(Base, Model):
     codenames = association_proxy('permission_assocs', 'codename',
         creator=get_or_fail)
 
-
-
 class UserGroup(Base, Model):
     '''User groups'''
     __tablename__ = 'baph_auth_user_groups'
@@ -281,7 +282,8 @@ class UserGroup(Base, Model):
     value = Column(String(32))
 
     user = relationship(User, lazy=True, uselist=False,
-        backref=backref('user_groups', lazy=True, uselist=True))
+        backref=backref('user_groups', lazy=True, uselist=True,
+            cascade='all, delete, delete-orphan'))
     
     group = relationship(Group, lazy=True, uselist=False,
         backref=backref('user_groups', lazy=True, uselist=True))
