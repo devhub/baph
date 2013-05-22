@@ -273,13 +273,16 @@ class UserGroup(Base, Model):
     '''User groups'''
     __tablename__ = 'baph_auth_user_groups'
     __table_args__ = (
+        Index('idx_group_context', 'group_id', 'key', 'value'),
         Index('idx_context', 'key', 'value'),
         )
 
-    user_id = Column(Integer, ForeignKey(User.id), primary_key=True)
-    group_id = Column(Integer, ForeignKey(Group.id), primary_key=True)
-    key = Column(String(32))
-    value = Column(String(32))
+    user_id = Column(Integer, ForeignKey(User.id), primary_key=True,
+        autoincrement=False)
+    group_id = Column(Integer, ForeignKey(Group.id), primary_key=True,
+        autoincrement=False)
+    key = Column(String(32), primary_key=True, default='')
+    value = Column(String(32), primary_key=True, default='')
 
     user = relationship(User, lazy=True, uselist=False,
         backref=backref('user_groups', lazy=True, uselist=True,

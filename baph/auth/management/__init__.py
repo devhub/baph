@@ -24,9 +24,9 @@ from baph.db.orm import Base, ORM
 orm = ORM.get()
 
 def _get_permission_codename(action, opts, label=None):
-    if not label:
-        return '%s_%s' % (action, opts.model_name)
-    return '%s_%s' % (action, slugify(label.replace(' ','_')))
+    label = label if label else opts.model_name
+    codename = '%s_%s' % (action, label)
+    return slugify(codename.replace(' ','_'))
     
 def _get_all_permissions(opts):
     """
@@ -75,8 +75,9 @@ def _get_custom_permissions(opts):
 
             if scope_id is None:
                 # boolean permission
+                label = opts.verbose_name
                 kwargs.update({
-                    'name': 'Can %s %s' % (action, opts.verbose_name),
+                    'name': 'Can %s %s' % (action, label),
                     'codename': _get_permission_codename(action, opts),
                     })
             else:

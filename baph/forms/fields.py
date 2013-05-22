@@ -7,12 +7,11 @@ from django import forms
 from django.core import validators
 from django.utils.translation import ugettext_lazy as _
 
-from baph.db.orm import Base
-
 
 class ObjectField(forms.Field):
     " allowed values must be sqlalchemy objects (result of resource hydration)"
     def to_python(self, value):
+        from baph.db.models import Base
         if value in validators.EMPTY_VALUES:
             return None
         if not isinstance(value, Base):
