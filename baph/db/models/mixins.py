@@ -113,6 +113,7 @@ class CacheMixin(object):
         
 
     def get_cache_keys(self, child_updated=False):
+        #print 'getting keys from', self
         cache_keys = set()
         version_keys = set()
 
@@ -126,7 +127,7 @@ class CacheMixin(object):
             return cache_keys, version_keys
             
         session = Session.object_session(self)
-        deleted = self in session.deleted
+        deleted = self.is_deleted or self in session.deleted
         data = instance_dict(self)
         cache = get_cache('objects')
 
@@ -143,6 +144,7 @@ class CacheMixin(object):
                 changed_keys.append(attr.key)
         self_updated = bool(changed_keys) or deleted
 
+        #print '\nself:', self
         #print '\tself_updated:', self_updated, changed_keys
         #print '\tchild_updated:', child_updated
 
@@ -215,8 +217,8 @@ class CacheMixin(object):
 
         return (cache_keys, version_keys)
 
-    def kill_cache(self):
-        cache_keys, version_keys = self.get_cache_keys()
+    def kill_cache(self, force=False):
+        cache_keys, version_keys = self.get_cache_keys(child_updated=force)
         if not cache_keys and not version_keys:
             return
 
