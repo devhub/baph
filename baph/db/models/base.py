@@ -71,6 +71,15 @@ class Model(CacheMixin):
     def create(cls, *args, **kwargs):
         return cls(*args, **kwargs)
 
+    @classmethod
+    def get_form_class(cls, *args, **kwargs):
+        if not cls._meta.form_class:
+            return None
+        cls_path = cls._meta.form_class
+        cls_mod, cls_name = cls_path.rsplit('.', 1)
+        module = import_module(cls_mod)
+        return getattr(module, cls_name)
+
     def permission_context(self, request):
         return {
             'user_id': request.user.id,
@@ -97,7 +106,7 @@ class ModelBase(DeclarativeMeta):
             meta = getattr(new_class, 'Meta', None)
         else:
             meta = attr_meta
-        #base_meta = getattr(new_class, '_meta', None)
+        base_meta = getattr(new_class, '_meta', None)
 
         if getattr(meta, 'app_label', None) is None:
             # Figure out the app_label by looking one level up.
@@ -108,6 +117,10 @@ class ModelBase(DeclarativeMeta):
             kwargs = {}
 
         new_class.add_to_class('_meta', Options(meta, **kwargs))
+        if base_meta:
+            for k,v in vars(base_meta).items():
+                if not getattr(new_class._meta, k, None):
+                    setattr(new_class._meta, k, v)
 
         signals.class_prepared.send(sender=new_class)
         register_models(new_class._meta.app_label, new_class)

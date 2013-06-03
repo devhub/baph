@@ -12,7 +12,7 @@ DEFAULT_NAMES = ('verbose_name', 'verbose_name_plural',
                  'app_label', 'swappable', 'auto_created',
                  'cache_detail_keys', 'cache_list_keys', 'cache_pointers',
                  'cache_relations', 'cache_cascades', 
-                 'permissions', 'permission_scopes')
+                 'permissions', 'permission_scopes', 'form_class')
 
 class Options(object):
     def __init__(self, meta, app_label=None):
@@ -60,6 +60,7 @@ class Options(object):
         self.permission_scopes = {}
         self.object_name, self.app_label = None, app_label
         self.pk = None
+        self.form_class = None
         self.meta = meta
 
         self.swappable = None
