@@ -103,9 +103,6 @@ class BaseUser(Base, Model):
     permissions = association_proxy('permission_assocs', 'permission')
     codenames = association_proxy('permission_assocs', 'codename')
 
-    groups = association_proxy('user_groups', 'group',
-        creator=lambda group: UserGroup(group=group))
-
     def get_absolute_url(self):
         '''The absolute path to a user's profile.
 
@@ -285,7 +282,7 @@ class UserGroup(Base, Model):
     value = Column(String(32), primary_key=True, default='')
 
     user = relationship(User, lazy=True, uselist=False,
-        backref=backref('user_groups', lazy=True, uselist=True,
+        backref=backref('groups', lazy=True, uselist=True,
             cascade='all, delete, delete-orphan'))
     
     group = relationship(Group, lazy=True, uselist=False,
