@@ -7,7 +7,6 @@ import time
 from django.core.management import call_command
 from tastypie.test import ResourceTestCase
 
-from dhplatform.whitelabel.models import Whitelabel
 from baph.db.orm import ORM
 
 
