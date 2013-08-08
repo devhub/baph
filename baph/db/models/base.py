@@ -180,6 +180,24 @@ class ModelBase(DeclarativeMeta):
                 prop = attr.property
             yield (key, prop)
 
+    @property
+    def resource_name(cls):
+        try:
+            if cls.__mapper__.polymorphic_on is not None:
+                return cls.__mapper__.primary_base_mapper.class_._meta.model_name
+        except:
+            pass
+        return cls._meta.model_name
+
+    @property
+    def base_class(cls):
+        try:
+            if cls.__mapper__.polymorphic_on is not None:
+                return cls.__mapper__.primary_base_mapper.class_
+        except:
+            pass
+        return cls
+
 
 Base = declarative_base(cls=Model, 
     metaclass=ModelBase,
