@@ -64,11 +64,6 @@ class Command(NoArgsCommand):
         no_startup = options.get('no_startup', False)
         interface = options.get('interface', None)
 
-        from dhplatform.pages.models import PageModule as Obj
-        fs = Obj._meta.fields
-        for k,f in fs:
-            print f
-
         try:
             if use_plain:
                 # Don't bother loading IPython, because the user wants plain Python.
