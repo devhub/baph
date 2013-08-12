@@ -91,6 +91,21 @@ class Model(CacheMixin):
             if hasattr(self, key) and getattr(self, key) != value:
                 setattr(self, key, value)       
 
+    def to_dict(self):
+        '''Creates a dictionary out of the column properties of the object.
+        This is needed because it's sometimes not possible to just use
+        :data:`__dict__`.
+
+        :rtype: :class:`dict`
+        '''
+        __dict__ = dict([(key, val) for key, val in self.__dict__.iteritems()
+                         if not key.startswith('_sa_')])
+        if len(__dict__) == 0:
+            return dict([(col.name, getattr(self, col.name))
+                         for col in self.__table__.c])
+        else:
+            return __dict__
+
     @property
     def is_deleted(self):
         return False
