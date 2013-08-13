@@ -4,7 +4,9 @@ from __future__ import unicode_literals
 import codecs
 import datetime
 from decimal import Decimal
+import htmlentitydefs
 import locale
+import re
 try:
     from urllib.parse import quote
 except ImportError:     # Python 2
