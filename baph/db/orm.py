@@ -86,7 +86,8 @@ class ORM(object):
         
         data, ro_data = get_connection_settings(name)
         self.engine = self._create_engine(data)
-        self._sessionmaker = scoped_session(sessionmaker(bind=self.engine))
+        self._sessionmaker = scoped_session(sessionmaker(bind=self.engine,
+            autoflush=False))
         if len(ro_data):
             self.readonly_engine = self._create_engine(ro_data)
             self._readonly_sessionmaker = \
