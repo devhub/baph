@@ -8,7 +8,7 @@ setup(name='baph',
       install_requires=[
           'Coffin',
           'Django >= 1.3',
-          'SQLAlchemy >= 0.7.8',
+          'SQLAlchemy >= 0.8.0',
       ],
       package_data={
           '': ['*.rst'],

@@ -15,14 +15,14 @@ Setting: AUTH_DIGEST_ALGORITHM
 
 The default hash algorithm used to set passwords with. Defaults to ``sha1``.
 '''
-
-import inspect
-
-from baph.db.models import Model
-from baph.db.orm import ORM
-from baph.db.types import UUID
-from baph.utils.importing import import_attr
 from datetime import datetime
+import hashlib
+from oauth import oauth
+import random
+import urllib
+import uuid
+
+from baph.utils.importing import import_attr
 from django.conf import settings
 (AnonymousUser, check_password, SiteProfileNotAvailable,
  UNUSABLE_PASSWORD) = \
@@ -38,12 +38,17 @@ except:
 from django.utils.encoding import smart_str
 from django.utils.importlib import import_module
 from django.utils.translation import ugettext as _
-import hashlib
-import random
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Unicode
-from sqlalchemy.orm import synonym
-import urllib
-import uuid
+from sqlalchemy import *
+from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.orm import synonym, relationship, backref
+
+from baph.db.models import Model
+from baph.db.orm import ORM, Base
+from baph.db.types import UUID, Dict, List
+from baph.utils.strings import random_string
+import inspect
+
 
 orm = ORM.get()
 
@@ -72,7 +77,7 @@ def _generate_user_id_column():
         return Column(AUTH_USER_FIELD, primary_key=True)
     return Column(UUID, primary_key=True, default=uuid.uuid4)
 
-class BaseUser(orm.Base, Model):
+class BaseUser(Base, Model):
     '''The SQLAlchemy model for Django's ``auth_user`` table.
     Users within the Django authentication system are represented by this
     model.
@@ -82,29 +87,21 @@ class BaseUser(orm.Base, Model):
     __tablename__ = 'auth_user'
 
     id = _generate_user_id_column()
-    '''Unique ID of the :class:`User`.'''
     username = Column(Unicode(75), nullable=False, unique=True)
-    '''See :attr:`django.contrib.auth.models.User.username`.'''
     first_name = Column(Unicode(30), nullable=True)
-    '''See :attr:`django.contrib.auth.models.User.first_name`.'''
     last_name = Column(Unicode(30), nullable=True)
-    '''See :attr:`django.contrib.auth.models.User.last_name`.'''
     email = Column(String(settings.EMAIL_FIELD_LENGTH), index=True,
                     nullable=False)
-    '''See :attr:`django.contrib.auth.models.User.email`.'''
     password = Column(String(256), nullable=False)
-    '''See :attr:`django.contrib.auth.models.User.password`.'''
     is_staff = Column(Boolean, default=False, nullable=False)
-    '''See :attr:`django.contrib.auth.models.User.is_staff`.'''
     is_active = Column(Boolean, default=True, nullable=False)
-    '''See :attr:`django.contrib.auth.models.User.is_active`.'''
     is_superuser = Column(Boolean, default=False, nullable=False)
-    '''See :attr:`django.contrib.auth.models.User.is_superuser`.'''
     last_login = Column(DateTime, default=datetime.now, nullable=False,
                         onupdate=datetime.now)
-    '''See :attr:`django.contrib.auth.models.User.last_login`.'''
     date_joined = Column(DateTime, default=datetime.now, nullable=False)
-    '''See :attr:`django.contrib.auth.models.User.date_joined`.'''
+
+    permissions = association_proxy('permission_assocs', 'permission')
+    codenames = association_proxy('permission_assocs', 'codename')
 
     def get_absolute_url(self):
         '''The absolute path to a user's profile.
@@ -138,39 +135,6 @@ class BaseUser(orm.Base, Model):
         '''
         full_name = u'%s %s' % (self.first_name, self.last_name)
         return full_name.strip()
-
-    def get_profile(self, session=None):
-        '''Returns site-specific profile for this user. Raises
-        :exc:`~django.contrib.auth.models.SiteProfileNotAvailable` if this
-        site does not allow profiles.
-        '''
-        if not hasattr(self, '_profile_cache'):
-            from django.conf import settings
-            if not getattr(settings, 'AUTH_PROFILE_MODULE', False):
-                raise SiteProfileNotAvailable('''\
-You need to set AUTH_PROFILE_MODULE in your project settings''')
-            try:
-                app_label, model_name = settings.AUTH_PROFILE_MODULE \
-                                                .rsplit('.', 1)
-            except ValueError:
-                raise SiteProfileNotAvailable('''\
-app_label and model_name should be separated by a dot in the
-AUTH_PROFILE_MODULE setting''')
-
-            try:
-                module = import_module(app_label)
-                model_cls = getattr(module, model_name, None)
-                if model_cls is None:
-                    raise SiteProfileNotAvailable('''\
-Unable to load the profile model, check AUTH_PROFILE_MODULE in your project
-settings''')
-                if not session:
-                    session = orm.sessionmaker()
-                self._profile_cache = session.query(model_cls) \
-                                             .get(self.id)
-            except (ImportError, ImproperlyConfigured):
-                raise SiteProfileNotAvailable
-        return self._profile_cache
 
     def has_usable_password(self):
         '''Determines whether the user has a password.'''
@@ -226,30 +190,6 @@ settings''')
         else:
             user.set_unusable_password()
         session.add(user)
-        '''Create user profile if defined'''
-        from django.conf import settings
-        if getattr(settings, 'AUTH_PROFILE_MODULE', False) and \
-           getattr(settings, 'AUTH_PROFILE_AUTO_CREATE', False):
-            try:
-                app_label, model_name = settings.AUTH_PROFILE_MODULE \
-                                                .rsplit('.', 1)
-            except ValueError:
-                raise SiteProfileNotAvailable('''\
-app_label and model_name should be separated by a dot in the
-AUTH_PROFILE_MODULE setting''')
-            try:
-                module = import_module(app_label)
-                model_cls = getattr(module, model_name, None)
-                if model_cls is None:
-                    raise SiteProfileNotAvailable('''\
-Unable to load the profile model, check AUTH_PROFILE_MODULE in your project
-settings''')
-                session.commit()
-                profile = model_cls(user_id=user.id)
-                session.add(profile)
-                session.commit()
-            except (ImportError, ImproperlyConfigured):
-                raise SiteProfileNotAvailable
         session.commit()
         return user
 
@@ -276,7 +216,8 @@ settings''')
         session.add(user)
         session.commit()
         return user
-        
+
+
 user_cls = getattr(settings, 'BAPH_USER_CLASS', None)
 if user_cls:
     try:
@@ -299,3 +240,114 @@ if user_cls:
     User = model_cls
 else:
     User = BaseUser
+    
+
+def get_or_fail(codename):
+    session = orm.sessionmaker()
+    try:
+        perm = session.query(Permission).filter_by(codename=codename).one()
+    except:
+        raise ValueError('%s is not a valid permission codename' % codename)
+    return PermissionAssociation(permission=perm)
+
+
+class Group(Base, Model):
+    '''Groups'''
+    __tablename__ = 'baph_auth_groups'
+
+    id = Column(Integer, primary_key=True)
+    whitelabel = Column(Unicode(100), info={'readonly': True})
+    name = Column(Unicode(100))
+
+    users = association_proxy('user_groups', 'user',
+        creator=lambda v: UserGroup(user=v))
+
+    permissions = association_proxy('permission_assocs', 'permission')
+    codenames = association_proxy('permission_assocs', 'codename',
+        creator=get_or_fail)
+
+class UserGroup(Base, Model):
+    '''User groups'''
+    __tablename__ = 'baph_auth_user_groups'
+    __table_args__ = (
+        Index('idx_group_context', 'group_id', 'key', 'value'),
+        Index('idx_context', 'key', 'value'),
+        )
+
+    user_id = Column(Integer, ForeignKey(User.id), primary_key=True,
+        autoincrement=False)
+    group_id = Column(Integer, ForeignKey(Group.id), primary_key=True,
+        autoincrement=False)
+    key = Column(String(32), primary_key=True, default='')
+    value = Column(String(32), primary_key=True, default='')
+
+    user = relationship(User, lazy=True, uselist=False,
+        backref=backref('groups', lazy=True, uselist=True,
+            cascade='all, delete, delete-orphan'))
+    
+    group = relationship(Group, lazy=True, uselist=False,
+        backref=backref('user_groups', lazy=True, uselist=True))
+
+class Permission(Base, Model):
+    __tablename__ = 'baph_auth_permissions'
+    id = Column(Integer, primary_key=True)
+    name = Column(Unicode(100))
+    codename = Column(String(100), unique=True)
+    resource = Column(String(50))
+    action = Column(String(16))
+    key = Column(String(100))
+    value = Column(String(50))
+
+
+class PermissionAssociation(Base, Model):
+    __tablename__ = 'baph_auth_permission_assoc'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey(User.id))
+    group_id = Column(Integer, ForeignKey(Group.id))
+    perm_id = Column(Integer, ForeignKey(Permission.id))
+
+    user = relationship(User, backref='permission_assocs')
+    group = relationship(Group, backref='permission_assocs')
+    permission = relationship(Permission, lazy='joined')
+
+    codename = association_proxy('permission', 'codename')
+
+
+MAX_KEY_LEN = 255
+MAX_SECRET_LEN = 255
+KEY_LEN = 32
+SECRET_LEN = 32
+
+class OAuthConsumer(Base, Model):
+    __tablename__ = 'auth_oauth_consumer'
+    id = Column(Integer, ForeignKey(User.id), primary_key=True)
+    key = Column(String(MAX_KEY_LEN))
+    secret = Column(String(MAX_SECRET_LEN))
+
+    user = relationship(User, lazy=True, uselist=False)
+
+    def __init__(self, **kwargs):
+        super(OAuthConsumer, self).__init__(**kwargs)
+        if not self.key:
+            self.key = random_string(length=KEY_LEN)
+        if not self.secret:
+            self.secret = random_string(length=SECRET_LEN)
+
+    @classmethod
+    def create(cls, user_id, **kwargs):
+        kwargs['id'] = user_id
+        return cls(**kwargs)
+
+    def as_consumer(self):
+        '''Creates an oauth.OAuthConsumer object from the DB data.
+        :rtype: oauth.OAuthConsumer
+        '''
+        return oauth.OAuthConsumer(self.key, self.secret)
+
+class OAuthNonce(Base, Model):
+    __tablename__ = 'auth_oauth_nonce'
+    id = Column(Integer, primary_key=True)
+    token_key = Column(String(32))
+    consumer_key = Column(String(MAX_KEY_LEN), ForeignKey(OAuthConsumer.key))
+    key = Column(String(255), nullable=False, unique=True)
+

@@ -3,7 +3,6 @@
 import inspect
 
 from baph.db.shortcuts import get_object_or_404
-from baph.sites.models import get_current_site
 from baph.utils.importing import import_attr
 render_to_response = import_attr(['coffin.shortcuts'], 'render_to_response')
 from coffin.template import RequestContext
@@ -68,12 +67,9 @@ def login(request, template_name='registration/login.html',
 
     request.session.set_test_cookie()
 
-    current_site = get_current_site(request)
     return render_to_response(template_name, {
         'form': form,
         redirect_field_name: redirect_to,
-        'site': current_site,
-        'site_name': current_site.name,
     }, context_instance=RequestContext(request))
 
 
@@ -87,10 +83,7 @@ def logout(request, next_page=None,
         if redirect_to:
             return HttpResponseRedirect(redirect_to)
         else:
-            current_site = get_current_site(request)
             return render_to_response(template_name, {
-                'site': current_site,
-                'site_name': current_site.name,
                 'title': _('Logged out'),
             }, context_instance=RequestContext(request))
     else:

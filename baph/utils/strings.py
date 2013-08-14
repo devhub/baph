@@ -8,7 +8,6 @@ def random_string(size=16, chars=None):
         chars = []
         chars.extend([i for i in string.ascii_letters])
         chars.extend([i for i in string.digits])
-        chars.extend([i for i in '!@#$%&*()-_=+[{}]~^,<.>;:/?'])
     s = ''
     for i in range(size):
         s += chars[random.randint(0, len(chars) - 1)]

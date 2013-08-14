@@ -1,32 +1,19 @@
-from baph.utils.importing import import_any_module
-from django.conf import settings
-from django.contrib.staticfiles.handlers import StaticFilesHandler
-from django.core.management.commands.runserver import BaseRunserverCommand
-from optparse import make_option
+from cStringIO import StringIO
 
-class Command(BaseRunserverCommand):
-    option_list = BaseRunserverCommand.option_list + (
-        make_option('--nostatic', action="store_false", dest='use_static_handler', default=True,
-            help='Tells Django to NOT automatically serve static files at STATIC_URL.'),
-        make_option('--insecure', action="store_true", dest='insecure_serving', default=False,
-            help='Allows serving static files even if DEBUG is False.'),
-    )
-    help = "Starts a lightweight Web server for development and also serves static files."
+from django.contrib.staticfiles.management.commands.runserver \
+    import Command as RunserverCommand
 
-    def get_handler(self, *args, **options):
-        """
-        Returns the static files serving handler.
-        """
-        handler = super(Command, self).get_handler(*args, **options)
-        use_static_handler = options.get('use_static_handler', True)
-        insecure_serving = options.get('insecure_serving', False)
-        if (settings.DEBUG and use_static_handler or
-                (use_static_handler and insecure_serving)):
-            handler = StaticFilesHandler(handler)
-        return handler
+from baph.core.management.validation import get_validation_errors
 
+
+class Command(RunserverCommand):
     def validate(self, app=None, display_num_errors=False):
-        for app in settings.INSTALLED_APPS:
-            print 'installing models from %s' % app
-            import_any_module(['%s.models' % app], raise_error=False)
-
+        s = StringIO()
+        num_errors = get_validation_errors(s, app)
+        if num_errors:
+            s.seek(0)
+            error_text = s.read()
+            raise CommandError("One or more models did not validate:\n%s" % error_text)
+        if display_num_errors:
+            self.stdout.write("%s error%s found\n" 
+                % (num_errors, num_errors != 1 and 's' or ''))

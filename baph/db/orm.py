@@ -66,8 +66,9 @@ def get_declarative_base():
         except (ImportError, ImproperlyConfigured):
             raise 
     else:
-        Base = declarative_base()
+        from baph.db.models.base import Base
     return Base
+Base = get_declarative_base()
 
 class ORM(object):
     '''A wrapper class for dealing with the various aspects of SQLAlchemy.
