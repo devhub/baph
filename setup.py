@@ -4,7 +4,7 @@
 from setuptools import setup, find_packages
 
 setup(name='baph',
-      version='0.2.7',
+      version='0.2.11',
       install_requires=[
           'Coffin',
           'Django >= 1.3',
