@@ -294,7 +294,7 @@ if user_cls:
     Unable to load the user profile model, check BAPH_USER_CLASS in your project
     settings''')
     except (ImportError, ImproperlyConfigured):
-        raise Exception
+        raise
 
     User = model_cls
 else:
