@@ -1,0 +1,20 @@
+# This file collects all required third-party applications that are needed
+# to run this project. Later you can install all these apps in a row
+# using pip. Example::
+#
+#     pip install --no-deps -r no_deps_requirements.pip
+
+git+git://github.com/django/django-localflavor-ar.git
+git+git://github.com/django/django-localflavor-at.git
+git+git://github.com/django/django-localflavor-au.git
+git+git://github.com/django/django-localflavor-br.git
+git+git://github.com/django/django-localflavor-ca.git
+git+git://github.com/django/django-localflavor-ch.git
+git+git://github.com/django/django-localflavor-co.git
+git+git://github.com/django/django-localflavor-de.git
+git+git://github.com/django/django-localflavor-es.git
+git+git://github.com/django/django-localflavor-in.git
+git+git://github.com/django/django-localflavor-mx.git
+git+git://github.com/django/django-localflavor-nl.git
+git+git://github.com/django/django-localflavor-us.git
+git+git://github.com/django/django-localflavor-za.git

@@ -12,31 +12,44 @@ http://code.djangoproject.com/ticket/5446/
 
 Attachment: country_and_language_fields_trunk.4.patch
 '''
-
-from baph.utils.importing import import_any_module, import_attr
-from django.conf import settings
-forms = import_any_module(['django.forms'])
-from django.utils.encoding import force_unicode
-from django.utils.html import escape, conditional_escape
-from django.utils.translation import ugettext_lazy as _
+from __future__ import unicode_literals
 from itertools import chain
 
-COUNTRY_PROVINCES = [u'ar', u'ca', u'es', u'nl', u'za']
-COUNTRY_STATES = [u'at', u'au', u'br', u'ch', u'de', u'in_', u'mx', u'us']
+from django import forms
+from django.conf import settings
+from django.utils.encoding import force_unicode
+from django.utils.html import escape, conditional_escape
+from django.utils.importlib import import_module
+from django.utils.translation import ugettext_lazy as _
+
+from baph.utils.importing import import_any_module, import_attr
 
 
-def _get_country_divisions(country, div_type):
-    country_code = country.strip(u'_')
-    module = 'django.contrib.localflavor.%s.%s_%ss' % \
-             (country, country_code, div_type)
-    attr = '%s_CHOICES' % div_type.upper()
-    return (country_code.upper(), import_attr([module], attr))
+COUNTRY_DIVISIONS = {
+    'province': ['ar', 'ca', 'es', 'nl', 'za'],
+    'state': ['at', 'au', 'br', 'ch', 'de', 'in', 'mx', 'us'],
+    'department': ['co'],
+    }
+COUNTRY_STATES = COUNTRY_DIVISIONS['state']
+COUNTRY_PROVINCES = COUNTRY_DIVISIONS['province']
 
-STATE_PROVINCE_CHOICES = \
-    tuple(sorted(chain([_get_country_divisions(country, 'province')
-                        for country in COUNTRY_PROVINCES],
-                       [_get_country_divisions(country, 'state')
-                        for country in COUNTRY_STATES])))
+
+def _get_country_divisions(country, div_type, key_by_code=False):
+    mod_name = 'django_localflavor_%s.%s_%ss' % (country, country, div_type)
+    module = import_module(mod_name)
+    choices = getattr(module, '%s_CHOICES' % div_type.upper(), [])
+    items = [(k, k if key_by_code else v) for k, v in choices]
+    return (country.upper(), items)
+
+STATE_PROVINCE_CHOICES = tuple(sorted(chain(*[
+    [_get_country_divisions(country, div_type) 
+        for country in countries]
+        for div_type, countries in COUNTRY_DIVISIONS.items()])))
+
+STATE_PROVINCE_CODE_CHOICES = tuple(sorted(chain(*[
+    [_get_country_divisions(country, div_type, key_by_code=True) 
+        for country in countries]
+        for div_type, countries in COUNTRY_DIVISIONS.items()])))
 
 class CountryField(forms.ChoiceField):
     '''A country field, an uppercase two-letter ISO 3166-1 standard country
@@ -56,6 +69,15 @@ class CountryField(forms.ChoiceField):
         })
         super(CountryField, self).__init__(*args, **kwargs)
 
+class CountryCodeField(forms.ChoiceField):
+
+    def __init__(self, *args, **kwargs):
+        from . import COUNTRIES
+        kwargs.setdefault('choices', sorted([(k,k) for k,v in COUNTRIES]))
+        kwargs['widget'] = forms.Select(attrs={
+            'class': 'localflavor-generic-country',
+        })
+        super(CountryCodeField, self).__init__(*args, **kwargs)
 
 class LanguageField(forms.ChoiceField):
     '''A language code. Generally you would check languages against
@@ -129,3 +151,33 @@ class StateProvinceField(forms.ChoiceField):
                 raise forms.ValidationError(msg)
         else:
             return u''
+            
+class StateProvinceCodeField(forms.ChoiceField):
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('choices', STATE_PROVINCE_CODE_CHOICES)
+        kwargs['widget'] = StateProvinceSelect(attrs={
+            'class': 'localflavor-generic-stateprovince',
+        })
+        super(StateProvinceCodeField, self).__init__(*args, **kwargs)
+
+    def check_value(self, division, country):
+        '''Checks the value of the field to make sure that the state/province
+        is part of the specified country. Call this method in the ``clean*()``
+        method of your form.
+
+        :param division: The state/province value to check.
+        :param country: The country code to check with the state/province
+                        value.
+        '''
+        countries_with_divisions = dict(self.choices)
+        msg = _(u'Select a state which corresponds to the country selected.')
+        if country in countries_with_divisions:
+            choices = countries_with_divisions[country]
+            if division in [c for c, d in choices]:
+                return division
+            else:
+                raise forms.ValidationError(msg)
+        else:
+            return u''
+
