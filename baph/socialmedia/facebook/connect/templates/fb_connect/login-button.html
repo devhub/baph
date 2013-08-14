@@ -1,2 +1,0 @@
-<div id="fb-root"><fb:login-button perms="email{% if fb_extra_perms %},{{ fb_extra_perms }}{% endif %}">{% trans %}Register using Facebook{% endtrans %}</fb:login-button></div>
-<form id="fb-connect" method="post" action="{% url facebook_register %}">{% csrf_token %}</form>{# vim: set ft=htmljinja : #}
