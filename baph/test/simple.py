@@ -90,7 +90,7 @@ def build_suite(app_module):
             if len(test._tests) > 0:
                 suite.addTests(test._tests)
         else:
-            test = unittest.TestLoader().loadTestsFromModule(test_module)
+            test = unittest.defaultTestLoader.loadTestsFromModule(test_module)
             if len(test._tests) > 0:
                 suite.addTests(test._tests)
             try:
