@@ -1,4 +1,3 @@
-from baph.db.orm import get_declarative_base
 from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm.attributes import instance_dict
 from sqlalchemy.orm.collections import MappedCollection
@@ -6,8 +5,8 @@ from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.session import object_session
 from sqlalchemy.orm.util import identity_key
 
+from baph.db.orm import Base
 
-Base = get_declarative_base()
 
 def clone_obj(obj, user, rules={}, registry={}, path=None, root=None):
     """Clones an object and returns the clone.

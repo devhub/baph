@@ -12,8 +12,9 @@ from sqlalchemy.schema import CreateSchema, DropSchema, CreateTable
 
 from baph.core.management.base import NoArgsCommand
 from baph.core.management.sql import emit_post_sync_signal
-from baph.db import connections, Session, DEFAULT_DB_ALIAS
-from baph.db.models import Base, signals, get_apps, get_models
+from baph.db import DEFAULT_DB_ALIAS
+from baph.db.models import signals, get_apps, get_models
+from baph.db.orm import ORM, Base
 
 
 def get_tablename(obj):
@@ -72,7 +73,8 @@ class Command(NoArgsCommand):
                     raise
 
         db = options.get('database')
-        engine = connections[db]
+        orm = ORM.get(db)
+        engine = orm.engine
         default_schema = engine.url.database
 
         # the default db may not exist yet, so we remove it before connecting

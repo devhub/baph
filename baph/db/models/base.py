@@ -43,14 +43,6 @@ def constructor(self, **kwargs):
         else:
             setattr(self, attr.key, default)
 
-    '''
-    for col in cls.__table__.c:
-        if col.default is not None:
-            if callable(col.default.arg):
-                setattr(self, col.key, col.default.arg({}))
-            else:
-                setattr(self, col.key, col.default.arg)
-    '''
     # now load in the kwargs values
     for k in kwargs:
         if not hasattr(cls, k):
@@ -213,11 +205,11 @@ class ModelBase(DeclarativeMeta):
             pass
         return cls
 
-
-Base = declarative_base(cls=Model, 
-    metaclass=ModelBase,
-    constructor=constructor)
-
+def get_declarative_base(**kwargs):
+    return declarative_base(cls=Model, 
+        metaclass=ModelBase,
+        constructor=constructor,
+        **kwargs)
 
 if getattr(settings, 'CACHE_ENABLED', False):
     @event.listens_for(mapper, 'after_insert')

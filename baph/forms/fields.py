@@ -11,7 +11,7 @@ from django.utils.translation import ugettext_lazy as _
 class ObjectField(forms.Field):
     " allowed values must be sqlalchemy objects (result of resource hydration)"
     def to_python(self, value):
-        from baph.db.models import Base
+        from baph.db.orm import Base
         if value in validators.EMPTY_VALUES:
             return None
         if not isinstance(value, Base):

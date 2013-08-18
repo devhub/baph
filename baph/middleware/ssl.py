@@ -12,7 +12,7 @@ Foundation License, version 2 <http://python.org/psf/license/>`_.
 '''
 
 from django.conf import settings
-from django.http import HttpResponseRedirect, get_host
+from django.http import HttpResponseRedirect
 
 SSL = 'SSL'
 
@@ -52,9 +52,12 @@ class SSLRedirect(object):
             request.META.get('X_HTTP_CONNECTION_TYPE') == 'https'
 
     def redirect(self, request, secure):
-        protocol = 'https' if secure else 'http'
-        new_url = '%s://%s%s' % (protocol, get_host(request),
-                                 request.get_full_path())
+        request_url = request.build_absolute_uri(request.get_full_path())
+        if secure:
+            conv = ('http://', 'https://')
+        else:
+            conv = ('https://', 'http://')
+        new_url = request_url.replace(conv[0], conv[1])
 
         if settings.DEBUG and request.method == 'POST':
             raise RuntimeError('''\

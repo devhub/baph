@@ -8,7 +8,7 @@ from sqlalchemy.orm.attributes import get_history, instance_dict
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.util import has_identity, identity_key
 
-from baph.db import Session
+from baph.db import ORM
 
 
 # these keys auto-update, so should be ignored when comparing old/new values
@@ -125,8 +125,9 @@ class CacheMixin(object):
             'cache_relations',
             ]):
             return cache_keys, version_keys
-            
-        session = Session.object_session(self)
+
+        orm = ORM.get()
+        session = orm.sessionmaker()
         deleted = self.is_deleted or self in session.deleted
         data = instance_dict(self)
         cache = get_cache('objects')

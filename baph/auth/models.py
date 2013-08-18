@@ -43,14 +43,15 @@ from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import synonym, relationship, backref
 
-from baph.db.models import Model
-from baph.db.orm import ORM, Base
+from baph.db import ORM
 from baph.db.types import UUID, Dict, List
 from baph.utils.strings import random_string
 import inspect
 
 
 orm = ORM.get()
+Base = orm.Base
+
 
 AUTH_USER_FIELD_TYPE = getattr(settings, 'AUTH_USER_FIELD_TYPE', 'UUID')
 AUTH_USER_FIELD = UUID if AUTH_USER_FIELD_TYPE == 'UUID' else Integer
@@ -77,7 +78,7 @@ def _generate_user_id_column():
         return Column(AUTH_USER_FIELD, primary_key=True)
     return Column(UUID, primary_key=True, default=uuid.uuid4)
 
-class BaseUser(Base, Model):
+class BaseUser(Base):
     '''The SQLAlchemy model for Django's ``auth_user`` table.
     Users within the Django authentication system are represented by this
     model.
@@ -251,7 +252,7 @@ def get_or_fail(codename):
     return PermissionAssociation(permission=perm)
 
 
-class Group(Base, Model):
+class Group(Base):
     '''Groups'''
     __tablename__ = 'baph_auth_groups'
 
@@ -266,7 +267,7 @@ class Group(Base, Model):
     codenames = association_proxy('permission_assocs', 'codename',
         creator=get_or_fail)
 
-class UserGroup(Base, Model):
+class UserGroup(Base):
     '''User groups'''
     __tablename__ = 'baph_auth_user_groups'
     __table_args__ = (
@@ -288,7 +289,7 @@ class UserGroup(Base, Model):
     group = relationship(Group, lazy=True, uselist=False,
         backref=backref('user_groups', lazy=True, uselist=True))
 
-class Permission(Base, Model):
+class Permission(Base):
     __tablename__ = 'baph_auth_permissions'
     id = Column(Integer, primary_key=True)
     name = Column(Unicode(100))
@@ -298,8 +299,7 @@ class Permission(Base, Model):
     key = Column(String(100))
     value = Column(String(50))
 
-
-class PermissionAssociation(Base, Model):
+class PermissionAssociation(Base):
     __tablename__ = 'baph_auth_permission_assoc'
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey(User.id))
@@ -318,7 +318,7 @@ MAX_SECRET_LEN = 255
 KEY_LEN = 32
 SECRET_LEN = 32
 
-class OAuthConsumer(Base, Model):
+class OAuthConsumer(Base):
     __tablename__ = 'auth_oauth_consumer'
     id = Column(Integer, ForeignKey(User.id), primary_key=True)
     key = Column(String(MAX_KEY_LEN))
@@ -344,7 +344,7 @@ class OAuthConsumer(Base, Model):
         '''
         return oauth.OAuthConsumer(self.key, self.secret)
 
-class OAuthNonce(Base, Model):
+class OAuthNonce(Base):
     __tablename__ = 'auth_oauth_nonce'
     id = Column(Integer, primary_key=True)
     token_key = Column(String(32))
