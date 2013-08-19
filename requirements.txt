@@ -4,13 +4,13 @@ boto
 # Coffin
 git+git://github.com/dcramer/coffin.git
 cssutils
-Django >= 1.2
+Django == 1.5
 # django-piston
 hg+http://bitbucket.org/malept/django-piston
 # django-newcache
-git+git://github.com/ericflo/django-newcache.git
+# git+git://github.com/ericflo/django-newcache.git
 # django-registration
-hg+http://bitbucket.org/ubernostrum/django-registration
+# hg+http://bitbucket.org/ubernostrum/django-registration
 # django-staticfiles
 git+git://github.com/malept/django-staticfiles.git
 docutils

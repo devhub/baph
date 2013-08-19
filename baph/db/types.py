@@ -9,8 +9,13 @@ try:
     import json
 except ImportError:
     import simplejson as json
+import datetime
 import uuid
+import re
 
+from django.conf import settings
+from django.utils.timezone import is_naive, is_aware, make_aware
+from pytz import timezone
 from sqlalchemy import types
 from sqlalchemy.databases import mysql, postgresql
 
@@ -95,3 +100,45 @@ class Dict(JsonText):
     @property
     def python_type(self):
         return dict
+
+class TZAwareDateTime(types.TypeDecorator):
+    impl = types.DateTime
+
+    def __init__(self, tz, *args, **kwargs):
+        super(TZAwareDateTime, self).__init__(*args, **kwargs)
+        self.tz = timezone(tz)
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, basestring):
+            value = value.replace('T', ' ').replace('Z', '+00:00')
+            p = re.compile('([0-9: -]+)\.?([0-9]*)([\+-][0-9]{2}:?[0-9]{2})?')
+            dt, ms, tz = p.match(value).groups()
+            value = datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
+            if tz:
+                pol, h, m = tz[0], int(tz[1:3]), int(tz[-2:])
+                delta = datetime.timedelta(hours=h, minutes=m)
+                if pol == '+':
+                    value -= delta
+                else:
+                    value += delta
+
+        if is_naive(value):
+            value = make_aware(value, self.tz)
+        else:
+            value = value.replace(tzinfo=self.tz)
+        return value.strftime('%Y-%m-%d %H:%M:%S')
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        value = self.tz.localize(value, is_dst=None)
+        return value
+        
+    def compare_values(self, x, y):
+        if x and y and is_naive(x) and is_aware(y):
+            x = make_aware(x, self.tz)
+        elif x and y and is_aware(x) and is_naive(y):
+            y = make_aware(y, self.tz)
+        return x == y

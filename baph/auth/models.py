@@ -1,20 +1,4 @@
 # -*- coding: utf-8 -*-
-'''\
-======================================================================
-:mod:`baph.auth.models` -- SQLAlchemy models for Django Authentication
-======================================================================
-
-.. moduleauthor:: Mark Lee <markl@evomediagroup.com>
-
-SQLAlchemy versions of models from :mod:`django.contrib.auth.models`.
-
-.. setting:: AUTH_DIGEST_ALGORITHM
-
-Setting: AUTH_DIGEST_ALGORITHM
-------------------------------
-
-The default hash algorithm used to set passwords with. Defaults to ``sha1``.
-'''
 from datetime import datetime
 import hashlib
 from oauth import oauth
@@ -22,40 +6,32 @@ import random
 import urllib
 import uuid
 
-from baph.utils.importing import import_attr
 from django.conf import settings
-(AnonymousUser, check_password, SiteProfileNotAvailable,
- UNUSABLE_PASSWORD) = \
-    import_attr(['django.contrib.auth.models'],
-                ['AnonymousUser', 'check_password',
-                 'SiteProfileNotAvailable', 'UNUSABLE_PASSWORD'])
+from django.contrib.auth.hashers import (
+    check_password, make_password, is_password_usable, UNUSABLE_PASSWORD)
 from django.core.exceptions import ImproperlyConfigured
-try:
-    # global variable needed for django 1.3
-    from django.utils.crypto import constant_time_compare
-except:
-    pass
 from django.utils.encoding import smart_str
 from django.utils.importlib import import_module
 from django.utils.translation import ugettext as _
 from sqlalchemy import *
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.orm import synonym, relationship, backref
+from sqlalchemy.orm import synonym, relationship, backref, object_session
 
-from baph.db.models import Model
-from baph.db.orm import ORM, Base
+from baph.db import ORM
 from baph.db.types import UUID, Dict, List
 from baph.utils.strings import random_string
 import inspect
 
 
 orm = ORM.get()
+Base = orm.Base
+
 
 AUTH_USER_FIELD_TYPE = getattr(settings, 'AUTH_USER_FIELD_TYPE', 'UUID')
 AUTH_USER_FIELD = UUID if AUTH_USER_FIELD_TYPE == 'UUID' else Integer
 
-
+"""
 def get_hexdigest(algorithm, salt, raw_password):
     '''Extends Django's :func:`django.contrib.auth.models.get_hexdigest` by
     adding support for all of the other available hash algorithms.
@@ -71,13 +47,41 @@ def get_hexdigest(algorithm, salt, raw_password):
 
 # fun with monkeypatching
 exec inspect.getsource(check_password)
-
+"""
 def _generate_user_id_column():
     if AUTH_USER_FIELD_TYPE != 'UUID':
         return Column(AUTH_USER_FIELD, primary_key=True)
     return Column(UUID, primary_key=True, default=uuid.uuid4)
 
-class BaseUser(Base, Model):
+def update_last_login(sender, user, **kwargs):
+    """
+    A signal receiver which updates the last_login date for
+    the user logging in.
+    """
+    user.last_login = get_datetime_now()
+    user.save(update_fields=['last_login'])
+    # user_logged_in.connect(update_last_login) #TODO: connect this signal
+
+def get_or_fail(codename):
+    session = orm.sessionmaker()
+    try:
+        perm = session.query(Permission).filter_by(codename=codename).one()
+    except:
+        raise ValueError('%s is not a valid permission codename' % codename)
+    return PermissionAssociation(permission=perm)
+
+def string_to_model(string):
+    if string in orm.Base._decl_class_registry:
+        return orm.Base._decl_class_registry[string]
+    elif string.title() in Base._decl_class_registry:
+        return orm.Base._decl_class_registry[string.title()]
+    else:
+        # this string doesn't match a resource
+        return None
+
+        
+
+class BaseUser(Base):
     '''The SQLAlchemy model for Django's ``auth_user`` table.
     Users within the Django authentication system are represented by this
     model.
@@ -109,13 +113,23 @@ class BaseUser(Base, Model):
         :rtype: :class:`str`
         '''
         return '/users/%s/' % urllib.quote(smart_str(self.username))
-
+    """
     def check_password(self, raw_password):
         '''Tests if the password given matches the password of the user.'''
         if self.password == UNUSABLE_PASSWORD:
             return False
         return check_password(raw_password, self.password)
-
+    """
+    def check_password(self, raw_password):
+        """
+        Returns a boolean of whether the raw_password was correct. Handles
+        hashing formats behind the scenes.
+        """
+        def setter(raw_password):
+            self.set_password(raw_password)
+            self.save(update_fields=["password"])
+        return check_password(raw_password, self.password, setter)
+    
     def email_user(self, subject, message, from_email=None, **kwargs):
         '''Sends an e-mail to this User.'''
         from django.core.mail import send_mail
@@ -123,12 +137,13 @@ class BaseUser(Base, Model):
             from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
         send_mail(subject, message, from_email, [self.email], **kwargs)
 
+    """
     @staticmethod
     def generate_salt(algo='sha1'):
         '''Generates a salt for generating digests.'''
         return get_hexdigest(algo, str(random.random()),
                              str(random.random()))[:5]
-
+    """
     def get_full_name(self):
         '''Retrieves the first_name plus the last_name, with a space in
         between and no leading/trailing whitespace.
@@ -152,6 +167,9 @@ class BaseUser(Base, Model):
         '''
         return True
 
+    def set_password(self, raw_password):
+        self.password = make_password(raw_password)
+    """
     def set_password(self, raw_password, algo=None):
         '''Copy of :meth:`django.contrib.auth.models.User.set_password`.
 
@@ -165,7 +183,7 @@ class BaseUser(Base, Model):
         salt = self.generate_salt(algo)
         hsh = get_hexdigest(algo, salt, raw_password)
         self.password = '%s$%s$%s' % (algo, salt, hsh)
-
+    """
     def set_unusable_password(self):
         '''Sets a password value that will never be a valid hash.'''
         self.password = UNUSABLE_PASSWORD
@@ -217,6 +235,12 @@ class BaseUser(Base, Model):
         session.commit()
         return user
 
+    def save(self, update_fields=[], **kwargs):
+        session = object_session(self)
+        if not session:
+            session = orm.sessionmaker()
+            session.add(self)
+        session.commit()
 
 user_cls = getattr(settings, 'BAPH_USER_CLASS', None)
 if user_cls:
@@ -251,7 +275,7 @@ def get_or_fail(codename):
     return PermissionAssociation(permission=perm)
 
 
-class Group(Base, Model):
+class Group(Base):
     '''Groups'''
     __tablename__ = 'baph_auth_groups'
 
@@ -266,7 +290,7 @@ class Group(Base, Model):
     codenames = association_proxy('permission_assocs', 'codename',
         creator=get_or_fail)
 
-class UserGroup(Base, Model):
+class UserGroup(Base):
     '''User groups'''
     __tablename__ = 'baph_auth_user_groups'
     __table_args__ = (
@@ -288,7 +312,7 @@ class UserGroup(Base, Model):
     group = relationship(Group, lazy=True, uselist=False,
         backref=backref('user_groups', lazy=True, uselist=True))
 
-class Permission(Base, Model):
+class Permission(Base):
     __tablename__ = 'baph_auth_permissions'
     id = Column(Integer, primary_key=True)
     name = Column(Unicode(100))
@@ -298,8 +322,7 @@ class Permission(Base, Model):
     key = Column(String(100))
     value = Column(String(50))
 
-
-class PermissionAssociation(Base, Model):
+class PermissionAssociation(Base):
     __tablename__ = 'baph_auth_permission_assoc'
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey(User.id))
@@ -318,7 +341,7 @@ MAX_SECRET_LEN = 255
 KEY_LEN = 32
 SECRET_LEN = 32
 
-class OAuthConsumer(Base, Model):
+class OAuthConsumer(Base):
     __tablename__ = 'auth_oauth_consumer'
     id = Column(Integer, ForeignKey(User.id), primary_key=True)
     key = Column(String(MAX_KEY_LEN))
@@ -344,7 +367,7 @@ class OAuthConsumer(Base, Model):
         '''
         return oauth.OAuthConsumer(self.key, self.secret)
 
-class OAuthNonce(Base, Model):
+class OAuthNonce(Base):
     __tablename__ = 'auth_oauth_nonce'
     id = Column(Integer, primary_key=True)
     token_key = Column(String(32))

@@ -1,7 +1,19 @@
 import re
+from types import FunctionType
 
 from django.conf import settings
-from django.utils.translation import string_concat
+from django.utils.encoding import force_unicode
+from django.utils.functional import cached_property
+from django.utils.translation import (string_concat, get_language, activate,
+    deactivate_all)
+from sqlalchemy import inspect, Integer
+from sqlalchemy.orm import configure_mappers
+from sqlalchemy.ext.hybrid import HYBRID_PROPERTY, HYBRID_METHOD
+from sqlalchemy.ext.associationproxy import ASSOCIATION_PROXY
+from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
+
+from baph.db import types
+from baph.db.models.fields import ModelField
 
 
 get_verbose_name = lambda class_name: \
@@ -12,7 +24,12 @@ DEFAULT_NAMES = ('verbose_name', 'verbose_name_plural',
                  'app_label', 'swappable', 'auto_created',
                  'cache_detail_keys', 'cache_list_keys', 'cache_pointers',
                  'cache_relations', 'cache_cascades', 
-                 'permissions', 'permission_scopes', 'form_class')
+                 'permissions', 'permission_scopes', 'form_class',
+                 'permission_actions', 'permission_classes',
+                 'permission_parents', 'permission_full_parents', 
+                 'permission_values', 'permission_terminator',
+                 'permission_handler',
+                 )
 
 class Options(object):
     def __init__(self, meta, app_label=None):
@@ -52,12 +69,20 @@ class Options(object):
         # invalidations. Use this when an object is cached as a subobject of
         # a larger cache, to signal the parent that it needs to recache
         self.cache_cascades = []
-        
-        self.limit = 1000
-        self.model_name, self.verbose_name = None, None
-        self.verbose_name_plural = None
+
         self.permissions = {}
         self.permission_scopes = {}
+        self.permission_actions = []
+        self.permission_classes = []
+        self.permission_parents = []
+        self.permission_handler = None
+        self.permission_full_parents = []
+        self.permission_terminator = False
+        self.permission_values = {}
+
+        self.limit = 1000
+        self.model_name = None
+        self.verbose_name, self.verbose_name_plural = None, None
         self.object_name, self.app_label = None, app_label
         self.pk = None
         self.form_class = None
@@ -76,9 +101,12 @@ class Options(object):
         self.object_name = cls.__name__
         self.model_name = self.object_name.lower()
         self.verbose_name = get_verbose_name(self.object_name)
+        if not self.model_name:
+            self.model_name = self.object_name.lower()
+            self.model_name_plural = self.model_name + 's'
 
         # Next, apply any overridden values from 'class Meta'.
-        if self.meta:
+        if getattr(self, 'meta', None):
             meta_attrs = self.meta.__dict__.copy()
             for name in self.meta.__dict__:
                 # Ignore any private attributes that Django doesn't care about.
@@ -99,10 +127,11 @@ class Options(object):
 
             # Any leftover attributes must be invalid.
             if meta_attrs != {}:
-                raise TypeError("'class Meta' got invalid attribute(s): %s" % ','.join(meta_attrs.keys()))
+                raise TypeError("'class Meta' got invalid attribute(s): %s" 
+                    % ','.join(meta_attrs.keys()))
+            del self.meta
         else:
             self.verbose_name_plural = string_concat(self.verbose_name, 's')
-        del self.meta
         
     def verbose_name_raw(self):
         """
@@ -142,3 +171,60 @@ class Options(object):
                     return swapped_for
         return None
     swapped = property(_swapped)
+
+    def _fill_fields_cache(self):
+        cache = []
+        if not self.model.__mapper__.configured:
+            configure_mappers()
+        for key, attr in inspect(self.model).all_orm_descriptors.items():
+            if attr.is_mapper:
+                continue
+            elif attr.extension_type == HYBRID_METHOD:
+                continue
+            elif attr.extension_type == HYBRID_PROPERTY:
+                field = ModelField.from_hybrid(key, attr)
+            elif attr.extension_type == ASSOCIATION_PROXY:
+                field = ModelField.from_proxy(key, attr, model=self.model)
+            elif isinstance(attr.property, ColumnProperty):
+                field = ModelField.from_column(key, attr)
+            elif isinstance(attr.property, RelationshipProperty):
+                field = ModelField.from_relationship(key, attr)
+            cache.append((key, field))
+        self._field_cache = tuple(cache)
+        self._field_name_cache = [x for x, _ in cache]
+
+    @cached_property
+    def fields(self):
+        """
+        Returns tuple of (key, ModelField) tuples representing available fields
+        """
+        try:
+            self._field_cache
+        except AttributeError:
+            self._fill_fields_cache()
+        return self._field_cache
+
+    @cached_property
+    def field_names(self):
+        """
+        The getter for self.fields. This returns the list of field objects
+        available to this model (including through parent models).
+
+        Callers are not permitted to modify this list, since it's a reference
+        to this instance (not a copy).
+        """
+        try:
+            self._field_name_cache
+        except AttributeError:
+            self._fill_fields_cache()
+        return self._field_name_cache
+
+    def get_field(self, name, many_to_many=True):
+        """
+        Returns the requested field by name. Raises FieldDoesNotExist on error.
+        """
+        to_search = self.fields #(self.fields + self.many_to_many) if many_to_many else self.fields
+        for f in to_search:
+            if f[0] == name:
+                return f[1]
+        raise FieldDoesNotExist('%s has no field named %r' % (self.object_name, name))

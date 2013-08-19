@@ -16,8 +16,6 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 from baph.db.models import get_app, get_apps
 from baph.db.orm import ORM, Base
 from baph.utils.importing import import_any_module
-#from baph.utils.unittest.loader import TestLoader
-#from baph.utils.unittest.suite import TestSuite
 
 
 orm = ORM.get()
@@ -92,7 +90,7 @@ def build_suite(app_module):
             if len(test._tests) > 0:
                 suite.addTests(test._tests)
         else:
-            test = unittest.TestLoader().loadTestsFromModule(test_module)
+            test = unittest.defaultTestLoader.loadTestsFromModule(test_module)
             if len(test._tests) > 0:
                 suite.addTests(test._tests)
             try:
@@ -247,8 +245,8 @@ class BaphTestSuiteRunner(object):
             self.engine.execute(CreateSchema(schema))
 
         # create tables
-        if len(orm.metadata.tables) > 0:
-            orm.metadata.create_all()
+        if len(orm.Base.metadata.tables) > 0:
+            orm.Base.metadata.create_all()
 
         # generate permissions
         call_command('createpermissions')

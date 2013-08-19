@@ -8,6 +8,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.utils.datastructures import SortedDict
 from django.utils.importlib import import_module
 from django.utils.module_loading import module_has_submodule
+from django.utils._os import upath
 #from django.utils import six
 
 
@@ -38,12 +39,24 @@ class AppCache(object):
     def __init__(self):
         self.__dict__ = self.__shared_state
 
-    def _label_for(self, app_mod):
-        """
-        Return app_label for given models module.
+    def extract_app_name(self, app_label):
+        " determine the relevant entry in settings.INSTALLED_APPS "
+        " which corresponds to this string-based module import "
+        for app_name in sorted(settings.INSTALLED_APPS, key=lambda x: -1*len(x)):
+            # we go from longest to shortest, so earlier matches are longer
+            if len(app_name) > len(app_label):
+                continue
+            if app_label.startswith(app_name):
+                return app_name
+                
+        # no result yet, try matching the short name
+        short = app_label.split('.',1)[0]
+        for app_name in settings.INSTALLED_APPS:
+            if app_name.rsplit('.',1)[-1] == short:
+                return app_name
 
-        """
-        return app_mod.__name__.rsplit('.',1)[0]
+        return None
+
 
     def _populate(self):
         """
@@ -74,23 +87,48 @@ class AppCache(object):
         finally:
             imp.release_lock()
 
-    def extract_app_name(self, app_label):
-        " determine the relevant entry in settings.INSTALLED_APPS "
-        " which corresponds to this string-based module import "
-        for app_name in sorted(settings.INSTALLED_APPS, key=lambda x: -1*len(x)):
-            # we go from longest to shortest, so earlier matches are longer
-            if len(app_name) > len(app_label):
-                continue
-            if app_label.startswith(app_name):
-                return app_name
-                
-        # no result yet, try matching the short name
-        short = app_label.split('.',1)[0]
-        for app_name in settings.INSTALLED_APPS:
-            if app_name.rsplit('.',1)[-1] == short:
-                return app_name
+    def _label_for(self, app_mod):
+        """
+        Return app_label for given models module.
 
-        return None
+        """
+        return app_mod.__name__.rsplit('.',1)[0]
+
+    def load_app(self, app_name, can_postpone=False):
+        """
+        Loads the app with the provided fully qualified name, and returns the
+        model module.
+        """
+        self.handled[app_name] = None
+        self.nesting_level += 1
+        app_module = import_module(app_name)
+        try:
+            models = import_module('.models', app_name)
+        except ImportError:
+            self.nesting_level -= 1
+            # If the app doesn't have a models module, we can just ignore the
+            # ImportError and return no models for it.
+            if not module_has_submodule(app_module, 'models'):
+                return None
+            # But if the app does have a models module, we need to figure out
+            # whether to suppress or propagate the error. If can_postpone is
+            # True then it may be that the package is still being imported by
+            # Python and the models module isn't available yet. So we add the
+            # app to the postponed list and we'll try it again after all the
+            # recursion has finished (in populate). If can_postpone is False
+            # then it's time to raise the ImportError.
+            else:
+                if can_postpone:
+                    self.postponed.append(app_name)
+                    return None
+                else:
+                    raise
+
+        self.nesting_level -= 1
+        if models not in self.app_store:
+            self.app_store[models] = len(self.app_store)
+            self.app_labels[self._label_for(models)] = models
+        return models
 
     def app_cache_ready(self):
         """
@@ -142,41 +180,7 @@ class AppCache(object):
         self._populate()
         return self.app_errors
 
-    def load_app(self, app_name, can_postpone=False):
-        """
-        Loads the app with the provided fully qualified name, and returns the
-        model module.
-        """
-        self.handled[app_name] = None
-        self.nesting_level += 1
-        app_module = import_module(app_name)
-        try:
-            models = import_module('.models', app_name)
-        except ImportError:
-            self.nesting_level -= 1
-            # If the app doesn't have a models module, we can just ignore the
-            # ImportError and return no models for it.
-            if not module_has_submodule(app_module, 'models'):
-                return None
-            # But if the app does have a models module, we need to figure out
-            # whether to suppress or propagate the error. If can_postpone is
-            # True then it may be that the package is still being imported by
-            # Python and the models module isn't available yet. So we add the
-            # app to the postponed list and we'll try it again after all the
-            # recursion has finished (in populate). If can_postpone is False
-            # then it's time to raise the ImportError.
-            else:
-                if can_postpone:
-                    self.postponed.append(app_name)
-                    return None
-                else:
-                    raise
 
-        self.nesting_level -= 1
-        if models not in self.app_store:
-            self.app_store[models] = len(self.app_store)
-            self.app_labels[self._label_for(models)] = models
-        return models
 
     def get_models(self, app_mod=None, include_auto_created=False,
                                        include_deferred=False):

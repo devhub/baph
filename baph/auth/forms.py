@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-
-from baph.sites.models import get_current_site
 from coffin.shortcuts import render_to_string
 from django import forms
 from django.contrib.auth.forms import SetPasswordForm as BaseSetPasswordForm
@@ -40,6 +38,8 @@ That e-mail address doesn't allow the password to be set.'''))
         from django.core.mail import send_mail
         for user in self.users_cache:
             if not domain_override:
+                # TODO: implement this
+                raise Exception('not implemented')
                 current_site = get_current_site(request)
                 site_name = current_site.name
                 domain = current_site.domain
