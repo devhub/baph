@@ -52,12 +52,10 @@ class SSLRedirect(object):
             request.META.get('X_HTTP_CONNECTION_TYPE') == 'https'
 
     def redirect(self, request, secure):
-        request_url = request.build_absolute_uri(request.get_full_path())
-        if secure:
-            conv = ('http://', 'https://')
-        else:
-            conv = ('https://', 'http://')
-        new_url = request_url.replace(conv[0], conv[1])
+        protocol = 'https' if secure else 'http'
+        new_url = '%s://%s%s' % (protocol, 
+                                 request.get_host(),
+                                 request.get_full_path())
 
         if settings.DEBUG and request.method == 'POST':
             raise RuntimeError('''\

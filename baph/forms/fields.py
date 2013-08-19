@@ -7,11 +7,6 @@ from django import forms
 from django.core import validators
 from django.utils.translation import ugettext_lazy as _
 
-from baph.db.orm import ORM
-
-
-orm = ORM.get()
-Base = orm.Base
 
 class ObjectField(forms.Field):
     " allowed values must be sqlalchemy objects (result of resource hydration)"
