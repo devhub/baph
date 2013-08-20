@@ -3,6 +3,7 @@
 
 from datetime import datetime
 from django.contrib.auth import BACKEND_SESSION_KEY, load_backend, SESSION_KEY
+from django.contrib.auth.models import AnonymousUser
 
 
 def login(request, user):

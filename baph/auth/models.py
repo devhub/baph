@@ -18,6 +18,7 @@ from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import synonym, relationship, backref, object_session
 
+from baph.auth.mixins import UserPermissionMixin
 from baph.db import ORM
 from baph.db.types import UUID, Dict, List
 from baph.utils.strings import random_string
@@ -79,9 +80,24 @@ def string_to_model(string):
         # this string doesn't match a resource
         return None
 
-        
+class AnonymousUser(object):
+    id = None
+    email = None
+    username = ''
+    is_staff = False
+    is_active = False
+    is_superuser = False
+    
+    def is_anonymous(self):
+        return True
 
-class BaseUser(Base):
+    def is_authenticated(self):
+        return False
+
+    def has_resource_perm(self, resource):
+        return False
+
+class BaseUser(Base, UserPermissionMixin):
     '''The SQLAlchemy model for Django's ``auth_user`` table.
     Users within the Django authentication system are represented by this
     model.
@@ -289,6 +305,7 @@ class Group(Base):
     permissions = association_proxy('permission_assocs', 'permission')
     codenames = association_proxy('permission_assocs', 'codename',
         creator=get_or_fail)
+    
 
 class UserGroup(Base):
     '''User groups'''
