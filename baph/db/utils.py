@@ -47,7 +47,6 @@ def django_config_to_sqla_config(config):
     return params
 
 def load_engine(config):
-    #url = create_sqla_engine_url(db_settings)
     url = URL(**django_config_to_sqla_config(config))
     try:
         engine = create_engine(url, poolclass=NullPool,
@@ -69,6 +68,17 @@ class DatabaseWrapper(object):
             autoflush=False))
 
 class EngineHandler(ConnectionHandler):
+    def __init__(self, databases):
+        if not databases:
+            self.databases = {
+                DEFAULT_DB_ALIAS: {
+                    'ENGINE': 'django.db.backends.dummy',
+                },
+            }
+        else:
+            self.databases = databases
+        self._connections = type('engine', (), {})
+
     def __getitem__(self, alias):
         return self.get(alias)
 
@@ -81,4 +91,4 @@ class EngineHandler(ConnectionHandler):
         db = self.databases[alias]
         conn = DatabaseWrapper(db, alias)
         setattr(self._connections, alias, conn)
-        return conn        
+        return conn
