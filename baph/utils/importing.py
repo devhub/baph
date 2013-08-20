@@ -4,11 +4,38 @@
 =======================================================
 
 .. moduleauthor:: Mark Lee <markl@evomediagroup.com>
+.. moduleauthor:: Gerald Thibault <jt@evomediagroup.com>
 '''
+from __future__ import absolute_import
+import ast
+import pkgutil
+import sys
 
 from django.conf import settings
 from django.utils.importlib import import_module
 
+
+class ImportTransformer(ast.NodeTransformer):
+
+    def __init__(self, modules):
+        self.modules = modules
+        super(ImportTransformer, self).__init__()
+
+    def visit_ImportFrom(self, node):
+        if node.module not in self.modules:
+            self.generic_visit(node)
+            return node
+
+        code = ['import sys\n']
+        for name in node.names:
+            asname = name.asname or name.name
+            line = "%s = sys.modules['%s'].%s\n" \
+                % (asname, node.module, name.name)
+            code.append(line)
+        code = ''.join(code)
+
+        nodes = tuple([self.visit(n) for n in ast.parse(code).body])
+        return nodes
 
 def import_any_module(modules, raise_error=True):
     '''Imports the first module available from a list of modules.
@@ -128,3 +155,55 @@ def import_any_attr(modules, attr, raise_error=True):
         raise AttributeError('Could not locate %s in any of %s' % \
                              (attr, modules))
     return result
+
+def module_to_filename(module_name):
+    pkg = pkgutil.get_loader(module_name)
+    return pkg.filename
+
+def safe_import(path, replace_modules=[]):
+    " input is a dotted path "
+    if not replace_modules:
+        raise ValueError('replace_modules must contain at least one value')
+
+    mod, name = path.rsplit('.',1)
+    filename = module_to_filename(mod)
+    f = open(filename)
+    code = f.read()
+    f.close()
+
+    node = ast.parse(code, filename)
+    node = ImportTransformer(replace_modules).visit(node)
+    node = ast.fix_missing_locations(node)
+    code = compile(node, filename, 'exec')
+    
+    if not mod in sys.modules:
+        sys.modules[mod] = type(sys)(mod)
+        sys.modules[mod].__file__ = filename
+
+    exec code in sys.modules[mod].__dict__
+    return getattr(sys.modules[mod], name)
+    
+def remove_class(cls, name):
+    from baph.db.models.loading import unregister_models
+    subs = cls.__subclasses__()
+    subs = [s for s in subs if s.__module__ != cls.__module__]
+    if not subs:
+        # unregister from AppCache
+        unregister_models(cls._meta.app_label, cls._meta.model_name)
+
+        # remove from SA class registry
+        if cls.__name__ in cls._decl_class_registry:
+            del cls._decl_class_registry[cls.__name__]
+
+        # remove from SA module registry
+        root = cls._decl_class_registry['_sa_module_registry']
+        tokens = cls.__module__.split(".")
+        while tokens:
+            token = tokens.pop(0)
+            module = root.get_module(token)
+            for token in tokens:
+                module = module.get_module(token)
+            module._remove_item(cls.__name__)
+
+        # delete the table
+        cls.metadata.remove(cls.__table__)

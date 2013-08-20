@@ -12,7 +12,7 @@ Foundation License, version 2 <http://python.org/psf/license/>`_.
 '''
 
 from django.conf import settings
-from django.http import HttpResponseRedirect, get_host
+from django.http import HttpResponseRedirect
 
 SSL = 'SSL'
 
@@ -53,7 +53,8 @@ class SSLRedirect(object):
 
     def redirect(self, request, secure):
         protocol = 'https' if secure else 'http'
-        new_url = '%s://%s%s' % (protocol, get_host(request),
+        new_url = '%s://%s%s' % (protocol, 
+                                 request.get_host(),
                                  request.get_full_path())
 
         if settings.DEBUG and request.method == 'POST':

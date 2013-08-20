@@ -11,7 +11,7 @@ from django.utils.translation import ugettext_lazy as _
 class ObjectField(forms.Field):
     " allowed values must be sqlalchemy objects (result of resource hydration)"
     def to_python(self, value):
-        from baph.db.models import Base
+        from baph.db.orm import Base
         if value in validators.EMPTY_VALUES:
             return None
         if not isinstance(value, Base):
@@ -58,6 +58,8 @@ class DictField(JsonField):
             raise ValueError(_('This field requires a dict as input'))
         return value
 
+# TODO: Test these
+"""
 class OneToManyField(ListField):
     " input from an html form will be a list of primary keys "
     " input from resource hydration will be the objects themselves "
@@ -71,7 +73,7 @@ class OneToManyField(ListField):
         value = super(OneToManyField, self).to_python(value)
         if all(isinstance(v, int) for v in value):
             # list of primary keys
-            session = Session()
+            session = orm.sessionmaker()
             return session.query(self.model) \
                 .filter(self.model.id.in_(value)) \
                 .all()
@@ -94,7 +96,7 @@ class ManyToManyField(ListField):
         value = super(ManyToManyField, self).to_python(value)
         if all(isinstance(v, int) for v in value):
             # list of primary keys
-            session = Session()
+            session = orm.sessionmaker()
             return session.query(self.model) \
                 .filter(self.model.id.in_(value)) \
                 .all()
@@ -103,4 +105,4 @@ class ManyToManyField(ListField):
             return value
         raise ValueError(_('This field takes a list of pks or instances of %s' \
             % self.model))
-
+"""

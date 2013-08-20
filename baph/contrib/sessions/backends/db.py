@@ -9,40 +9,43 @@
 from __future__ import absolute_import
 
 from datetime import datetime
-from django.contrib.sessions.backends.base import CreateError, SessionBase
+from django.contrib.sessions.backends.base import SessionBase, CreateError
 from django.utils.encoding import force_unicode
 from sqlalchemy.exc import SQLAlchemyError
-from ..models import orm, Session
 
+from baph.db.orm import ORM
+
+
+orm = ORM.get()
 
 class SessionStore(SessionBase):
     '''Implements an SQLAlchemy-based session store for Django.
 
     To use, set ``SESSION_ENGINE`` in ``settings.py`` to
-    ``baph.sessions.backends.sqlalchemy``.
+    ``baph.contrib.sessions.backends.sqlalchemy``.
     '''
 
     def load(self):
-        sess = orm.sessionmaker()
-        dsession = sess.query(Session) \
+        session = orm.sessionmaker()
+        s = session.query(Session) \
                    .filter_by(session_key=self.session_key) \
                    .filter(Session.expire_date > datetime.now()) \
                    .first()
-        if dsession is None:
+        if s is None:
             self.create()
             return {}
         else:
-            return self.decode(force_unicode(dsession.session_data))
+            return self.decode(s.session_data)
 
     def exists(self, session_key):
-        sess = orm.sessionmaker()
-        return sess.query(Session) \
+        session = orm.sessionmaker()
+        return session.query(Session) \
                .filter_by(session_key=session_key) \
                .count() > 0
 
     def create(self):
         while True:
-            self.session_key = self._get_new_session_key()
+            self._session_key = self._get_new_session_key()
             try:
                 # Save immediately to ensure we have a unique entry in the
                 # database.
@@ -60,28 +63,29 @@ class SessionStore(SessionBase):
         create a *new* entry (as opposed to possibly updating an existing
         entry).
         '''
-        sess = orm.sessionmaker()
+        obj = Session(
+            session_key=self._get_or_create_session_key(),
+            session_data=self.encode(self._get_session(no_load=must_create)),
+            expire_date=self.get_expiry_date()
+        )
         if self.exists(self.session_key) and must_create:
             raise CreateError
-        sess.begin(subtransactions=True)
+        session = orm.sessionmaker()
         try:
-            session_data = self.encode(self._get_session(no_load=must_create))
-            obj = Session(session_key=self.session_key,
-                          session_data=session_data,
-                          expire_date=self.get_expiry_date())
-            sess.merge(obj)
-            sess.commit()
+            session.merge(obj)
+            session.commit()
         except SQLAlchemyError:
-            sess.rollback()
+            session.rollback()
             raise
 
     def delete(self, session_key=None):
         if session_key is None:
-            if self._session_key is None:
+            if self.session_key is None:
                 return
-            else:
-                session_key = self._session_key
-        sess = orm.sessionmaker()
-        sess.query(Session) \
+            session_key = self.session_key
+        session = orm.sessionmaker()
+        session.query(Session) \
             .filter_by(session_key=session_key) \
             .delete()
+
+from baph.contrib.sessions.models import Session

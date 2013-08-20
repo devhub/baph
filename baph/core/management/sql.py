@@ -1,4 +1,5 @@
-from baph.db.models import signals, get_apps, Base
+from baph.db.models import signals, get_apps
+from baph.db.orm import ORM, Base
 
 
 def emit_post_sync_signal(created_models, verbosity, interactive, db):

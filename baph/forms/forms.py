@@ -65,10 +65,14 @@ def fields_for_model(model, fields=None, exclude=None, widgets=None,
             if isinstance(col, _Label):
                 # this is an aliased expression, with no setter
                 continue
+            if col.default is not None:
+                default = col.default.arg
+            else:
+                default = col.default
             kwargs = {
                 'required': data_type != Boolean \
                     and not col.nullable and not col.default,
-                'initial': col.default,
+                'initial': default,
                 'label': col.info.get('label', None),
                 'help_text': col.info.get('help_text', None),
                 }
