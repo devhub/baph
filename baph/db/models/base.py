@@ -23,7 +23,6 @@ from baph.db.models import signals
 
 @compiles(ForeignKeyConstraint)
 def set_default_schema(constraint, compiler, **kw):
-    print 'set_default_schema'
     """ This overrides the formatting function used to render remote tables
         in foreign key declarations, because innodb (at least, perhaps others)
         requires explicit schemas when declaring a FK which crosses schemas """
