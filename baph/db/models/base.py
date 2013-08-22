@@ -7,17 +7,39 @@ from django.conf import settings
 from django.forms import ValidationError
 from sqlalchemy import event, inspect
 from sqlalchemy.ext.associationproxy import ASSOCIATION_PROXY
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
 from sqlalchemy.ext.hybrid import HYBRID_PROPERTY, HYBRID_METHOD
 from sqlalchemy.orm import mapper, configure_mappers
 from sqlalchemy.orm.attributes import instance_dict, instance_state
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
+from sqlalchemy.schema import ForeignKeyConstraint
 
 from baph.db.models.loading import get_model, register_models
 from baph.db.models.mixins import CacheMixin
 from baph.db.models.options import Options
 from baph.db.models import signals
 
+
+@compiles(ForeignKeyConstraint)
+def set_default_schema(constraint, compiler, **kw):
+    print 'set_default_schema'
+    """ This overrides the formatting function used to render remote tables
+        in foreign key declarations, because innodb (at least, perhaps others)
+        requires explicit schemas when declaring a FK which crosses schemas """
+    remote_table = list(constraint._elements.values())[0].column.table
+   
+    if remote_table.schema is None:
+        default_schema = remote_table.bind.url.database
+        constraint_schema = constraint.columns[0].table.schema
+        if constraint_schema not in (default_schema, None):
+            """ if the constraint schema is not the default, we need to 
+                add a schema before formatting the table """
+            remote_table.schema = default_schema
+            value = compiler.visit_foreign_key_constraint(constraint, **kw)
+            remote_table.schema = None
+            return value
+    return compiler.visit_foreign_key_constraint(constraint, **kw)
 
 def constructor(self, **kwargs):
     cls = type(self)
