@@ -1,7 +1,7 @@
 from sqlalchemy.orm import configure_mappers
 
 from baph.core.management.base import NoArgsCommand
-from baph.db.models import Base
+from baph.db.orm import Base
 from baph.forms.models import fields_for_model
 import sys
 
