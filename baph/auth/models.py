@@ -361,7 +361,7 @@ SECRET_LEN = 32
 class OAuthConsumer(Base):
     __tablename__ = 'auth_oauth_consumer'
     id = Column(Integer, ForeignKey(User.id), primary_key=True)
-    key = Column(String(MAX_KEY_LEN))
+    key = Column(String(MAX_KEY_LEN), unique=True)
     secret = Column(String(MAX_SECRET_LEN))
 
     user = relationship(User, lazy=True, uselist=False)
