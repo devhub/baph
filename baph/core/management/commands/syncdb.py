@@ -81,12 +81,15 @@ class Command(NoArgsCommand):
         engine.url.database = None
         tmp_url = str(engine.url)
         engine.url.database = default_schema
+
         tmp_engine = create_engine(tmp_url)
         tmp_conn = tmp_engine.connect()
         existing_schemas = set([s[0] for s in tmp_conn.execute('show databases')])
         if not default_schema in existing_schemas:
             tmp_engine.execute(CreateSchema(default_schema))
             existing_schemas.add(default_schema)
+        
+        orm = ORM.get(db)
 
         # now reconnect with the default_db provided
         conn = engine.connect()
@@ -173,6 +176,7 @@ class Command(NoArgsCommand):
 
         # create any missing tables
         created_models = set()
+        to_create = []
         if verbosity >= 1:
             self.stdout.write("Creating tables ...\n")
         for app_name, model in table_manifest:
@@ -181,10 +185,12 @@ class Command(NoArgsCommand):
                     % (app_name, model._meta.object_name))
             tablename = get_tablename(model)
             if tablename not in existing_tables:
-                model.__table__.create()
+                table = model.__table__
+                to_create.append(table)
                 existing_tables.append(tablename)
             existing_models.append(model)
             created_models.add(model)
+        orm.Base.metadata.create_all(bind=engine, tables=to_create)
 
         # Send the post_syncdb signal
         emit_post_sync_signal(created_models, verbosity, interactive, db)

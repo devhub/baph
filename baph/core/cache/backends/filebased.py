@@ -56,7 +56,7 @@ class CustomOpenerFileCache(FileBasedCache):
 
             with self._opener(fname, 'wb') as f:
                 expiry = None if timeout is None else time.time() + timeout
-                pickle.dump(expiry, f, pickle.HIGEST_PROTOCOL)
+                pickle.dump(expiry, f, pickle.HIGHEST_PROTOCOL)
                 pickle.dump(value, f, pickle.HIGHEST_PROTOCOL)
         except (IOError, OSError):
             pass
