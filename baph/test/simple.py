@@ -259,8 +259,8 @@ class BaphTestSuiteRunner(object):
             .run(suite)
 
     def teardown_databases(self, old_config, **kwargs):
-        for schema in old_config:
-            self.engine.execute(DropSchema(schema))
+        call_command('purge', interactive=False)
+        pass
 
     def teardown_test_environment(self, **kwargs):
         unittest.removeHandler()

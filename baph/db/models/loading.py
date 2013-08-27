@@ -174,6 +174,22 @@ class AppCache(object):
         apps.sort()
         return [elt[1] for elt in apps]
 
+    def get_app_paths(self):
+        """
+        Returns a list of paths to all installed apps.
+
+        Useful for discovering files at conventional locations inside apps
+        (static files, templates, etc.)
+        """
+        self._populate()
+
+        app_paths = []
+        for app in self.get_apps():
+            if hasattr(app, '__path__'):        # models/__init__.py package
+                app_paths.extend([upath(path) for path in app.__path__])
+            else:                               # models.py module
+                app_paths.append(upath(app.__file__))
+        return app_paths
 
     def get_app_errors(self):
         "Returns the map of known problems with the INSTALLED_APPS."
@@ -266,6 +282,7 @@ cache = AppCache()
 
 get_apps = cache.get_apps
 get_app = cache.get_app
+get_app_paths = cache.get_app_paths
 get_app_errors = cache.get_app_errors
 get_models = cache.get_models
 get_model = cache.get_model
