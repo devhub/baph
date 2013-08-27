@@ -74,67 +74,69 @@ class Command(NoArgsCommand):
                 if not msg.startswith('No module named') or 'management' not in msg:
                     raise
 
-        confirm = raw_input("""You have requested a purghe of the database.
+        if interactive:
+            confirm = raw_input("""You have requested a purghe of the database.
 This will IRREVERSIBLY DESTROY all data currently in the database,
 and DELETE ALL TABLES AND SCHEMAS. Are you sure you want to do this?
 
     Type 'yes' to continue, or 'no' to cancel: """)
-        if confirm != 'yes':
-            print 'Aborting purge'
-            sys.exit()
+        else:
+            confirm = 'yes'
 
-        db = options.get('database')
-        orm = ORM.get(db)
-        engine = orm.engine
-        conn = engine.connect()
-        Base = orm.Base
+        if confirm == 'yes':
+            db = options.get('database')
+            orm = ORM.get(db)
+            engine = orm.engine
+            conn = engine.connect()
+            Base = orm.Base
 
-        default_schema = engine.url.database
-        existing_schemas = set([s[0] for s in conn.execute('show databases') 
-                           if s[0]])
-        schemas = set([default_schema])
-        schemas.update(Base.metadata._schemas)
-        schemas = schemas.intersection(existing_schemas)
+            default_schema = engine.url.database
+            existing_schemas = set([s[0] for s in conn.execute('show databases') 
+                               if s[0]])
+            schemas = set([default_schema])
+            schemas.update(Base.metadata._schemas)
+            schemas = schemas.intersection(existing_schemas)
 
-        existing_tables = []
-        if verbosity >= 1:
-            self.stdout.write("Getting existing tables...\n")
-        for schema in schemas:
-            if schema not in existing_schemas:
-                schemas.remove(schema)
-                continue
-            for name in engine.engine.table_names(schema, connection=conn):
-                existing_tables.append('%s.%s' % (schema,name))
-                if verbosity >= 3:
-                    self.stdout.write("\t%s.%s\n" % (schema,name))    
-
-        inspector = reflection.Inspector.from_engine(engine)
-        metadata = MetaData()
-        all_fks = []
-        tables = []
-        for table in Base.metadata.tables.values():
-            schema = table.schema or default_schema
-            table_name = table.name
-            table_fullname = '%s.%s' % (schema, table_name)
-            if table_fullname not in existing_tables:
-                continue
-
-            fks = []
-            for fk in inspector.get_foreign_keys(table_name, schema):
-                if not fk['name']:
+            existing_tables = []
+            if verbosity >= 1:
+                self.stdout.write("Getting existing tables...\n")
+            for schema in schemas:
+                if schema not in existing_schemas:
+                    schemas.remove(schema)
                     continue
-                fks.append(ForeignKeyConstraint((), (), name=fk['name']))
-            t = Table(table_name, metadata, *fks, schema=table.schema)
-            tables.append(t)
-            all_fks.extend(fks)
+                for name in engine.engine.table_names(schema, connection=conn):
+                    existing_tables.append('%s.%s' % (schema,name))
+                    if verbosity >= 3:
+                        self.stdout.write("\t%s.%s\n" % (schema,name))    
 
-        for fkc in all_fks:
-            conn.execute(DropConstraint(fkc))
+            inspector = reflection.Inspector.from_engine(engine)
+            metadata = MetaData()
+            all_fks = []
+            tables = []
+            for table in Base.metadata.tables.values():
+                schema = table.schema or default_schema
+                table_name = table.name
+                table_fullname = '%s.%s' % (schema, table_name)
+                if table_fullname not in existing_tables:
+                    continue
 
-        for table in tables:
-            conn.execute(DropTable(table))
+                fks = []
+                for fk in inspector.get_foreign_keys(table_name, schema):
+                    if not fk['name']:
+                        continue
+                    fks.append(ForeignKeyConstraint((), (), name=fk['name']))
+                t = Table(table_name, metadata, *fks, schema=table.schema)
+                tables.append(t)
+                all_fks.extend(fks)
 
-        for schema in schemas:
-            conn.execute(DropSchema(schema))
+            for fkc in all_fks:
+                conn.execute(DropConstraint(fkc))
 
+            for table in tables:
+                conn.execute(DropTable(table))
+
+            for schema in schemas:
+                conn.execute(DropSchema(schema))
+        else:
+            self.stdout.write("Purge cancelled.\n")
 
