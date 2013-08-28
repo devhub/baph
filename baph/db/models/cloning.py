@@ -5,8 +5,11 @@ from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.session import object_session
 from sqlalchemy.orm.util import identity_key
 
-from baph.db.orm import Base
+from baph.db.orm import ORM
 
+
+orm = ORM.get()
+Base = orm.Base
 
 def clone_obj(obj, user, rules={}, registry={}, path=None, root=None):
     """Clones an object and returns the clone.
@@ -74,6 +77,8 @@ def clone_obj(obj, user, rules={}, registry={}, path=None, root=None):
         # relations are using their subclasses, and not the base class
         session = object_session(obj)
         session.expunge_all()
+        session.close()
+        session = orm.sessionmaker()
         obj = session.query(cls).get(pk)
 
     if not rules and not hasattr(cls, '__cloning_rules__'):

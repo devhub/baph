@@ -55,18 +55,19 @@ Are you sure you want to do this?
 
         if confirm == 'yes':
             session = orm.sessionmaker()
+            session.execute('SET foreign_key_checks=0')
+
             try:
                 for table in reversed(Base.metadata.sorted_tables):
                     if table.name == 'baph_auth_permissions':
                         # TODO: this is terrible, fix it
                         continue
-                    try:
-                        session.execute(table.delete())
-                    except:
-                        pass
+                    session.execute(table.delete())
                 session.commit()
+                session.execute('SET foreign_key_checks=1')
             except Exception, e:
                 session.rollback()
+                session.execute('SET foreign_key_checks=1')
                 raise
                 raise CommandError("""Database couldn't be flushed. Possible reasons:
   * The database isn't running or isn't configured correctly.
