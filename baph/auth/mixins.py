@@ -1,6 +1,8 @@
 from types import FunctionType
 
 from django.conf import settings
+from sqlalchemy import *
+from sqlalchemy.orm import lazyload
 
 
 USER_ORG_KEY = getattr(settings, 'BAPH_USER_ORG_KEY')
@@ -8,6 +10,28 @@ USER_ORG_REL = getattr(settings, 'BAPH_USER_ORG_RELATION')
 GROUP_ORG_KEY = getattr(settings, 'BAPH_GROUP_ORG_KEY')
 GROUP_ORG_REL = getattr(settings, 'BAPH_GROUP_ORG_RELATION')
 
+
+def convert_filter(k, cls=None):
+    if not isinstance(k, basestring):
+        raise Exception('convert_filters keys must be strings')
+    frags = k.split('.')
+    attr = frags.pop()
+    joins = []
+    if not frags:
+        # only attr provided, use current model
+        if not cls:
+            raise Exception('convert_filter: cls is required for '
+                'single-dotted keys')
+        model = cls
+    else:
+        # dotted format, chained relations
+        model = string_to_model(frags.pop(0))
+        for frag in frags:
+            rel = getattr(model, frag)
+            joins.append(rel)
+            model = rel.property.argument
+    col = getattr(model, attr)
+    return (col, joins)
 
 def string_to_model(string):
     from baph.db.orm import Base
@@ -124,4 +148,120 @@ class UserPermissionMixin(object):
         if action:
             perms = perms.get(action, {})
         return perms
+
+    def has_perm(self, resource, action, filters=None):
+        from baph.db.orm import ORM
+        if not self.is_authenticated():
+            # user is not logged in
+            return False
+
+        perms = self.get_resource_permissions(resource, action)
+        if not perms:
+            # user has no applicable permissions
+            return False
+
+        for perm in perms:
+            if not perm.key:
+                # boolean (no filter criteria) permissions are always valid
+                return True
+
+        if not filters:
+            filters = {}
+            # no boolean permissions exist, so filters must be provided in
+            # order to determine validity of potential permissions
+            raise Exception('has_perm called with no filters, but all ' \
+                'located permissions are filter-based')
+
+        model = string_to_model(resource)
+        joins = []
+
+        and_filters = []
+        for k, v in filters.items():
+            col, joins_ = convert_filter(k, model)
+            and_filters.append(col == v)
+            for j in joins_:
+                if not j in joins:
+                    joins.append(j)
+
+        or_filters = []
+        for perm in perms:
+            col, joins_ = convert_filter(perm.key, model)
+            or_filters.append(col == perm.value)
+            for j in joins_:
+                if not j in joins:
+                    joins.append(j)
+
+        all_filters = []
+
+        if len(or_filters) > 1:
+            all_filters.append(or_(*or_filters))
+        elif len(or_filters) == 1:
+            all_filters.append(or_filters[0])
+
+        all_filters += and_filters
+        if len(all_filters) > 1:
+            filters = and_(*all_filters)
+        elif len(all_filters) == 1:
+            filters = all_filters[0]
+        else:
+            raise Exception('no filters of any kind found')
+
+        orm = ORM.get()
+        session = orm.sessionmaker()
+        query = session.query(model) \
+            .options(lazyload('*'))
+
+        for join in joins:
+            query = query.outerjoin(join)
+
+        query = query.filter(filters) \
+            .with_entities(func.count(text('*')))
+        return query.scalar() != 0
+
+    def has_resource_perm(self, resource):
+        if not self.is_authenticated():
+            # user is not logged in
+            return False
+        
+        perms = self.get_resource_permissions(resource)
+        return bool(perms)
+
+    def get_resource_filters(self, resource, action='view'):
+        """
+        Returns resource filters in a format appropriate for 
+        applying to an existing query
+        """
+        from baph.db.orm import Base
+        perms = self.get_resource_permissions(resource, action)
+        formatted = []
+
+        for p in perms:
+            if not p.key:
+                # this is a boolean permission, which cannot be applied
+                # as a filter
+                continue
+            model = string_to_model(p.resource)
+            keys = p.key.split(',')
+            values = p.value.split(',')
+            data = zip(keys, values)
+
+            filters = []
+            for key, value in data:
+                frags = key.split('.')
+                cls = Base._decl_class_registry[frags.pop(0)]
+                attr = frags.pop()
+                for frag in frags:
+                    rel = getattr(cls, frag)
+                    cls = rel.property.argument
+                    if isinstance(cls, FunctionType):
+                        # lazy-loaded attr that hasn't been evaluated yet
+                        cls = cls()
+                col = getattr(cls, attr)
+                filters.append(col == value)
+
+            if len(filters) == 1:
+                formatted.append(filters[0])
+            else:
+                formatted.append(and_(*filters))
+        return formatted
 
