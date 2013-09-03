@@ -296,7 +296,8 @@ class Group(Base):
     __tablename__ = 'baph_auth_groups'
 
     id = Column(Integer, primary_key=True)
-    whitelabel = Column(Unicode(100), info={'readonly': True})
+    whitelabel_name = Column('whitelabel', String(25),
+        info={'readonly': True})
     name = Column(Unicode(100))
 
     users = association_proxy('user_groups', 'user',
