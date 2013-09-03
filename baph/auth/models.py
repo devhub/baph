@@ -16,7 +16,8 @@ from django.utils.translation import ugettext as _
 from sqlalchemy import *
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.orm import synonym, relationship, backref, object_session
+from sqlalchemy.orm import (relationship, backref, object_session,
+    RelationshipProperty)
 
 from baph.auth.mixins import UserPermissionMixin
 from baph.db import ORM
@@ -32,23 +33,7 @@ Base = orm.Base
 AUTH_USER_FIELD_TYPE = getattr(settings, 'AUTH_USER_FIELD_TYPE', 'UUID')
 AUTH_USER_FIELD = UUID if AUTH_USER_FIELD_TYPE == 'UUID' else Integer
 
-"""
-def get_hexdigest(algorithm, salt, raw_password):
-    '''Extends Django's :func:`django.contrib.auth.models.get_hexdigest` by
-    adding support for all of the other available hash algorithms.
 
-    Inspired by http://u.malept.com/djpwdhash
-    '''
-    if (hasattr(hashlib, 'algorithms') and algorithm in hashlib.algorithms):
-        return hashlib.new(algorithm, salt + raw_password).hexdigest()
-    elif algorithm in ('sha1', 'sha224', 'sha256', 'sha384', 'sha512', 'md5'):
-        return getattr(hashlib, algorithm)(salt + raw_password).hexdigest()
-    else:
-        raise Exception('Unsupported algorithm "%s"' % algorithm)
-
-# fun with monkeypatching
-exec inspect.getsource(check_password)
-"""
 def _generate_user_id_column():
     if AUTH_USER_FIELD_TYPE != 'UUID':
         return Column(AUTH_USER_FIELD, primary_key=True)
@@ -79,6 +64,109 @@ def string_to_model(string):
     else:
         # this string doesn't match a resource
         return None
+
+
+# permission classes
+
+class Permission(Base):
+    __tablename__ = 'baph_auth_permissions'
+    __table_args__ = {
+        'info': {'preserve_during_flush': True},
+        }
+
+    id = Column(Integer, primary_key=True)
+    name = Column(Unicode(100))
+    codename = Column(String(100), unique=True)
+    resource = Column(String(50))
+    action = Column(String(16))
+    key = Column(String(100))
+    value = Column(String(50))
+
+
+# organization models
+
+class AbstractBaseOrganization(Base):
+    __abstract__ = True
+    id = Column(Integer, primary_key=True)
+    name = Column(Unicode(200), nullable=False)
+
+    @classmethod
+    def get_current(cls):
+        raise NotImplemented('get_current must be defined on the '
+            'custom Organization model')
+
+    @classmethod
+    def get_current_id(cls):
+        org = cls.get_current()
+        if not org:
+            return None
+        if isinstance(org, dict):
+            return org['id']
+        else:
+            return org.id
+
+class BaseOrganization(AbstractBaseOrganization):
+    __tablename__ = 'baph_auth_organizations'
+    __requires_subclass__ = True
+
+class Organization(BaseOrganization):
+    class Meta:
+        swappable = 'BAPH_ORGANIZATION_MODEL'
+
+
+# group models
+
+class BaseGroup(Base):
+    '''Groups'''
+    __tablename__ = 'baph_auth_groups'
+
+    id = Column(Integer, primary_key=True)
+    #whitelabel_name = Column('whitelabel', String(25),
+    #    info={'readonly': True})
+    name = Column(Unicode(100))
+
+    users = association_proxy('user_groups', 'user',
+        creator=lambda v: UserGroup(user=v))
+    codenames = association_proxy('permission_assocs', 'codename',
+        creator=get_or_fail)
+    permissions = association_proxy('permission_assocs', 'permission')
+
+class Group(BaseGroup):
+    class Meta:
+        swappable = 'BAPH_GROUP_MODEL'
+
+setattr(Group, Organization._meta.model_name+'_id',
+    Column(Integer, ForeignKey(Organization.id), index=True))
+setattr(Group, Organization._meta.model_name,
+    RelationshipProperty(Organization, 
+        backref=Group._meta.model_name_plural,
+        foreign_keys=[getattr(Group, Organization._meta.model_name+'_id')]))
+
+'''
+
+class AbstractBaseGroup(Base):
+    __abstract__ = True
+    id = Column(Integer, primary_key=True)
+
+    users = association_proxy('user_groups', 'user',
+        creator=lambda v: UserGroup(user=v))
+    permissions = association_proxy('permission_assocs', 'permission')
+    codenames = association_proxy('permission_assocs', 'codename',
+        creator=get_or_fail)
+
+class BaseGroup(AbstractBaseGroup):
+    __tablename__ = 'baph_auth_groups'
+    __requires_subclass__ = True
+    name = Column(Unicode(100), nullable=False)
+
+class Group(BaseGroup):
+    class Meta:
+        permission_actions = ['add', 'view', 'edit', 'delete']
+        permission_parents = [Organization._meta.model_name]
+        swappable = 'BAPH_GROUP_MODEL'
+'''
+
+#
 
 class AnonymousUser(object):
     id = None
@@ -129,13 +217,7 @@ class BaseUser(Base, UserPermissionMixin):
         :rtype: :class:`str`
         '''
         return '/users/%s/' % urllib.quote(smart_str(self.username))
-    """
-    def check_password(self, raw_password):
-        '''Tests if the password given matches the password of the user.'''
-        if self.password == UNUSABLE_PASSWORD:
-            return False
-        return check_password(raw_password, self.password)
-    """
+
     def check_password(self, raw_password):
         """
         Returns a boolean of whether the raw_password was correct. Handles
@@ -153,13 +235,6 @@ class BaseUser(Base, UserPermissionMixin):
             from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
         send_mail(subject, message, from_email, [self.email], **kwargs)
 
-    """
-    @staticmethod
-    def generate_salt(algo='sha1'):
-        '''Generates a salt for generating digests.'''
-        return get_hexdigest(algo, str(random.random()),
-                             str(random.random()))[:5]
-    """
     def get_full_name(self):
         '''Retrieves the first_name plus the last_name, with a space in
         between and no leading/trailing whitespace.
@@ -282,31 +357,11 @@ else:
     User = BaseUser
     
 
-def get_or_fail(codename):
-    session = orm.sessionmaker()
-    try:
-        perm = session.query(Permission).filter_by(codename=codename).one()
-    except:
-        raise ValueError('%s is not a valid permission codename' % codename)
-    return PermissionAssociation(permission=perm)
 
 
-class Group(Base):
-    '''Groups'''
-    __tablename__ = 'baph_auth_groups'
-
-    id = Column(Integer, primary_key=True)
-    whitelabel_name = Column('whitelabel', String(25),
-        info={'readonly': True})
-    name = Column(Unicode(100))
-
-    users = association_proxy('user_groups', 'user',
-        creator=lambda v: UserGroup(user=v))
-
-    permissions = association_proxy('permission_assocs', 'permission')
-    codenames = association_proxy('permission_assocs', 'codename',
-        creator=get_or_fail)
     
+
+# association classes
 
 class UserGroup(Base):
     '''User groups'''
@@ -330,16 +385,6 @@ class UserGroup(Base):
     group = relationship(Group, lazy=True, uselist=False,
         backref=backref('user_groups', lazy=True, uselist=True))
 
-class Permission(Base):
-    __tablename__ = 'baph_auth_permissions'
-    id = Column(Integer, primary_key=True)
-    name = Column(Unicode(100))
-    codename = Column(String(100), unique=True)
-    resource = Column(String(50))
-    action = Column(String(16))
-    key = Column(String(100))
-    value = Column(String(50))
-
 class PermissionAssociation(Base):
     __tablename__ = 'baph_auth_permission_assoc'
     id = Column(Integer, primary_key=True)
@@ -353,6 +398,8 @@ class PermissionAssociation(Base):
 
     codename = association_proxy('permission', 'codename')
 
+
+# OAuth models
 
 MAX_KEY_LEN = 255
 MAX_SECRET_LEN = 255

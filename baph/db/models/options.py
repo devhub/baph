@@ -81,9 +81,10 @@ class Options(object):
         self.permission_values = {}
 
         self.limit = 1000
-        self.model_name = None
-        self.verbose_name, self.verbose_name_plural = None, None
         self.object_name, self.app_label = None, app_label
+        self.model_name, self.model_name_plural = None, None
+        self.verbose_name, self.verbose_name_plural = None, None
+        
         self.pk = None
         self.form_class = None
         self.meta = meta
@@ -101,8 +102,7 @@ class Options(object):
         self.object_name = cls.__name__
         self.model_name = self.object_name.lower()
         self.verbose_name = get_verbose_name(self.object_name)
-        if not self.model_name:
-            self.model_name = self.object_name.lower()
+        if not self.model_name_plural:
             self.model_name_plural = self.model_name + 's'
 
         # Next, apply any overridden values from 'class Meta'.
