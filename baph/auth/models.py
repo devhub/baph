@@ -116,34 +116,6 @@ class Organization(BaseOrganization):
 
 # group models
 
-class BaseGroup(Base):
-    '''Groups'''
-    __tablename__ = 'baph_auth_groups'
-
-    id = Column(Integer, primary_key=True)
-    #whitelabel_name = Column('whitelabel', String(25),
-    #    info={'readonly': True})
-    name = Column(Unicode(100))
-
-    users = association_proxy('user_groups', 'user',
-        creator=lambda v: UserGroup(user=v))
-    codenames = association_proxy('permission_assocs', 'codename',
-        creator=get_or_fail)
-    permissions = association_proxy('permission_assocs', 'permission')
-
-class Group(BaseGroup):
-    class Meta:
-        swappable = 'BAPH_GROUP_MODEL'
-
-setattr(Group, Organization._meta.model_name+'_id',
-    Column(Integer, ForeignKey(Organization.id), index=True))
-setattr(Group, Organization._meta.model_name,
-    RelationshipProperty(Organization, 
-        backref=Group._meta.model_name_plural,
-        foreign_keys=[getattr(Group, Organization._meta.model_name+'_id')]))
-
-'''
-
 class AbstractBaseGroup(Base):
     __abstract__ = True
     id = Column(Integer, primary_key=True)
@@ -157,16 +129,19 @@ class AbstractBaseGroup(Base):
 class BaseGroup(AbstractBaseGroup):
     __tablename__ = 'baph_auth_groups'
     __requires_subclass__ = True
-    name = Column(Unicode(100), nullable=False)
+    name = Column(Unicode(100))
 
 class Group(BaseGroup):
     class Meta:
-        permission_actions = ['add', 'view', 'edit', 'delete']
-        permission_parents = [Organization._meta.model_name]
         swappable = 'BAPH_GROUP_MODEL'
-'''
 
-#
+setattr(Group, Organization._meta.model_name+'_id',
+    Column(Integer, ForeignKey(Organization.id), index=True))
+setattr(Group, Organization._meta.model_name,
+    RelationshipProperty(Organization, backref=Group._meta.model_name_plural,
+        foreign_keys=[getattr(Group, Organization._meta.model_name+'_id')]))
+
+# user models
 
 class AnonymousUser(object):
     id = None
