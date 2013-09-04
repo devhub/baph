@@ -135,9 +135,9 @@ class Group(BaseGroup):
     class Meta:
         swappable = 'BAPH_GROUP_MODEL'
 
-setattr(Group, Organization._meta.model_name+'_id',
+setattr(BaseGroup, Organization._meta.model_name+'_id',
     Column(Integer, ForeignKey(Organization.id), index=True))
-setattr(Group, Organization._meta.model_name,
+setattr(BaseGroup, Organization._meta.model_name,
     RelationshipProperty(Organization, backref=Group._meta.model_name_plural,
         foreign_keys=[getattr(Group, Organization._meta.model_name+'_id')]))
 
@@ -160,66 +160,24 @@ class AnonymousUser(object):
     def has_resource_perm(self, resource):
         return False
 
-class BaseUser(Base, UserPermissionMixin):
-    '''The SQLAlchemy model for Django's ``auth_user`` table.
-    Users within the Django authentication system are represented by this
-    model.
-
-    Username and password are required. Other fields are optional.
-    '''
-    __tablename__ = 'auth_user'
-
+class AbstractBaseUser(Base, UserPermissionMixin):
+    __abstract__ = True
     id = _generate_user_id_column()
-    username = Column(Unicode(75), nullable=False, unique=True)
-    first_name = Column(Unicode(30), nullable=True)
-    last_name = Column(Unicode(30), nullable=True)
     email = Column(String(settings.EMAIL_FIELD_LENGTH), index=True,
                     nullable=False)
     password = Column(String(256), nullable=False)
+    last_login = Column(DateTime, default=datetime.now, nullable=False)
     is_staff = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
-    last_login = Column(DateTime, default=datetime.now, nullable=False,
-                        onupdate=datetime.now)
+    is_active = Column(Boolean, default=True, nullable=False)
     date_joined = Column(DateTime, default=datetime.now, nullable=False)
 
     permissions = association_proxy('permission_assocs', 'permission')
     codenames = association_proxy('permission_assocs', 'codename')
 
-    def get_absolute_url(self):
-        '''The absolute path to a user's profile.
-
-        :rtype: :class:`str`
-        '''
-        return '/users/%s/' % urllib.quote(smart_str(self.username))
-
-    def check_password(self, raw_password):
-        """
-        Returns a boolean of whether the raw_password was correct. Handles
-        hashing formats behind the scenes.
-        """
-        def setter(raw_password):
-            self.set_password(raw_password)
-            self.save(update_fields=["password"])
-        return check_password(raw_password, self.password, setter)
-    
-    def email_user(self, subject, message, from_email=None, **kwargs):
-        '''Sends an e-mail to this User.'''
-        from django.core.mail import send_mail
-        if not from_email:
-            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
-        send_mail(subject, message, from_email, [self.email], **kwargs)
-
-    def get_full_name(self):
-        '''Retrieves the first_name plus the last_name, with a space in
-        between and no leading/trailing whitespace.
-        '''
-        full_name = u'%s %s' % (self.first_name, self.last_name)
-        return full_name.strip()
-
-    def has_usable_password(self):
-        '''Determines whether the user has a password.'''
-        return self.password != UNUSABLE_PASSWORD
+    def get_username(self):
+        "Return the identifying username for this User"
+        return getattr(self, self.USERNAME_FIELD)
 
     def is_anonymous(self):
         '''Always returns :const:`False`. This is a way of comparing
@@ -235,106 +193,122 @@ class BaseUser(Base, UserPermissionMixin):
 
     def set_password(self, raw_password):
         self.password = make_password(raw_password)
-    """
-    def set_password(self, raw_password, algo=None):
-        '''Copy of :meth:`django.contrib.auth.models.User.set_password`.
 
-        The important difference: it takes an optional ``algo`` parameter,
-        which can change the hash method used to one-way encrypt the password.
-        The fallback used is the :setting:`AUTH_DIGEST_ALGORITHM` setting,
-        followed by the default in Django, ``sha1``.
-        '''
-        if not algo:
-            algo = getattr(settings, 'AUTH_DIGEST_ALGORITHM', 'sha1')
-        salt = self.generate_salt(algo)
-        hsh = get_hexdigest(algo, salt, raw_password)
-        self.password = '%s$%s$%s' % (algo, salt, hsh)
-    """
+    def check_password(self, raw_password):
+        """
+        Returns a boolean of whether the raw_password was correct. Handles
+        hashing formats behind the scenes.
+        """
+        def setter(raw_password):
+            self.set_password(raw_password)
+            self.save(update_fields=["password"])
+        return check_password(raw_password, self.password, setter)
+
+    def has_usable_password(self):
+        '''Determines whether the user has a password.'''
+        return self.password != UNUSABLE_PASSWORD
+
     def set_unusable_password(self):
         '''Sets a password value that will never be a valid hash.'''
         self.password = UNUSABLE_PASSWORD
 
-    def __repr__(self):
-        return '<User(%s, "%s")>' % (self.id, self.get_full_name())
-
-    def __unicode__(self):
-        return unicode(self.username)
+    # from UserManager
 
     @classmethod
-    def create_user(cls, username, email, password=None, session=None,
-                    first_name=None, last_name=None):
-        '''Creates a new User.'''
-        if not session:
-            session = orm.sessionmaker()
-        user = cls(username=username, email=email, first_name=first_name,
-                   last_name=last_name, is_staff=False, is_active=True,
-                   is_superuser=False)
-        if password:
-            user.set_password(password)
+    def normalize_email(cls, email):
+        """
+        Normalize the address by lowercasing the domain part of the email
+        address.
+        """
+        email = email or ''
+        try:
+            email_name, domain_part = email.strip().rsplit('@', 1)
+        except ValueError:
+            pass
         else:
-            user.set_unusable_password()
+            email = '@'.join([email_name, domain_part.lower()])
+        return email
+
+    @classmethod
+    def _create_user(cls, username, email, password, is_staff, is_superuser,
+                     **extra_fields):
+        now = datetime.now()
+        if not username:
+            raise ValueError('The given username must be set')
+        org_key = Organization._meta.model_name
+        if not any(f in extra_fields for f in (org_key, org_key+'_id')):
+            extra_fields[org_key+'_id'] = Organization.get_current_id()
+
+        email = cls.normalize_email(email)
+        user = cls(username=username, email=email, is_staff=is_staff,
+                   is_active=True, is_superuser=is_superuser, 
+                   last_login=now, date_joined=now, **extra_fields)
+        user.set_password(password)
+        session = orm.sessionmaker()
         session.add(user)
         session.commit()
         return user
 
     @classmethod
-    def create_staff(cls, username, email, password, session=None):
-        '''Creates a new User with staff privileges.'''
-        if not session:
-            session = orm.sessionmaker()
-        user = cls(username=username, email=email, is_staff=True,
-                   is_active=True, is_superuser=False)
-        user.set_password(password)
-        session.add(user)
-        session.commit()
-        return user
+    def create_user(cls, username, email=None, password=None, **extra_fields):
+        return cls._create_user(username, email, password, False, False,
+                                 **extra_fields)
 
     @classmethod
-    def create_superuser(cls, username, email, password, session=None):
-        '''Creates a new User with superuser privileges.'''
-        if not session:
-            session = orm.sessionmaker()
-        user = cls(username=username, email=email, is_staff=True,
-                   is_active=True, is_superuser=True)
-        user.set_password(password)
-        session.add(user)
-        session.commit()
-        return user
+    def create_superuser(cls, username, email, password, **extra_fields):
+        return cls._create_user(username, email, password, True, True,
+                                 **extra_fields)
 
+class BaseUser(AbstractBaseUser):
+    __tablename__ = 'auth_user'
+    __requires_subclass__ = True
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = ['email']
+
+    username = Column(Unicode(75), nullable=False, unique=True)
+    first_name = Column(Unicode(30), nullable=True)
+    last_name = Column(Unicode(30), nullable=True)
+
+    def email_user(self, subject, message, from_email=None, **kwargs):
+        '''Sends an e-mail to this User.'''
+        from django.core.mail import send_mail
+        if not from_email:
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
+        send_mail(subject, message, from_email, [self.email], **kwargs)
+
+    def get_absolute_url(self):
+        '''The absolute path to a user's profile.
+
+        :rtype: :class:`str`
+        '''
+        return '/users/%s/' % urllib.quote(smart_str(self.username))
+
+    def get_full_name(self):
+        '''Retrieves the first_name plus the last_name, with a space in
+        between and no leading/trailing whitespace.
+        '''
+        full_name = u'%s %s' % (self.first_name, self.last_name)
+        return full_name.strip()
+
+    # TODO: Might need this later for userena stuff
+    ''' 
     def save(self, update_fields=[], **kwargs):
         session = object_session(self)
         if not session:
             session = orm.sessionmaker()
             session.add(self)
         session.commit()
+    '''
 
-user_cls = getattr(settings, 'BAPH_USER_CLASS', None)
-if user_cls:
-    try:
-        app_label, model_name = user_cls.rsplit('.', 1)
-    except ValueError:
-        raise exceptions.ImproperlyConfigured('''\
-    app_label and model_name should be separated by a dot in the
-    BAPH_USER_CLASS setting''')
+class User(BaseUser):
+    class Meta:
+        swappable = 'BAPH_USER_MODEL'
 
-    try:
-        module = import_module(app_label)
-        model_cls = getattr(module, model_name, None)
-        if model_cls is None:
-            raise exceptions.ImproperlyConfigured('''\
-    Unable to load the user profile model, check BAPH_USER_CLASS in your project
-    settings''')
-    except (ImportError, ImproperlyConfigured):
-        raise
+setattr(BaseUser, Organization._meta.model_name+'_id',
+    Column(Integer, ForeignKey(Organization.id), index=True))
+setattr(BaseUser, Organization._meta.model_name,
+    RelationshipProperty(Organization, backref=User._meta.model_name_plural))
 
-    User = model_cls
-else:
-    User = BaseUser
-    
-
-
-
-    
 
 # association classes
 
