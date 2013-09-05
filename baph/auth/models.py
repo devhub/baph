@@ -88,7 +88,6 @@ class Permission(Base):
 class AbstractBaseOrganization(Base):
     __abstract__ = True
     id = Column(Integer, primary_key=True)
-    name = Column(Unicode(200), nullable=False)
 
     @classmethod
     def get_current(cls):
@@ -108,6 +107,7 @@ class AbstractBaseOrganization(Base):
 class BaseOrganization(AbstractBaseOrganization):
     __tablename__ = 'baph_auth_organizations'
     __requires_subclass__ = True
+    name = Column(Unicode(200), nullable=False)
 
 class Organization(BaseOrganization):
     class Meta:
@@ -137,7 +137,7 @@ class Group(BaseGroup):
 
 setattr(BaseGroup, Organization._meta.model_name+'_id',
     Column(Integer, ForeignKey(Organization.id), index=True))
-setattr(BaseGroup, Organization._meta.model_name,
+setattr(Group, Organization._meta.model_name,
     RelationshipProperty(Organization, backref=Group._meta.model_name_plural,
         foreign_keys=[getattr(Group, Organization._meta.model_name+'_id')]))
 
@@ -306,7 +306,7 @@ class User(BaseUser):
 
 setattr(BaseUser, Organization._meta.model_name+'_id',
     Column(Integer, ForeignKey(Organization.id), index=True))
-setattr(BaseUser, Organization._meta.model_name,
+setattr(User, Organization._meta.model_name,
     RelationshipProperty(Organization, backref=User._meta.model_name_plural))
 
 

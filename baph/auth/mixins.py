@@ -5,12 +5,6 @@ from sqlalchemy import *
 from sqlalchemy.orm import lazyload
 
 
-USER_ORG_KEY = getattr(settings, 'BAPH_USER_ORG_KEY')
-USER_ORG_REL = getattr(settings, 'BAPH_USER_ORG_RELATION')
-GROUP_ORG_KEY = getattr(settings, 'BAPH_GROUP_ORG_KEY')
-GROUP_ORG_REL = getattr(settings, 'BAPH_GROUP_ORG_RELATION')
-
-
 def convert_filter(k, cls=None):
     if not isinstance(k, basestring):
         raise Exception('convert_filters keys must be strings')
@@ -30,6 +24,9 @@ def convert_filter(k, cls=None):
             rel = getattr(model, frag)
             joins.append(rel)
             model = rel.property.argument
+    if isinstance(model, FunctionType):
+        # lazily-loaded class
+        model = model()
     col = getattr(model, attr)
     return (col, joins)
 
@@ -67,13 +64,14 @@ class UserPermissionMixin(object):
         return permissions
 
     def get_group_permissions(self):
+        from baph.auth.models import Organization
         ctx = self.get_context()
         permissions = {}
         for user_group in self.groups:
             if user_group.key:
                 ctx[user_group.key] = user_group.value
             group = user_group.group
-            org_id = getattr(group, GROUP_ORG_KEY)
+            org_id = getattr(group, Organization._meta.model_name+'_id')
             if org_id not in permissions:
                 permissions[org_id] = {}
             perms = permissions[org_id]
@@ -116,12 +114,8 @@ class UserPermissionMixin(object):
     def get_current_permissions(self):
         if hasattr(self, '_perm_cache'):
             return self._perm_cache
-
-        # TODO: this will have a better solution soon
-        org_cls = getattr(type(self), USER_ORG_REL).property.argument
-        if isinstance(org_cls, FunctionType):
-            org_cls = org_cls()
-        current_org_id = org_cls.get_current_id()
+        from baph.auth.models import Organization
+        current_org_id = Organization.get_current_id()
         perms = {}
         for org_id, org_perms in self.get_all_permissions().items():
             if not org_id in (None, current_org_id):
