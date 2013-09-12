@@ -13,7 +13,7 @@ class Command(NoArgsCommand):
 
     def handle_noargs(self, **options):
         self.validate(display_num_errors=True)
-        configure_mappers()
+        #configure_mappers()
         
         print '\nPost-Validation Tables:'
         for table in Base.metadata.tables:

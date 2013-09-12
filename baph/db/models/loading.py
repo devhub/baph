@@ -199,7 +199,8 @@ class AppCache(object):
 
 
     def get_models(self, app_mod=None, include_auto_created=False,
-                                       include_deferred=False):
+                                       include_deferred=False,
+                                       include_swapped=False):
         cache_key = (app_mod, include_auto_created, include_deferred)
         try:
             return self._get_models_cache[cache_key]
