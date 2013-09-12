@@ -1,5 +1,4 @@
 import re
-from types import FunctionType
 
 from django.conf import settings
 from django.utils.encoding import force_unicode
@@ -27,8 +26,8 @@ DEFAULT_NAMES = ('verbose_name', 'verbose_name_plural',
                  'permissions', 'permission_scopes', 'form_class',
                  'permission_actions', 'permission_classes',
                  'permission_parents', 'permission_full_parents', 
-                 'permission_values', 'permission_terminator',
-                 'permission_handler',
+                 'permission_limiters', 'permission_terminator',
+                 'permission_handler', 'permission_resources',
                  )
 
 class Options(object):
@@ -72,18 +71,38 @@ class Options(object):
 
         self.permissions = {}
         self.permission_scopes = {}
-        self.permission_actions = []
-        self.permission_classes = []
+
+        # permission_parents is a list of *toOne relations which can be
+        # considered to refer to 'parents'. These relations will automatically
+        # be considered when generating possible permission paths
         self.permission_parents = []
+        # permission_resources is a dict, with each key containing a resource
+        # name to expose (generally the lowercased classname), and a value 
+        # containing a list of actions available on that resource
+        # ex: { 'image': ['add', 'edit', 'delete', 'view', 'crop'] }
+        self.permission_resources = {}
+        # permission_handler is the name of the parent relation through which
+        # to route permission requests for this object
         self.permission_handler = None
+        # permission_limiters is a dict, with each key containing an 'alias'
+        # for the limiter, used in generating codenames. Each value is a dict,
+        # with the key referring to the local column to be checked, and the
+        # value containing an expression which will be evaluated against the
+        # permission's context
+        self.permission_limiters = {}
+
+        #self.permission_actions = []
+        #self.permission_classes = []
+
         self.permission_full_parents = []
         self.permission_terminator = False
-        self.permission_values = {}
+
 
         self.limit = 1000
-        self.model_name = None
-        self.verbose_name, self.verbose_name_plural = None, None
         self.object_name, self.app_label = None, app_label
+        self.model_name, self.model_name_plural = None, None
+        self.verbose_name, self.verbose_name_plural = None, None
+        
         self.pk = None
         self.form_class = None
         self.meta = meta
@@ -101,8 +120,7 @@ class Options(object):
         self.object_name = cls.__name__
         self.model_name = self.object_name.lower()
         self.verbose_name = get_verbose_name(self.object_name)
-        if not self.model_name:
-            self.model_name = self.object_name.lower()
+        if not self.model_name_plural:
             self.model_name_plural = self.model_name + 's'
 
         # Next, apply any overridden values from 'class Meta'.

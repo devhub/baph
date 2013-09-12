@@ -1,4 +1,4 @@
-from types import FunctionType
+import types
 
 from django import forms
 from django.utils.text import capfirst
@@ -130,15 +130,9 @@ class ModelField(object):
     def from_relationship(cls, key, attr, raw=False):
         kwargs = {}
         prop = attr.property
-        data_type = prop.argument
-        if isinstance(data_type, FunctionType):
-            # lazy-loaded attr that hasn't been evaluated yet
-            data_type = data_type()
-        elif getattr(data_type, 'is_mapper', False):
-            data_type = data_type.class_
-
+        data_type = cls.get_related_class(attr.name)
         data_collection = prop.collection_class
-        if isinstance(data_collection, FunctionType):
+        if isinstance(data_collection, types.FunctionType):
             # lambda-based evaluator, call it and check the type
             data_collection = type(data_collection())
 

@@ -1,13 +1,88 @@
-from types import FunctionType
-
 from django.conf import settings
+from sqlalchemy import *
+from sqlalchemy import inspect
+from sqlalchemy.orm import lazyload
+
+from baph.db import ORM
+from baph.db.models.loading import cache
 
 
-USER_ORG_KEY = getattr(settings, 'BAPH_USER_ORG_KEY')
-USER_ORG_REL = getattr(settings, 'BAPH_USER_ORG_RELATION')
-GROUP_ORG_KEY = getattr(settings, 'BAPH_GROUP_ORG_KEY')
-GROUP_ORG_REL = getattr(settings, 'BAPH_GROUP_ORG_RELATION')
+def column_to_attr(cls, col):
+    """Determine which class attribute references a given column"""
+    for attr_ in inspect(cls).all_orm_descriptors:
+        try:
+            if col in attr_.property.columns:
+                return attr_
+        except:
+            pass    
+    return None
 
+def convert_filter(k, cls=None):
+    """Convert a string filter into a column-based filter"""
+    if not isinstance(k, basestring):
+        raise Exception('convert_filters keys must be strings')
+    frags = k.split('.')
+    attr = frags.pop()
+    joins = []
+    if not frags:
+        # only attr provided, use current model
+        if not cls:
+            raise Exception('convert_filter: cls is required for '
+                'single-dotted keys')
+        model = cls
+    else:
+        # dotted format, chained relations
+        model = string_to_model(frags.pop(0))
+        for frag in frags:
+            model = model.get_related_class(frag)
+    
+    col = getattr(model, attr)
+    return (col, joins)
+
+def key_to_value(obj, key):
+    """Evaluate chained relations against a target object"""
+    frags = key.split('.')
+    col_key = frags.pop()
+    current_obj = obj
+
+    while frags:
+        if not current_obj:
+            # we weren't able to follow the chain back, one of the 
+            # fks was probably optional, and had no value
+            return None
+        
+        attr_name = frags.pop(0)
+        previous_obj = current_obj
+        previous_cls = type(previous_obj)
+        current_obj = getattr(previous_obj, attr_name)
+        if current_obj:
+            # proceed to next step of the chain
+            continue
+
+        # relation was empty, we'll grab the fk and lookup the
+        # object manually
+        attr = getattr(previous_cls, attr_name)
+        prop = attr.property
+
+        related_cls = prop.argument
+        if isinstance(related_cls, type(lambda x:x)):
+            related_cls = related_cls()
+        related_col = prop.local_remote_pairs[0][0]
+        attr_ = column_to_attr(previous_cls, related_col)
+        related_key = attr_.key
+        related_val = getattr(previous_obj, related_key)
+        if related_val is None:
+            # relation and key are both empty: no parent found
+            return None
+
+        orm = ORM.get()
+        session = orm.sessionmaker()
+        current_obj = session.query(related_cls).get(related_val)
+
+    value = getattr(current_obj, col_key, None)
+    if value:
+        return str(value)
+    return None
 
 def string_to_model(string):
     from baph.db.orm import Base
@@ -30,33 +105,32 @@ class UserPermissionMixin(object):
         permissions = {}
         for assoc in self.permission_assocs:
             perm = assoc.permission
-            model = string_to_model(perm.resource)
-            model_name = model.__name__ if model else perm.resource
+            model_name = perm.resource
             if model_name not in permissions:
                 permissions[model_name] = {}
             if perm.action not in permissions[model_name]:
                 permissions[model_name][perm.action] = set()
-            perm = Struct(**perm.to_dict())
+            perm = PermissionStruct(**perm.to_dict())
             if perm.value:
                 perm.value = perm.value % ctx
             permissions[model_name][perm.action].add(perm)
         return permissions
 
     def get_group_permissions(self):
+        from baph.auth.models import Organization
         ctx = self.get_context()
         permissions = {}
         for user_group in self.groups:
             if user_group.key:
                 ctx[user_group.key] = user_group.value
             group = user_group.group
-            org_id = getattr(group, GROUP_ORG_KEY)
+            org_id = getattr(group, Organization._meta.model_name+'_id')
             if org_id not in permissions:
                 permissions[org_id] = {}
             perms = permissions[org_id]
             for assoc in group.permission_assocs:
                 perm = assoc.permission
-                model = string_to_model(perm.resource)
-                model_name = model.__name__ if model else perm.resource
+                model_name = perm.resource
                 if model_name not in perms:
                     perms[model_name] = {}
                 if perm.action not in perms[model_name]:
@@ -92,12 +166,8 @@ class UserPermissionMixin(object):
     def get_current_permissions(self):
         if hasattr(self, '_perm_cache'):
             return self._perm_cache
-
-        # TODO: this will have a better solution soon
-        org_cls = getattr(type(self), USER_ORG_REL).property.argument
-        if isinstance(org_cls, FunctionType):
-            org_cls = org_cls()
-        current_org_id = org_cls.get_current_id()
+        from baph.auth.models import Organization
+        current_org_id = Organization.get_current_id()
         perms = {}
         for org_id, org_perms in self.get_all_permissions().items():
             if not org_id in (None, current_org_id):
@@ -116,12 +186,148 @@ class UserPermissionMixin(object):
         if not resource:
             raise Exception('resource is required for permission filtering')
         perms = self.get_current_permissions()
-        model = string_to_model(resource)
-        model_name = model.__name__ if model else resource        
-        if model_name not in perms:
+        if resource not in perms:
             return set()
-        perms = perms.get(model_name, {})
+        perms = perms.get(resource, {})
         if action:
             perms = perms.get(action, {})
         return perms
+
+    def has_resource_perm(self, resource):
+        if not self.is_authenticated():
+            # user is not logged in
+            return False
+        perms = self.get_resource_permissions(resource)
+        return bool(perms)
+
+    def has_perm(self, resource, action, filters=None):
+        if not filters:
+            filters = {}
+        ctx = self.get_context()
+        from baph.db.orm import ORM
+        if not self.is_authenticated():
+            # user is not logged in
+            return False
+
+        perms = self.get_resource_permissions(resource, action)
+        if not perms:
+            # user has no applicable permissions
+            return False
+
+        orm = ORM.get()
+        cls_name = tuple(perms)[0].resource
+        cls = orm.Base._decl_class_registry[cls_name]
+
+        requires_load = False
+        for rel in cls._meta.permission_parents:
+            fk = tuple(getattr(cls, rel).property.local_columns)[0].name
+            if not any (key in filters for key in (rel, fk)):
+                requires_load = True
+        
+        session = orm.sessionmaker()
+
+        if requires_load:
+            obj = session.query(cls).filter_by(**filters).first()
+        else:
+            obj = cls(**filters)
+            if obj in session:
+                session.expunge(obj)
+        return self.has_obj_perm(resource, action, obj)
+
+    def has_obj_perm(self, resource, action, obj):
+        # TODO: auto-generate resource by checking base_mapper of polymorphics
+        if type(obj)._meta.permission_handler:
+            # permissions for this object are based off parent object
+            parent_obj = obj.get_parent(type(obj)._meta.permission_handler)
+            if not parent_obj:
+                # nothing to check perms against, assume True
+                return True
+            parent_res = type(parent_obj).resource_name
+            if action != 'view':
+                action = 'edit'
+            return self.has_obj_perm(parent_res, action, parent_obj)
+
+        ctx = self.get_context()
+        perms = self.get_resource_permissions(resource, action)
+        if not perms:
+            return False
+            
+        perm_map = {}
+        for p in perms:
+            if not p.key in perm_map:
+                perm_map[p.key] = set()
+            perm_map[p.key].add(p.value % ctx)
+
+        if action == 'add':
+            for p in type(obj)._meta.permission_parents:
+                attr = getattr(type(obj), p)
+                prop = attr.property
+                col = prop.local_remote_pairs[0][0]
+                col_attr = column_to_attr(type(obj), col)
+                if not col_attr.key in perm_map:
+                    perm_map[col_attr.key] = set([None])
+
+        for k,v in perm_map.items():
+            keys = k.split(',')
+            key_pieces = [key_to_value(obj, key) for key in keys]
+            if key_pieces == [None]:
+                value = None
+            else:
+                value = ','.join(key_pieces)
+
+            if action == 'add':
+                # for adding items, all filters must match
+                if value and str(value) not in v:
+                    if v == set([None]):
+                        continue
+                    return False
+            else:
+                # for other actions, one relevant perm is enough
+                if value and str(value) in v:
+                    return True
+        return action == 'add'
+
+    def get_resource_filters(self, resource, action='view'):
+        """
+        Returns resource filters in a format appropriate for 
+        applying to an existing query
+        """
+        orm = ORM.get()
+        cls = orm.Base._decl_class_registry[resource]
+        if cls._meta.permission_handler:
+            # permissions for this object are routed to parent object
+            parent_cls = cls.get_related_class(cls._meta.permission_handler)
+            if action != 'view':
+                action = 'edit'
+            return self.get_resource_filters(parent_cls.resource_name, action)
+
+        ctx = self.get_context()
+        perms = self.get_resource_permissions(resource, action)
+        if not perms:
+            return False
+
+        formatted = []
+        for p in perms:
+            if not p.key:
+                # this is a boolean permission, so cannot be applied as a filter
+                continue
+            cls = orm.Base._decl_class_registry[resource]
+            keys = p.key.split(',')
+            values = p.value.split(',')
+            data = zip(keys, values)
+            
+            filters = []
+            for key, value in data:
+                frags = key.split('.')
+                attr = frags.pop()
+                for frag in frags:
+                    cls = cls.get_related_class(frag)
+                col = getattr(cls, attr)
+                filters.append(col==value)
+
+            if len(filters) == 1:
+                formatted.append(filters[0])
+            else:
+                formatted.append(and_(*filters))
+        return formatted
 
