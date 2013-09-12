@@ -1,10 +1,41 @@
 # -*- coding: utf-8 -*-
+import decorator
 import logging
 import time
 
 from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.contrib.auth.decorators import user_passes_test
+from django.http import HttpResponseRedirect
 
+
+def check_perm(resource, action, simple=True, extra_keys={}, filters={}):
+    ''' checks user permissions to determine whether to allow user access
+    :resource: [string] corresponds to 'resource' value in db, ex: 'site'
+    :action: [string] corresponds to 'action' value in db, ex 'view'
+    :simple: [bool] True = checks if any permission exists for the 
+    :   resource.action pair. False = apply base filters, extra_keys,
+    :   and filters to a model to determine more granular permissions
+    :extra_keys: [dict] each key is a param to extract from kwargs and each
+    :   value is the corresponding db field, ex {'site_hash','hash'}
+    :filters: [dict] key/value pairs of filter conditions to apply to
+    :   the model query, ex {'deleted':0}
+    '''
+    def check_perm_closure(f, request, *args, **kwargs):
+
+        if not kwargs:
+            keys = f.func_code.co_varnames[1:] #item 0 is 'request'
+            kwargs = dict(zip(keys,args))
+            args = []
+
+        for url_key, db_key in extra_keys.items():
+            filters[db_key] = kwargs[url_key]
+
+        if request.user.has_perm(resource, action, filters):
+            return f(request, *args, **kwargs)
+        else:
+            return HttpResponseRedirect('/')
+
+    return decorator.decorator(check_perm_closure)
 
 def superuser_required(function=None,
                        redirect_field_name=REDIRECT_FIELD_NAME):
