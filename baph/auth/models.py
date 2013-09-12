@@ -320,6 +320,10 @@ class UserGroup(Base):
         Index('idx_context', 'key', 'value'),
         )
 
+    class Meta:
+        permission_parents = ['user']
+        permission_handler = 'user'
+
     user_id = Column(Integer, ForeignKey(User.id), primary_key=True,
         autoincrement=False)
     group_id = Column(Integer, ForeignKey(Group.id), primary_key=True,

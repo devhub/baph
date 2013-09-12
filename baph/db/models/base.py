@@ -17,8 +17,9 @@ from sqlalchemy.orm.attributes import instance_dict, instance_state
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.schema import ForeignKeyConstraint
 
+from baph.db import ORM
 from baph.db.models.loading import get_model, register_models
-from baph.db.models.mixins import CacheMixin
+from baph.db.models.mixins import CacheMixin, ModelPermissionMixin
 from baph.db.models.options import Options
 from baph.db.models import signals
 from baph.utils.importing import safe_import, remove_class
@@ -81,7 +82,7 @@ def set_polymorphic_base_mapper(mapper_, class_):
         polymorphic_map.update(mapper_.polymorphic_map)
         mapper_.polymorphic_map = polymorphic_map
 
-class Model(CacheMixin):
+class Model(CacheMixin, ModelPermissionMixin):
 
     @classmethod
     def create(cls, *args, **kwargs):
@@ -95,13 +96,6 @@ class Model(CacheMixin):
         cls_mod, cls_name = cls_path.rsplit('.', 1)
         module = import_module(cls_mod)
         return getattr(module, cls_name)
-
-    def permission_context(self, request):
-        return {
-            'user_id': request.user.id,
-            'user_whitelabel': request.user.whitelabel_name,
-            'user_whitelabel_id': request.user.whitelabel_id,
-            }
 
     def update(self, data):
         for key, value in data.iteritems():
@@ -172,8 +166,6 @@ class ModelBase(type):
         base_meta = getattr(new_class, '_meta', None)
 
         if getattr(meta, 'app_label', None) is None:
-            # Figure out the app_label by looking one level up.
-            # For 'django.contrib.sites.models', this would be 'sites'.
             model_module = sys.modules[new_class.__module__]
             kwargs = {"app_label": model_module.__name__.rsplit('.',1)[0]}
         else:
@@ -238,18 +230,12 @@ class ModelBase(type):
     def get_prop_from_proxy(cls, proxy):
         if proxy.scalar:
             # column
-            col = proxy.remote_attr.property.columns
-            data_type = type(col[0].type)
             prop = proxy.remote_attr.property
         elif proxy.remote_attr.extension_type == ASSOCIATION_PROXY:
             prop = cls.get_prop_from_proxy(proxy.remote_attr)
         elif isinstance(proxy.remote_attr.property, RelationshipProperty):
-            data_type = proxy.remote_attr.property.collection_class or object
-            readonly = proxy.remote_attr.info.get('readonly', False)
             prop = proxy.remote_attr.property
         else:
-            col = proxy.remote_attr.property.columns
-            data_type = type(col[0].type)
             prop = proxy.remote_attr.property
         return prop
 
@@ -264,19 +250,13 @@ class ModelBase(type):
                 # not a property
                 continue
             elif attr.extension_type == HYBRID_PROPERTY:
-                data_type = type(attr.expr(cls).type)
-                readonly = not attr.fset
                 prop = attr
             elif attr.extension_type == ASSOCIATION_PROXY:
                 proxy = getattr(cls, key)
                 prop = cls.get_prop_from_proxy(proxy)
             elif isinstance(attr.property, ColumnProperty):
-                data_type = type(attr.property.columns[0].type)
-                readonly = attr.info.get('readonly', False)
                 prop = attr.property
             elif isinstance(attr.property, RelationshipProperty):
-                data_type = attr.property.collection_class or object
-                readonly = attr.info.get('readonly', False)
                 prop = attr.property
             yield (key, prop)
 
@@ -284,13 +264,13 @@ class ModelBase(type):
     def resource_name(cls):
         try:
             if cls.__mapper__.polymorphic_on is not None:
-                return cls.__mapper__.primary_base_mapper.class_._meta.model_name
+                return cls.__mapper__.primary_base_mapper.class_.resource_name
         except:
             pass
-        return cls._meta.model_name
+        return cls._meta.object_name
 
-    @property
-    def base_class(cls):
+    def get_base_class(cls):
+        """Returns the base class if polymorphic, else the class itself"""
         try:
             if cls.__mapper__.polymorphic_on is not None:
                 return cls.__mapper__.primary_base_mapper.class_
