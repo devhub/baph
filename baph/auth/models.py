@@ -68,12 +68,8 @@ def string_to_model(string):
 
 # permission classes
 
-class Permission(Base):
-    __tablename__ = 'baph_auth_permissions'
-    __table_args__ = {
-        'info': {'preserve_during_flush': True},
-        }
-
+class AbstractBasePermission(Base):
+    __abstract__ = True
     id = Column(Integer, primary_key=True)
     name = Column(Unicode(100))
     codename = Column(String(100), unique=True)
@@ -81,6 +77,16 @@ class Permission(Base):
     action = Column(String(16))
     key = Column(String(100))
     value = Column(String(50))
+
+class BasePermission(AbstractBasePermission):
+    __tablename__ = 'baph_auth_permissions'
+    __table_args__ = {
+        'info': {'preserve_during_flush': True},
+        }
+
+class Permission(BasePermission):
+    class Meta:
+        swappable = 'BAPH_PERMISSION_MODEL'
 
 
 # organization models
