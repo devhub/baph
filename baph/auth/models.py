@@ -32,6 +32,14 @@ Base = orm.Base
 
 AUTH_USER_FIELD_TYPE = getattr(settings, 'AUTH_USER_FIELD_TYPE', 'UUID')
 AUTH_USER_FIELD = UUID if AUTH_USER_FIELD_TYPE == 'UUID' else Integer
+PERMISSION_TABLE = getattr(settings, 'BAPH_PERMISSION_TABLE',
+                            'baph_auth_permissions')
+AUTH_MODELS = (
+    'BAPH_ORGANIZATION_MODEL',
+    'BAPH_GROUP_MODEL',
+    'BAPH_USER_MODEL',
+    )
+
 
 
 def _generate_user_id_column():
@@ -68,8 +76,11 @@ def string_to_model(string):
 
 # permission classes
 
-class AbstractBasePermission(Base):
-    __abstract__ = True
+class Permission(Base):
+    __tablename__ = PERMISSION_TABLE
+    __table_args__ = {
+        'info': {'preserve_during_flush': True},
+        }
     id = Column(Integer, primary_key=True)
     name = Column(Unicode(100))
     codename = Column(String(100), unique=True)
@@ -77,16 +88,6 @@ class AbstractBasePermission(Base):
     action = Column(String(16))
     key = Column(String(100))
     value = Column(String(50))
-
-class BasePermission(AbstractBasePermission):
-    __tablename__ = 'baph_auth_permissions'
-    __table_args__ = {
-        'info': {'preserve_during_flush': True},
-        }
-
-class Permission(BasePermission):
-    class Meta:
-        swappable = 'BAPH_PERMISSION_MODEL'
 
 
 # organization models
@@ -345,7 +346,7 @@ class UserGroup(Base):
         backref=backref('user_groups', lazy=True, uselist=True))
 
 class PermissionAssociation(Base):
-    __tablename__ = 'baph_auth_permission_assoc'
+    __tablename__ = PERMISSION_TABLE + '_assoc'
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey(User.id))
     group_id = Column(Integer, ForeignKey(Group.id))
