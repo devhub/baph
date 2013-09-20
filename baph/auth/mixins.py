@@ -254,6 +254,9 @@ class UserPermissionMixin(object):
             
         perm_map = {}
         for p in perms:
+            if not p.key:
+                # this is a boolean permission (not a key/value filter)
+                return True
             if not p.key in perm_map:
                 perm_map[p.key] = set()
             perm_map[p.key].add(p.value % ctx)
