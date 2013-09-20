@@ -1,0 +1,31 @@
+{% extends 'registration/base_registration.html' %}
+
+{% block title %}{% trans %}Signin{% endtrans %}{% endblock %}
+
+{% block content %}
+<form action="" method="post">
+  {% csrf_token %}
+  <fieldset>
+    <legend>{% trans %}Signin{% endtrans %}</legend>
+    {{ form.non_field_errors()|safe }}
+    {% for field in form %}
+        {{ field.errors|safe }}
+        {% if field.name == 'remember_me' %}
+        <p class="checkbox">
+        <label for="id_{{ field.name }}">{{ field|safe }} {{ field.label|safe }}</label>
+        </p>
+        {% else %}
+        <p>
+        {{ field.label_tag()|safe }}
+        {{ field|safe }}
+        </p>
+        {% endif %}
+    {% endfor %}
+  </fieldset>
+  <input type="submit" value="{% trans %}Signin{% endtrans %}" />
+  <p class="forgot-password">
+    <a href="{% url 'baph_password_reset' %}" title="{% trans %}Forgot your password?{% endtrans %}">
+        {% trans %}Forgot your password?{% endtrans %}</a></p>
+  {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
+</form>
+{% endblock %}

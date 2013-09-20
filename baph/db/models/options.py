@@ -118,9 +118,9 @@ class Options(object):
             in settings.INSTALLED_APPS
         # First, construct the default values for these options.
         self.object_name = cls.__name__
-        self.model_name = self.object_name.lower()
         self.verbose_name = get_verbose_name(self.object_name)
-        if not self.model_name_plural:
+        if not self.model_name:
+            self.model_name = self.object_name.lower()
             self.model_name_plural = self.model_name + 's'
 
         # Next, apply any overridden values from 'class Meta'.

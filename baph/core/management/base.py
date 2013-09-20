@@ -272,12 +272,6 @@ class BaseCommand(object):
                                    "(%s) and 'can_import_settings' (%s) command "
                                    "options." % (self.leave_locale_alone,
                                                  self.can_import_settings))
-            # Switch to US English, because django-admin.py creates database
-            # content like permissions, and those shouldn't contain any
-            # translations.
-            from django.utils import translation
-            saved_locale = translation.get_language()
-            translation.activate('en-us')
 
         try:
             if self.requires_model_validation and not options.get('skip_validation'):
@@ -295,8 +289,7 @@ class BaseCommand(object):
                 if self.output_transaction:
                     self.stdout.write('\n' + self.style.SQL_KEYWORD("COMMIT;"))
         finally:
-            if saved_locale is not None:
-                translation.activate(saved_locale)
+            pass
 
     def validate(self, app=None, display_num_errors=False):
         """

@@ -1,0 +1,8 @@
+{% extends 'registration/base_registration.html' %}
+
+{% block title %}{% trans %}Email changed!{% endtrans %}{% endblock %}
+
+{% block content_title %}<h2>{% trans %}New email{% endtrans %}</h2>{% endblock %}
+{% block content %}
+<p>{% trans %}Your new email address is saved. You can continue using{% endtrans %} {{ org.name }} {% trans %}with this email.{% endtrans %}</p>
+{% endblock %}

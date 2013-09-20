@@ -10,6 +10,9 @@ from django.conf import settings
 from django.contrib.auth.hashers import (
     check_password, make_password, is_password_usable, UNUSABLE_PASSWORD)
 from django.core.exceptions import ImproperlyConfigured
+from django.dispatch import receiver
+from django.test.signals import setting_changed
+from django.utils.datastructures import SortedDict
 from django.utils.encoding import smart_str
 from django.utils.importlib import import_module
 from django.utils.translation import ugettext as _
@@ -17,13 +20,16 @@ from sqlalchemy import *
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import (relationship, backref, object_session,
-    RelationshipProperty)
+    RelationshipProperty, clear_mappers)
 
 from baph.auth.mixins import UserPermissionMixin
+from baph.auth.registration import settings as auth_settings
 from baph.db import ORM
+from baph.db.models.loading import cache
 from baph.db.types import UUID, Dict, List
 from baph.utils.strings import random_string
-import inspect
+from baph.utils.importing import remove_class
+import inspect, sys
 
 
 orm = ORM.get()
@@ -34,13 +40,6 @@ AUTH_USER_FIELD_TYPE = getattr(settings, 'AUTH_USER_FIELD_TYPE', 'UUID')
 AUTH_USER_FIELD = UUID if AUTH_USER_FIELD_TYPE == 'UUID' else Integer
 PERMISSION_TABLE = getattr(settings, 'BAPH_PERMISSION_TABLE',
                             'baph_auth_permissions')
-AUTH_MODELS = (
-    'BAPH_ORGANIZATION_MODEL',
-    'BAPH_GROUP_MODEL',
-    'BAPH_USER_MODEL',
-    )
-
-
 
 def _generate_user_id_column():
     if AUTH_USER_FIELD_TYPE != 'UUID':
@@ -142,11 +141,20 @@ class Group(BaseGroup):
     class Meta:
         swappable = 'BAPH_GROUP_MODEL'
 
-setattr(BaseGroup, Organization._meta.model_name+'_id',
-    Column(Integer, ForeignKey(Organization.id), index=True))
-setattr(Group, Organization._meta.model_name,
-    RelationshipProperty(Organization, backref=Group._meta.model_name_plural,
-        foreign_keys=[getattr(Group, Organization._meta.model_name+'_id')]))
+col_key = Organization._meta.model_name+'_id'
+col = getattr(BaseGroup.__table__.c, col_key, None)
+if col is None:
+    setattr(BaseGroup, col_key,
+        Column(Integer, ForeignKey(Organization.id), index=True))
+
+rel_key = Organization._meta.model_name
+rel = getattr(Group, rel_key, None)
+if rel is None:
+    rel = RelationshipProperty(Organization, 
+        backref=Group._meta.model_name_plural,
+        foreign_keys=[getattr(BaseGroup, col_key)])
+    setattr(Group, rel_key, rel)
+    
 
 # user models
 
@@ -181,6 +189,11 @@ class AbstractBaseUser(Base, UserPermissionMixin):
 
     permissions = association_proxy('permission_assocs', 'permission')
     codenames = association_proxy('permission_assocs', 'codename')
+
+    # this is to allow the django password reset token generator to work
+    @property
+    def pk(self):
+        return self.id
 
     def get_username(self):
         "Return the identifying username for this User"
@@ -266,15 +279,17 @@ class AbstractBaseUser(Base, UserPermissionMixin):
         return cls._create_user(username, email, password, True, True,
                                  **extra_fields)
 
+
 class BaseUser(AbstractBaseUser):
     __tablename__ = 'auth_user'
     __requires_subclass__ = True
     USERNAME_FIELD = 'username'
     REQUIRED_FIELDS = ['email']
 
-    username = Column(Unicode(75), nullable=False, unique=True)
-    first_name = Column(Unicode(30), nullable=True)
-    last_name = Column(Unicode(30), nullable=True)
+    username = Column(Unicode(75), 
+        nullable=auth_settings.BAPH_AUTH_WITHOUT_USERNAMES, index=True)
+    first_name = Column(Unicode(30))
+    last_name = Column(Unicode(30))
 
     def email_user(self, subject, message, from_email=None, **kwargs):
         '''Sends an e-mail to this User.'''
@@ -297,24 +312,42 @@ class BaseUser(AbstractBaseUser):
         full_name = u'%s %s' % (self.first_name, self.last_name)
         return full_name.strip()
 
-    # TODO: Might need this later for userena stuff
-    ''' 
     def save(self, update_fields=[], **kwargs):
         session = object_session(self)
         if not session:
             session = orm.sessionmaker()
             session.add(self)
         session.commit()
-    '''
 
 class User(BaseUser):
     class Meta:
         swappable = 'BAPH_USER_MODEL'
 
-setattr(BaseUser, Organization._meta.model_name+'_id',
+col_key = Organization._meta.model_name+'_id'
+#col = getattr(BaseUser.__table__.c, col_key, None)
+#if col is None:
+setattr(BaseUser, col_key,
     Column(Integer, ForeignKey(Organization.id), index=True))
-setattr(User, Organization._meta.model_name,
-    RelationshipProperty(Organization, backref=User._meta.model_name_plural))
+
+rel_key = Organization._meta.model_name
+#rel = getattr(User, rel_key, None)
+#if rel is None:
+rel = RelationshipProperty(Organization, 
+    backref=User._meta.model_name_plural,
+    foreign_keys=[getattr(BaseUser, col_key)])
+setattr(User, rel_key, rel)
+
+if auth_settings.BAPH_AUTH_UNIQUE_WITHIN_ORG:
+    args = [col_key]
+else:
+    args = []
+
+con = UniqueConstraint(*(args+['email']))
+BaseUser.__table__.append_constraint(con)
+
+if not auth_settings.BAPH_AUTH_WITHOUT_USERNAMES:
+    con = UniqueConstraint(*(args+[User.USERNAME_FIELD]))
+    BaseUser.__table__.append_constraint(con)
 
 
 # association classes

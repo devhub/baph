@@ -1,0 +1,11 @@
+{% if not without_usernames %}{% trans %}Dear{% endtrans %} {{ user.username }},{% endif %}
+{% trans %}Thank you for signing up at{% endtrans %} {{ org.name }}.
+
+{% trans %}To activate your account you should click on the link below:{% endtrans %}
+
+{{ protocol }}://{{ org.host }}{% url 'baph_activate' activation_key %}
+
+{% trans %}Thanks for using our site!{% endtrans %}
+
+{% trans %}Sincerely{% endtrans %},
+{{ org.name }}

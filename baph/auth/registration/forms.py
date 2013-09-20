@@ -62,7 +62,7 @@ class AuthenticationForm(forms.Form):
         # it again here.
         self.fields['remember_me'].label = _(u'Remember me for %(days)s') \
             % {'days': _(settings.BAPH_REMEMBER_ME_DAYS[0])}
-        if settings.BAPH_WITHOUT_USERNAMES:
+        if settings.BAPH_AUTH_WITHOUT_USERNAMES:
             self.fields['identification'] = identification_field_factory(
                 _(u"Email"),
                 _(u"Please supply your email."))
@@ -92,7 +92,7 @@ class SignupForm(forms.Form):
         base_form = User.get_form_class()
         if not base_form:
             raise Exception('no form_class found in User.Meta')
-        if not settings.BAPH_WITHOUT_USERNAMES:
+        if not settings.BAPH_AUTH_WITHOUT_USERNAMES:
             field_name = User.USERNAME_FIELD
             self.fields[field_name] = base_form.base_fields[field_name]
         for field_name in User.REQUIRED_FIELDS:
@@ -107,13 +107,11 @@ class SignupForm(forms.Form):
 
     def clean_username(self):
         username = User.USERNAME_FIELD
-        if settings.BAPH_AUTH_UNIQUE_USERNAME:
-            filters = {username: self.cleaned_data[username]}
-        elif settings.BAPH_AUTH_UNIQUE_ORG_USERNAME:
-            filters = {
-                username: self.cleaned_data[username],
-                User.org_key: Organization.get_current_id(),
-                }
+        filters = {username: self.cleaned_data[username]}
+        if settings.BAPH_AUTH_UNIQUE_WITHIN_ORG:
+            org_key = Organization._meta.model_name + '_id'
+            filters[org_key] = Organization.get_current_id()
+
         session = orm.sessionmaker()
         user = session.query(User) \
             .options(joinedload('signup')) \
@@ -128,13 +126,11 @@ class SignupForm(forms.Form):
         return self.cleaned_data[username]
 
     def clean_email(self):
-        if settings.BAPH_AUTH_UNIQUE_EMAIL:
-            filters = {'email': self.cleaned_data['email']}
-        elif settings.BAPH_AUTH_UNIQUE_ORG_EMAIL:
-            filters = {
-                'email': self.cleaned_data['email'],
-                User.org_key: Organization.get_current_id(),
-                }
+        filters = {'email': self.cleaned_data['email']}
+        if settings.BAPH_AUTH_UNIQUE_WITHIN_ORG:
+            org_key = Organization._meta.model_name + '_id'
+            filters[org_key] = Organization.get_current_id()
+
         session = orm.sessionmaker()
         user = session.query(User) \
             .options(joinedload('signup')) \
@@ -223,13 +219,12 @@ class ChangeEmailForm(forms.Form):
         if self.cleaned_data['email'].lower() == self.user.email:
             raise forms.ValidationError(_(u'You\'re already known under this '
                 'email.'))
-        if settings.BAPH_AUTH_UNIQUE_EMAIL:
-            filters = {'email': self.cleaned_data['email']}
-        elif settings.BAPH_AUTH_UNIQUE_ORG_EMAIL:
-            filters = {
-                'email': self.cleaned_data['email'],
-                User.org_key: Organization.get_current_id(),
-                }
+        
+        filters = {'email': self.cleaned_data['email']}
+        if settings.BAPH_AUTH_UNIQUE_WITHIN_ORG:
+            org_key = Organization._meta.model_name + '_id'
+            filters[org_key] = Organization.get_current_id()
+
         session = orm.sessionmaker()
         user = session.query(User) \
             .filter(User.email != self.user.email) \

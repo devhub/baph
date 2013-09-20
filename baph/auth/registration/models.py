@@ -62,7 +62,7 @@ class UserRegistration(Base):
 
         """
         context = {'user': self.user,
-                  'without_usernames': settings.BAPH_WITHOUT_USERNAMES,
+                  'without_usernames': settings.BAPH_AUTH_WITHOUT_USERNAMES,
                   'protocol': get_protocol(),
                   'activation_days': settings.BAPH_ACTIVATION_DAYS,
                   'activation_key': self.activation_key,
@@ -93,7 +93,7 @@ class UserRegistration(Base):
 
         """
         context = {'user': self.user,
-                  'without_usernames': settings.BAPH_WITHOUT_USERNAMES,
+                  'without_usernames': settings.BAPH_AUTH_WITHOUT_USERNAMES,
                   'new_email': self.email_unconfirmed,
                   'protocol': get_protocol(),
                   'confirmation_key': self.email_confirmation_key,

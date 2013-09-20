@@ -12,9 +12,10 @@ from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
 from sqlalchemy.ext.declarative.base import (_as_declarative, _add_attribute)
 from sqlalchemy.ext.declarative.clsregistry import add_class
 from sqlalchemy.ext.hybrid import HYBRID_PROPERTY, HYBRID_METHOD
-from sqlalchemy.orm import mapper, configure_mappers
+from sqlalchemy.orm import mapper, configure_mappers, object_session
 from sqlalchemy.orm.attributes import instance_dict, instance_state
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
+from sqlalchemy.orm.util import has_identity
 from sqlalchemy.schema import ForeignKeyConstraint
 
 from baph.db import ORM
@@ -101,6 +102,12 @@ class Model(CacheMixin, ModelPermissionMixin):
         for key, value in data.iteritems():
             if hasattr(self, key) and getattr(self, key) != value:
                 setattr(self, key, value)       
+
+    def delete(self):
+        if has_identity(self):
+            session = object_session(self)
+            session.delete(self)
+            session.commit()
 
     def to_dict(self):
         '''Creates a dictionary out of the column properties of the object.

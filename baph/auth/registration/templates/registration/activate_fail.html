@@ -1,0 +1,8 @@
+{% extends 'registration/base_registration.html' %}
+
+{% block title %}{% trans %}Account activation failed.{% endtrans %}{% endblock %}
+
+{% block content %}
+<p>{% trans %}Your account could not be activated. This could be because your activation link has aged.{% endtrans %}</p>
+<p>{% trans %}Please try signing up again or contact us if you think something went wrong.{% endtrans %}</p>
+{% endblock %}

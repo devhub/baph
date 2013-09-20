@@ -1,0 +1,9 @@
+{% if not without_usernames %}{% trans %}Dear{% endtrans %} {{ user.username }},{% endif %}
+{% trans %}There was a request to change your email address at{% endtrans %} {{ org.name }}.
+
+{% trans %}An email has been send to {{ new_email }} which contains a verification link. Click on the link in this email to activate it.{% endtrans %}
+
+{% trans %}Thanks for using our site!{% endtrans %}
+
+{% trans %}Sincerely{% endtrans %},
+{{ org.name }}

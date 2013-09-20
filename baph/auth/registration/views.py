@@ -31,7 +31,7 @@ orm = ORM.get()
 def signup(request, signup_form=SignupForm,
             template_name='registration/signup_form.html',
             success_url=None, extra_context=None):
-    if settings.BAPH_WITHOUT_USERNAMES and (signup_form == SignupForm):
+    if settings.BAPH_AUTH_WITHOUT_USERNAMES and (signup_form == SignupForm):
         signup_form = SignupFormOnlyEmail
 
     if request.method == 'POST':

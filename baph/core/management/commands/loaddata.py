@@ -17,6 +17,7 @@ from django.conf import settings
 from django.core.management.base import CommandError
 from django.core.management.color import no_style
 from django.core import serializers
+from django.utils.datastructures import SortedDict
 from django.utils.functional import cached_property, memoize
 from django.utils._os import upath
 from sqlalchemy.orm.util import identity_key
@@ -133,7 +134,7 @@ class Command(BaseCommand):
         session.expunge_all()
         
         #print '\nloading label:', fixture_label
-        identity_map = {}
+        identity_map = SortedDict()
         for fixture_file, fixture_dir, fixture_name in self.find_fixtures(fixture_label):
             #print '\tfound fixture:', fixture_file, fixture_dir, fixture_name
             _, ser_fmt, cmp_fmt = self.parse_name(os.path.basename(fixture_file))
@@ -151,7 +152,6 @@ class Command(BaseCommand):
                     using=self.using, ignorenonexistent=self.ignore)
 
                 for obj in objects:
-                    #print '\t\tfound object:', obj
                     objects_in_fixture += 1
                     # TODO: implement routing
                     if True: #router.allow_syncdb(self.using, obj.object.__class__):
@@ -173,6 +173,7 @@ class Command(BaseCommand):
             except Exception as e:
                 if not isinstance(e, CommandError):
                     e.args = ("Problem installing fixture '%s': %s" % (fixture_file, e),)
+                continue
                 raise
             finally:
                 fixture.close()
@@ -187,7 +188,6 @@ class Command(BaseCommand):
         session.execute('SET foreign_key_checks=0')
         session.commit()
         session.execute('SET foreign_key_checks=1')
-        
 
 
     def _find_fixtures(self, fixture_label):
