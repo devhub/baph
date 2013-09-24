@@ -1,0 +1,8 @@
+{% extends 'registration/base_registration.html' %}
+
+{% block title %}{% trans %}Account activation failed.{% endtrans %}{% endblock %}
+
+{% block content %}
+<p>{% trans %}Your account could not be activated because activation link is expired."{% endtrans %}</p>
+<p><a href="{% url 'baph_activate_retry' activation_key %}">{% trans %}Request a new activation link.{% endtrans %}</a></p>
+{% endblock %}

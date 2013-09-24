@@ -79,7 +79,13 @@ class Command(NoArgsCommand):
 
         # the default db may not exist yet, so we remove it before connecting
         engine.url.database = None
-        tmp_url = str(engine.url)
+        frags = str(engine.url).split('?')
+        tmp_url = frags[0]
+        if len(frags) == 2:
+            if not tmp_url.endswith('/'):
+                # query strings will break this if it doesn't end with a /
+                tmp_url += '/'
+            tmp_url += '?%s' % frags[1]
         engine.url.database = default_schema
 
         tmp_engine = create_engine(tmp_url)

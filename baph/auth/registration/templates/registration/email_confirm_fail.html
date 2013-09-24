@@ -1,0 +1,9 @@
+{% extends 'registration/base_registration.html' %}
+
+{% block title %}{% trans %}Email verification failed.{% endtrans %}{% endblock %}
+{% block content_title %}<h2>{% trans %}Your email could not be verified...{% endtrans %}</h2>{% endblock %}
+
+{% block content %}
+<p>{% trans %}Your email could not be verified...{% endtrans %}</p>
+<p>{% trans %}You could try changing it again in your account settings.{% endtrans %}</p>
+{% endblock %}

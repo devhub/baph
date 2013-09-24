@@ -1,40 +1,47 @@
-# -*- coding: utf-8 -*-
-'''\
-=========================================================================
-:mod:`baph.auth.backends` -- SQLAlchemy backend for Django Authentication
-=========================================================================
+import django.core.validators
 
-.. moduleauthor:: Mark Lee <markl@evomediagroup.com>
-'''
-
-from .models import orm, User
+from baph.auth.models import User, Organization
+from baph.auth.registration import settings as auth_settings
+from baph.db.orm import ORM
 
 
-class SQLAlchemyBackend(object):
-    '''Authentication backend using SQLAlchemy. See
-    :setting:`AUTHENTICATION_BACKENDS` for details on
-    setting this class as the authentication backend for your project.
-    '''
+orm = ORM.get()
 
-    supports_object_permissions = False
-    supports_anonymous_user = True
-
-    def authenticate(self, username=None, password=None, session=None):
-        # TODO: Model, login attribute name and password attribute name
-        # should be configurable.
-        if not session:
-            session = orm.sessionmaker()
-        user = session.query(User) \
-                      .filter_by(username=username) \
-                      .first()
-        if user is None:
-            return user
-        elif user.check_password(password):
-            return user
-        else:
+class MultiSQLAlchemyBackend(object):
+    """Backend which auths via username or email"""
+    
+    def authenticate(self, identification, password=None, check_password=True):
+        session = orm.sessionmaker()
+        org_key = Organization.resource_name.lower() + '_id'
+        user = None
+        try:
+            # if it looks like an email, lookup against the email column
+            django.core.validators.validate_email(identification)
+            filters = {'email': identification}
+            if auth_settings.BAPH_AUTH_UNIQUE_WITHIN_ORG:
+                filters[org_key] = Organization.get_current_id()
+            user = session.query(User).filter_by(**filters).first()
+        except django.core.validators.ValidationError:
+            # this wasn't an email
+            pass
+        if not user:
+            # email lookup failed, try username lookup if enabled
+            if auth_settings.BAPH_AUTH_WITHOUT_USERNAMES:
+                # usernames are not valid login credentials
+                return None
+            filters = {User.USERNAME_FIELD: identification}
+            if auth_settings.BAPH_AUTH_UNIQUE_WITHIN_ORG:
+                filters[org_key] = Organization.get_current_id()
+            user = session.query(User).filter_by(**filters).first()
+        if not user:
             return None
+        if check_password:
+            if user.check_password(password):
+                return user
+            return None
+        else: return user
 
-    def get_user(self, user_id, session=None):
-        if not session:
-            session = orm.sessionmaker()
+    def get_user(self, user_id):
+        session = orm.sessionmaker()
         return session.query(User).get(user_id)
+

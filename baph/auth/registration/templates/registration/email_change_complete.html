@@ -1,0 +1,9 @@
+{% extends 'registration/base_registration.html' %}
+
+{% block title %}{% trans %}Email verification{% endtrans %}{% endblock %}
+{% block content_title %}<h2>{% trans %}Confirm your new email{% endtrans %}</h2>{% endblock %}
+
+{% block content %}
+<p>{% trans %}You have received an email at{% endtrans %} {{ viewed_user.signup.email_unconfirmed }}.</p>
+<p>{% trans %}To associate this email address with your account{% endtrans %} ({{ viewed_user.username }}) {% trans %}click on the link provided in this email.{% endtrans %}</p>
+{% endblock %}
