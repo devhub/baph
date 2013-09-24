@@ -1,1 +1,2 @@
-recursive-include baph *.py *.html *.js *.json
+recursive-include baph/auth/registration/fixtures *.json
+recursive-include baph/auth/registration/templates *.html
