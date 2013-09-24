@@ -1,0 +1,9 @@
+{% extends 'registration/base_registration.html' %}
+
+{% block title %}{% trans %}Account re-activation succeded.{% endtrans %}{% endblock %}
+
+{% block content %}
+<p>{% trans %}You requested a new activation of your account.{% endtrans %}</p>
+<p>{% trans %}You have been sent an e-mail with an activation link to the supplied email.{% endtrans %}</p>
+<p>{% trans %}We will store your signup information for {{ baph_activation_days }} days on our server. {% endtrans %}</p>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% if not without_usernames %}{% trans %}Dear{% endtrans %} {{ user.username }},{% endif %}
+{% trans %}You requested a change of your email address at{% endtrans %} {{ org.name }}.
+
+
+{% trans %}Please confirm this email address by clicking on the link below:{% endtrans %}
+
+{{ protocol }}://{{ org.host }}{% url 'baph_email_confirm' confirmation_key %}
+
+
+{% trans %}Thanks for using our site!{% endtrans %}
+
+{% trans %}Sincerely{% endtrans %},
+{{ org.name }}
+

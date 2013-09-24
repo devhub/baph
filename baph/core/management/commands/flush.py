@@ -59,10 +59,13 @@ Are you sure you want to do this?
 
             try:
                 for table in reversed(Base.metadata.sorted_tables):
-                    if table.name == 'baph_auth_permissions':
-                        # TODO: this is terrible, fix it
+                    if table.info.get('preserve_during_flush', False):
                         continue
-                    session.execute(table.delete())
+                    try:
+                        session.execute(table.delete())
+                    except:
+                        # table not present
+                        pass
                 session.commit()
                 session.execute('SET foreign_key_checks=1')
             except Exception, e:

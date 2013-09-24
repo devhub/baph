@@ -1,0 +1,1 @@
+{% trans %}Email verification for{% endtrans %} {{ org.name }}.
