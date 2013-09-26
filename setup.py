@@ -1,15 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from setuptools import setup, find_packages
+from distutils.core import setup
+from setuptools import find_packages
 
 setup(name='baph',
-      version='0.3.2',
+      version='0.3.4',
       install_requires=[
           'Coffin',
           'Django >= 1.5',
           'SQLAlchemy >= 0.9.0',
       ],
+      include_package_data=True,
       package_data={
           '': ['*.rst'],
       },
