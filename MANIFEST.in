@@ -1,1 +1,1 @@
-recursive-include baph *.py *.json *.html
+recursive-include baph *.py *.json *.html *.txt
