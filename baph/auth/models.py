@@ -9,6 +9,7 @@ import uuid
 from django.conf import settings
 from django.contrib.auth.hashers import (
     check_password, make_password, is_password_usable, UNUSABLE_PASSWORD)
+from django.contrib.auth.signals import user_logged_in
 from django.core.exceptions import ImproperlyConfigured
 from django.dispatch import receiver
 from django.test.signals import setting_changed
@@ -51,9 +52,9 @@ def update_last_login(sender, user, **kwargs):
     A signal receiver which updates the last_login date for
     the user logging in.
     """
-    user.last_login = get_datetime_now()
+    user.last_login = datetime.now()
     user.save(update_fields=['last_login'])
-    # user_logged_in.connect(update_last_login) #TODO: connect this signal
+user_logged_in.connect(update_last_login)
 
 def get_or_fail(codename):
     session = orm.sessionmaker()
