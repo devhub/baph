@@ -37,6 +37,7 @@ class RegistrationViewsTests(TestCase):
         #                     reverse('baph_profile_detail', kwargs={'username': user.username}))
 
         user = session.query(User).filter_by(email='alice@example.com').first()
+        session.close()
         self.failUnless(user.is_active)
 
     def test_activation_expired_retry(self):
@@ -59,6 +60,7 @@ class RegistrationViewsTests(TestCase):
         self.assertContains(response, "Request a new activation link")
 
         user = session.query(User).filter_by(email='alice@example.com').first()
+        session.close()
         self.failUnless(not user.is_active)
         auth_settings.BAPH_ACTIVATION_RETRY = False
 
@@ -82,10 +84,13 @@ class RegistrationViewsTests(TestCase):
 
         # We must reload the object from database to get the new key
         user = session.query(User).filter_by(email='alice@example.com').first()
+        new_key = user.signup.activation_key
+        session.close()
         self.assertContains(response, "Account re-activation succeded")
 
-        self.failIfEqual(old_key, user.signup.activation_key)
+        self.failIfEqual(old_key, new_key)
         user = session.query(User).filter_by(email='alice@example.com').first()
+        session.close()
         self.failUnless(not user.is_active)
 
         self.failUnlessEqual(len(mail.outbox), 2)
@@ -93,12 +98,11 @@ class RegistrationViewsTests(TestCase):
         self.assertTrue(mail.outbox[1].body.find("activate your account ")>-1)
 
         response = self.client.get(reverse('baph_activate',
-                                           kwargs={'activation_key': user.signup.activation_key}))
-        #self.assertRedirects(response,
-        #                     reverse('baph_profile_detail', kwargs={'username': user.username}))
+                                           kwargs={'activation_key': new_key}))
 
         session = orm.sessionmaker()
         user = session.query(User).filter_by(email='alice@example.com').first()
+        session.close()
         self.failUnless(user.is_active)
         auth_settings.BAPH_ACTIVATION_RETRY = False
 
@@ -271,13 +275,13 @@ class RegistrationViewsTests(TestCase):
                                     data={'identification': 'john@example.com',
                                           'password': 'blowfish'})
         self.failUnless(self.client.session.get_expire_at_browser_close())
-
     def test_signin_view_inactive(self):
         """ A ``POST`` from a inactive user """
         session = orm.sessionmaker()
         user = session.query(User).filter_by(email='john@example.com').first()
         user.is_active = False
         user.save()
+        session.commit()
 
         response = self.client.post(reverse('baph_signin'),
                                     data={'identification': 'john@example.com',
@@ -379,6 +383,7 @@ class RegistrationViewsTests(TestCase):
         # Check that the new password is set.
         session = orm.sessionmaker()
         john = session.query(User).filter_by(username='john').first()
+        session.close()
         self.failUnless(john.check_password(new_password))
 
     '''

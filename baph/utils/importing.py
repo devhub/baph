@@ -219,7 +219,6 @@ def safe_import(path, replace_modules=[]):
 
     code = compile(node, filename, 'exec')
     exec code in sys.modules[mod].__dict__
-    print mod, name
     return getattr(sys.modules[mod], name)    
 
 def remove_class(cls, name):

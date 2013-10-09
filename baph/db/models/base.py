@@ -119,10 +119,13 @@ class Model(CacheMixin, ModelPermissionMixin):
         __dict__ = dict([(key, val) for key, val in self.__dict__.iteritems()
                          if not key.startswith('_sa_')])
         if len(__dict__) == 0:
-            return dict([(col.name, getattr(self, col.name))
-                         for col in self.__table__.c])
-        else:
-            return __dict__
+            for attr in inspect(type(self)).all_orm_descriptors:
+                if not hasattr(attr, 'property'):
+                    continue
+                if not isinstance(attr.property, ColumnProperty):
+                    continue
+                __dict__[attr.key] = getattr(self, attr.key)
+        return __dict__
 
     @property
     def is_deleted(self):
