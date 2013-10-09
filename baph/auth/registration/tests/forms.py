@@ -174,6 +174,7 @@ class ChangeEmailFormTests(TestCase):
     def test_change_email_form(self):
         session = orm.sessionmaker()
         user = session.query(User).get(1)
+        session.close()
         invalid_data_dicts = [
             # No change in e-mail address
             {'data': {'email': 'john@example.com'},

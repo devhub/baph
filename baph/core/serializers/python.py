@@ -1,13 +1,41 @@
-from django.core.serializers import base
-from django.core.serializers.python import Serializer as _Serializer
-from django.db import DEFAULT_DB_ALIAS
+from django.utils.encoding import smart_text, is_protected_type
+from sqlalchemy.orm.util import identity_key
 
+from baph.core.serializers import base
+from baph.db import DEFAULT_DB_ALIAS
 from baph.db.models import get_apps
 from baph.db.orm import Base
 
 
-class Serializer(_Serializer):
-    pass
+class Serializer(base.Serializer):
+    """
+    Serializes a QuerySet to basic Python objects.
+    """
+
+    internal_use_only = True
+
+    def start_serialization(self):
+        self._current = None
+        self.objects = []
+
+    def end_serialization(self):
+        pass
+
+    def start_object(self, obj):
+        self._current = {}
+
+    def end_object(self, obj):
+        self.objects.append(self.get_dump_object(obj))
+        self._current = None
+
+    def get_dump_object(self, obj):
+        model, pk = identity_key(instance=obj)
+        self._current['__model__'] = model.__name__
+        return self._current
+
+    def getvalue(self):
+        return self.objects
+
 
 def Deserializer(object_list, **options):
     """
