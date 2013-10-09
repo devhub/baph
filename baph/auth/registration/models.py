@@ -1,267 +1,156 @@
-# -*- coding: utf-8 -*-
-'''\
-:mod:`baph.auth.registration.models` -- Registration-related SQLAlchemy Models
-==============================================================================
-'''
+import datetime
 
-from baph.auth.models import User, AUTH_USER_FIELD
-from baph.db.models import Model
-from baph.db.orm import ORM
-from baph.decorators.db import sqlalchemy_session
-from baph.utils.importing import import_attr
-render_to_string = import_attr(['coffin.shortcuts'], 'render_to_string')
-from datetime import datetime, timedelta
-from django.conf import settings
-from django.utils.hashcompat import sha_constructor
-import random
-import re
-from sqlalchemy import Column, ForeignKey, Integer, String
-from sqlalchemy.orm import relation
+from coffin.shortcuts import render_to_string
+from django.conf import settings as django_settings
+from django.core.mail import send_mail
+from sqlalchemy import *
+from sqlalchemy.orm import relationship, backref, joinedload
+
+from baph.auth.models import User, Organization
+from baph.auth.registration import settings
+from baph.auth.registration.utils import get_protocol
+from baph.auth.utils import generate_sha1
+from baph.db import ORM
+
 
 orm = ORM.get()
-SHA1_RE = re.compile(r'^[a-f0-9]{40}$')
+Base = orm.Base
 
+class UserRegistration(Base):
+    __tablename__ = 'baph_auth_user_registration'
+    user_id = Column(Integer, ForeignKey(User.id), primary_key=True)
+    last_active = Column(DateTime)
+    activation_key = Column(String(40))
+    activation_notification_send = Column(Boolean, default=False)
+    email_unconfirmed = Column(String(255))
+    email_confirmation_key = Column(String(40))
+    email_confirmation_key_created = Column(DateTime)
 
-class RegistrationProfile(orm.Base, Model):
-    '''A simple profile which stores an activation key for use during user
-    account registration.
-
-    While it is possible to use this model as the value of the
-    :setting:`AUTH_PROFILE_MODULE` setting, it's not recommended that you do
-    so. This model's sole purpose is to store data temporarily during
-    account registration and activation.
-
-    '''
-    __tablename__ = 'auth_registration_profile'
-
-    ACTIVATED = u"ALREADY_ACTIVATED"
-
-    user_id = Column(AUTH_USER_FIELD, ForeignKey(User.id), primary_key=True)
-    activation_key = Column(String(40), nullable=False)
-
-    user = relation(User)
+    user = relationship(User, backref=backref('signup', uselist=False,
+        cascade='all, delete, delete-orphan'))
 
     def __unicode__(self):
-        return u'Registration information for %s' % self.user
+        return '%s' % self.user.username
 
     def activation_key_expired(self):
-        '''Determine whether the user's activation key has expired.
+        """
+        Checks if activation key is expired.
 
-        Key expiration is determined by a two-step process:
+        Returns ``True`` when the ``activation_key`` of the user is expired and
+        ``False`` if the key is still valid.
 
-        1. If the user has already activated, the key will have been
-           reset to the string :attr:`ACTIVATED`. Re-activating is
-           not permitted, and so this method returns :const:`True` in this
-           case.
+        The key is expired when it's set to the value defined in
+        ``USERENA_ACTIVATED`` or ``activation_key_created`` is beyond the
+        amount of days defined in ``USERENA_ACTIVATION_DAYS``.
 
-        2. Otherwise, the date the user signed up is incremented by
-           the number of days specified in the setting
-           :const:`ACCOUNT_ACTIVATION_DAYS` (which should be the number of
-           days after signup during which a user is allowed to
-           activate their account); if the result is less than or
-           equal to the current date, the key has expired and this
-           method returns :const:`True`.
-
-        :returns: :const:`True` if the key has expired, :const:`False`
-                  otherwise.
-        :rtype: :class:`bool`
-        '''
-        expiration_date = timedelta(days=settings.ACCOUNT_ACTIVATION_DAYS)
-        return self.activation_key == self.ACTIVATED or \
-               (self.user.date_joined + expiration_date <= datetime.now())
-    activation_key_expired.boolean = True
-
-    def send_activation_email(self, site):
-        '''Send an activation email to the user associated with this
-        ``RegistrationProfile``.
-
-        The activation email will make use of two templates:
-
-        ``registration/activation_email_subject.txt``
-            This template will be used for the subject line of the
-            email. Because it is used as the subject line of an email,
-            this template's output **must** be only a single line of
-            text; output longer than one line will be forcibly joined
-            into only a single line.
-
-        ``registration/activation_email.txt``
-            This template will be used for the body of the email.
-
-        These templates will each receive the following context
-        variables:
-
-        ``activation_key``
-            The activation key for the new account.
-
-        ``expiration_days``
-            The number of days remaining during which the account may
-            be activated.
-
-        ``site``
-            An object representing the site on which the user
-            registered; depending on whether :mod:`baph.sites` is installed,
-            this may be an instance of either :class:`baph.sites.models.DjangoSite`
-            (if the sites application is installed) or
-            :class:`baph.sites.models.RequestSite` (if not). Consult the
-            documentation for the Django/Baph sites framework for details
-            regarding these objects' interfaces.
-        '''
-        ctx_dict = {
-            'activation_key': self.activation_key,
-            'expiration_days': settings.ACCOUNT_ACTIVATION_DAYS,
-            'subject_prefix': settings.EMAIL_SUBJECT_PREFIX,
-            'site': site,
-        }
-        subject = render_to_string('registration/activation_email_subject.txt',
-                                   ctx_dict)
-        # Email subject *must not* contain newlines
-        subject = ''.join(subject.splitlines())
-
-        message = render_to_string('registration/activation_email.txt',
-                                   ctx_dict)
-
-        self.user.email_user(subject, message, settings.DEFAULT_FROM_EMAIL)
-
-    @classmethod
-    @sqlalchemy_session
-    def activate_user(cls, activation_key, session=None):
-        '''Validate an activation key and activate the corresponding
-        :class:`~baph.auth.models.User` if valid.
-
-        If the key is valid and has not expired, return the
-        :class:`~baph.auth.models.User` after activating.
-
-        If the key is not valid or has expired, return :const:`False`.
-
-        If the key is valid but the :class:`~baph.auth.models.User` is already
-        active, return :const:`False`.
-
-        To prevent reactivation of an account which has been
-        deactivated by site administrators, the activation key is
-        reset to the string constant :attr:`ACTIVATED` after successful
-        activation.
-
-        :param activation_key: The activation key of the user who will be
-                               activated.
-        :type activation_key: :class:`str`
-        '''
-        # Make sure the key we're trying conforms to the pattern of a
-        # SHA1 hash; if it doesn't, no point trying to look it up in
-        # the database.
-        if SHA1_RE.search(activation_key):
-            profile = session.query(cls) \
-                             .filter_by(activation_key=activation_key) \
-                             .first()
-            if not profile:
-                return False
-            if not profile.activation_key_expired():
-                user = profile.user
-                user.is_active = True
-                profile.activation_key = cls.ACTIVATED
-                session.commit()
-                return user
+        """
+        expiration_days = datetime.timedelta(days=settings.BAPH_ACTIVATION_DAYS)
+        expiration_date = self.user.date_joined + expiration_days
+        if self.activation_key == settings.BAPH_ACTIVATED:
+            return True
+        dt = datetime.datetime.now()
+        if dt >= expiration_date:
+            return True
         return False
 
-    @classmethod
-    @sqlalchemy_session
-    def create_inactive_user(cls, username, email, password, site,
-                             send_email=True, session=None):
-        '''Create a new, inactive :class:`~baph.auth.models.User`, generate a
-        :class:`RegistrationProfile` and email its activation key to the
-        :class:`~baph.auth.models.User`.
+    def send_activation_email(self):
+        """
+        Sends a activation email to the user.
 
-        :param username: The username of the user.
-        :type username: :class:`unicode`
-        :param email: The email address of the user.
-        :type email: :class:`str`
-        :param password: The password of the user.
-        :type password: :class:`unicode`
-        :param site: The site associated with the user.
-        :type site: :class:`baph.sites.models.DjangoSite` or
-                    :class:`baph.sites.models.RequestSite`
-        :param send_email: Whether an activation email will be sent to the new
-                           user.
-        :type send_email: :class:`bool`
-        :rtype: :class:`baph.auth.models.User`
-        '''
-        new_user = User.create_user(username, email, password,
-                                    session=session)
-        new_user.is_active = False
-        session.commit()
+        This email is send when the user wants to activate their newly created
+        user.
 
-        registration_profile = cls.create_profile(new_user, session=session)
+        """
+        context = {'user': self.user,
+                  'without_usernames': settings.BAPH_AUTH_WITHOUT_USERNAMES,
+                  'protocol': get_protocol(),
+                  'activation_days': settings.BAPH_ACTIVATION_DAYS,
+                  'activation_key': self.activation_key,
+                  'org': Organization.get_current(),
+                  }
 
-        if send_email:
-            registration_profile.send_activation_email(site)
+        subject = render_to_string('registration/emails/activation_email_subject.txt',
+                                   context)
+        subject = ''.join(subject.splitlines())
 
-        return new_user
+        message = render_to_string('registration/emails/activation_email_message.txt',
+                                   context)
+        send_mail(subject,
+                  message,
+                  django_settings.DEFAULT_FROM_EMAIL,
+                  [self.user.email, ])
 
-    @classmethod
-    @sqlalchemy_session
-    def create_profile(cls, user, session=None):
-        '''Create a :class:`RegistrationProfile` for a given
-        :class:`~baph.auth.models.User`.
+    def send_confirmation_email(self):
+        """
+        Sends an email to confirm the new email address.
 
-        The activation key for the :class:`RegistrationProfile` will be a
-        SHA1 hash, generated from a combination of the
-        :class:`~baph.auth.models.User`'s username and a random salt.
+        This method sends out two emails. One to the new email address that
+        contains the ``email_confirmation_key`` which is used to verify this
+        this email address with :func:`UserenaUser.objects.confirm_email`.
 
-        :rtype: :class:`RegistrationProfile`
-        '''
-        salt = sha_constructor(str(random.random())).hexdigest()[:5]
-        username = user.username
-        if isinstance(username, unicode):
-            username = username.encode('utf-8')
-        activation_key = sha_constructor(salt + username).hexdigest()
-        profile = RegistrationProfile(user=user, activation_key=activation_key)
-        session.add(profile)
-        session.commit()
-        return profile
+        The other email is to the old email address to let the user know that
+        a request is made to change this email address.
 
-    @classmethod
-    @sqlalchemy_session
-    def delete_expired_users(cls, session=None):
-        '''Remove expired instances of :class:`RegistrationProfile` and their
-        associated users.
+        """
+        context = {'user': self.user,
+                  'without_usernames': settings.BAPH_AUTH_WITHOUT_USERNAMES,
+                  'new_email': self.email_unconfirmed,
+                  'protocol': get_protocol(),
+                  'confirmation_key': self.email_confirmation_key,
+                  'org': Organization.get_current(),
+                  }
 
-        Accounts to be deleted are identified by searching for
-        instances of :class:`RegistrationProfile` with expired activation
-        keys, and then checking to see if their associated ``User``
-        instances have the field ``is_active`` set to ``False``; any
-        ``User`` who is both inactive and has an expired activation
-        key will be deleted.
+        # Email to the old address, if present
+        subject_old = render_to_string(
+            'registration/emails/confirmation_email_subject_old.txt', context)
+        subject_old = ''.join(subject_old.splitlines())
 
-        It is recommended that this method be executed regularly as
-        part of your routine site maintenance; this application
-        provides a custom management command which will call this
-        method, accessible as ``manage.py cleanupregistration``.
+        message_old = render_to_string(
+            'registration/emails/confirmation_email_message_old.txt', context)
+        if self.user.email:
+            send_mail(subject_old,
+                      message_old,
+                      django_settings.DEFAULT_FROM_EMAIL,
+                    [self.user.email])
 
-        Regularly clearing out accounts which have never been
-        activated serves two useful purposes:
+        # Email to the new address
+        subject_new = render_to_string(
+            'registration/emails/confirmation_email_subject_new.txt', context)
+        subject_new = ''.join(subject_new.splitlines())
 
-        1. It alleviates the ocasional need to reset a
-           :class:`RegistrationProfile` and/or re-send an activation email
-           when a user does not receive or does not act upon the
-           initial activation email; since the account will be
-           deleted, the user will be able to simply re-register and
-           receive a new activation key.
+        message_new = render_to_string(
+            'registration/emails/confirmation_email_message_new.txt', context)
 
-        2. It prevents the possibility of a malicious user registering
-           one or more accounts and never activating them (thus
-           denying the use of those usernames to anyone else); since
-           those accounts will be deleted, the usernames will become
-           available for use again.
+        send_mail(subject_new,
+                  message_new,
+                  django_settings.DEFAULT_FROM_EMAIL,
+                  [self.email_unconfirmed, ])
 
-        If you have a troublesome ``User`` and wish to disable their
-        account while keeping it in the database, simply delete the
-        associated :class:`RegistrationProfile`; an inactive ``User`` which
-        does not have an associated :class:`RegistrationProfile` will not
-        be deleted.
-        '''
-        for profile in session.query(cls).all():
-            if profile.activation_key_expired():
-                user = profile.user
-                if not user.is_active:
-                    session.delete(user)
-                    session.delete(profile)
+    def change_email(self, email):
+        """
+        Changes the email address for a user.
+
+        A user needs to verify this new email address before it becomes
+        active. By storing the new email address in a temporary field --
+        ``temporary_email`` -- we are able to set this email address after the
+        user has verified it by clicking on the verification URI in the email.
+        This email gets send out by ``send_verification_email``.
+
+        :param email:
+            The new email address that the user wants to use.
+
+        """
+        self.email_unconfirmed = email
+
+        salt, hash = generate_sha1(self.user.username)
+        self.email_confirmation_key = hash
+        self.email_confirmation_key_created = datetime.datetime.now()
+        self.save()
+
+        # Send email for activation
+        self.send_confirmation_email()
+
+    def save(self):
+        session = orm.sessionmaker()
+        session.add(self)
         session.commit()

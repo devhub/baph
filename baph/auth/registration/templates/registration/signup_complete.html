@@ -1,0 +1,14 @@
+{% extends 'registration/base_registration.html' %}
+
+{% block title %}{% trans %}Signup almost done!{% endtrans %}{% endblock %}
+
+{% block content %}
+<p>{% trans %}Thank you for signing up with us!{% endtrans %}</p>
+
+{% if baph_activation_required %}
+<p>{% trans %}You have been sent an e-mail with an activation link to the supplied email.{% endtrans %}</p>
+<p>{% trans %}We will store your signup information for {{ baph_activation_days }} days on our server. {% endtrans %}</p>
+{% else  %}
+<p>{% trans %}You can now use the supplied credentials to signin.{% endtrans %}</p>
+{% endif %}
+{% endblock %}

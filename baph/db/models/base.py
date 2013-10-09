@@ -12,9 +12,10 @@ from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
 from sqlalchemy.ext.declarative.base import (_as_declarative, _add_attribute)
 from sqlalchemy.ext.declarative.clsregistry import add_class
 from sqlalchemy.ext.hybrid import HYBRID_PROPERTY, HYBRID_METHOD
-from sqlalchemy.orm import mapper, configure_mappers
+from sqlalchemy.orm import mapper, configure_mappers, object_session
 from sqlalchemy.orm.attributes import instance_dict, instance_state
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
+from sqlalchemy.orm.util import has_identity
 from sqlalchemy.schema import ForeignKeyConstraint
 
 from baph.db import ORM
@@ -102,6 +103,12 @@ class Model(CacheMixin, ModelPermissionMixin):
             if hasattr(self, key) and getattr(self, key) != value:
                 setattr(self, key, value)       
 
+    def delete(self):
+        if has_identity(self):
+            session = object_session(self)
+            session.delete(self)
+            session.commit()
+
     def to_dict(self):
         '''Creates a dictionary out of the column properties of the object.
         This is needed because it's sometimes not possible to just use
@@ -112,10 +119,13 @@ class Model(CacheMixin, ModelPermissionMixin):
         __dict__ = dict([(key, val) for key, val in self.__dict__.iteritems()
                          if not key.startswith('_sa_')])
         if len(__dict__) == 0:
-            return dict([(col.name, getattr(self, col.name))
-                         for col in self.__table__.c])
-        else:
-            return __dict__
+            for attr in inspect(type(self)).all_orm_descriptors:
+                if not hasattr(attr, 'property'):
+                    continue
+                if not isinstance(attr.property, ColumnProperty):
+                    continue
+                __dict__[attr.key] = getattr(self, attr.key)
+        return __dict__
 
     @property
     def is_deleted(self):

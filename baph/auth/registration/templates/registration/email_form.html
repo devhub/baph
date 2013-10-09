@@ -1,0 +1,18 @@
+{% extends 'registration/base_registration.html' %}
+
+{% block content_title %}<h2>{% trans %}Account{% endtrans %} &raquo; {{ user.username }}</h2>{% endblock %}
+
+{% block content %}
+<form action="" method="post">
+  <ul id="box-nav">
+    <li><a href="{% url 'baph_password_change' %}">{% trans %}Change password{% endtrans %}</a></li>
+    <li class="last selected"><a href="{% url 'baph_email_change' %}">{% trans %}Change email{% endtrans %}</a></li>
+  </ul>
+  {% csrf_token %}
+  <fieldset>
+    <legend>{% trans %}Change email address{% endtrans %}</legend>
+    {{ form.as_p()|safe }}
+  </fieldset>
+  <input type="submit" value="{% trans %}Change email{% endtrans %}" />
+</form>
+{% endblock %}

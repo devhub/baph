@@ -23,15 +23,22 @@ class ImportTransformer(ast.NodeTransformer):
 
     def visit_ImportFrom(self, node):
         if node.module not in self.modules:
+            " we're not monitoring imports from this module, handle as normal "
             self.generic_visit(node)
             return node
 
         code = ['import sys\n']
         for name in node.names:
             asname = name.asname or name.name
-            line = "%s = sys.modules['%s'].%s\n" \
-                % (asname, node.module, name.name)
-            code.append(line)
+            if hasattr(sys.modules[node.module], name.name):
+                """
+                This was already loaded during the partial load, we'll replace
+                the import with a raw call to sys.modules, to avoid a circular
+                reference
+                """
+                line = "%s = sys.modules['%s'].%s\n" \
+                    % (asname, node.module, name.name)
+                code.append(line)
         code = ''.join(code)
 
         nodes = tuple([self.visit(n) for n in ast.parse(code).body])
@@ -171,18 +178,49 @@ def safe_import(path, replace_modules=[]):
     code = f.read()
     f.close()
 
-    node = ast.parse(code, filename)
-    node = ImportTransformer(replace_modules).visit(node)
-    node = ast.fix_missing_locations(node)
-    code = compile(node, filename, 'exec')
-    
     if not mod in sys.modules:
         sys.modules[mod] = type(sys)(mod)
         sys.modules[mod].__file__ = filename
 
+    node = ast.parse(code, filename)
+    node = ImportTransformer(replace_modules).visit(node)
+    node = ast.fix_missing_locations(node)
+
+    while True:
+        code = compile(node, filename, 'exec')
+        try:
+            exec code in sys.modules[mod].__dict__
+            break
+        except:
+            exc_type, exc_value, tb_root = sys.exc_info()
+
+            tb = tb_root
+            while tb is not None:
+                if tb.tb_frame.f_code.co_filename == filename:
+                    break
+                tb = tb.tb_next
+            if tb is None:
+                raise Exception('no tb frame contained an error in '
+                    'the source file')
+
+            last_valid_idx = None
+            for i, item in enumerate(node.body):
+                if item.lineno <= tb.tb_lineno:
+                    last_valid_idx = i
+                else:
+                    break
+            if not last_valid_idx:
+                raise Exception('tb line # didn\'t fall in any '
+                    'ranges present in source file (how?)')
+            del node.body[last_valid_idx]
+            if len(node.body) == 0:
+                raise Exception('Source AST was trimmed to zero trying to '
+                    'eliminate circular import errors. "oops".')
+
+    code = compile(node, filename, 'exec')
     exec code in sys.modules[mod].__dict__
-    return getattr(sys.modules[mod], name)
-    
+    return getattr(sys.modules[mod], name)    
+
 def remove_class(cls, name):
     from baph.db.models.loading import unregister_models
     subs = cls.__subclasses__()
