@@ -251,7 +251,7 @@ def column_to_attr(cls, col):
 
 class ModelPermissionMixin(object):
 
-    def get_context(self):
+    def get_context(self, depth=0):
         ctx = {}
         for key,attr in inspect(self.__class__).all_orm_descriptors.items():
             if not attr.is_attribute:
@@ -269,8 +269,8 @@ class ModelPermissionMixin(object):
                 continue            
                 
             parent = getattr(self, key)
-            if parent:
-                ctx.update(parent.get_context())
+            if parent and depth == 0:
+                ctx.update(parent.get_context(depth=1))
         return ctx
 
     @classmethod
