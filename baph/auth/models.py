@@ -372,22 +372,22 @@ class UserGroup(Base):
     key = Column(String(32), primary_key=True, default='')
     value = Column(String(32), primary_key=True, default='')
 
-    user = relationship(User, lazy=True, uselist=False,
-        backref=backref('groups', lazy=True, uselist=True,
-            cascade='all, delete, delete-orphan'))
-    
-    group = relationship(Group, lazy=True, uselist=False,
-        backref=backref('user_groups', lazy=True, uselist=True))
+    user = relationship(User, backref=backref('groups',
+        cascade='all, delete, delete-orphan'))
+    group = relationship(Group, backref=backref('user_groups',
+        cascade='all, delete, delete-orphan'))
 
 class PermissionAssociation(Base):
     __tablename__ = PERMISSION_TABLE + '_assoc'
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey(User.id))
     group_id = Column(Integer, ForeignKey(Group.id))
-    perm_id = Column(Integer, ForeignKey(Permission.id))
+    perm_id = Column(Integer, ForeignKey(Permission.id), nullable=False)
 
-    user = relationship(User, backref='permission_assocs')
-    group = relationship(Group, backref='permission_assocs')
+    user = relationship(User, backref=backref('permission_assocs',
+        cascade='all, delete, delete-orphan'))
+    group = relationship(Group, backref=backref('permission_assocs',
+        cascade='all, delete, delete-orphan'))
     permission = relationship(Permission, lazy='joined')
 
     codename = association_proxy('permission', 'codename')
