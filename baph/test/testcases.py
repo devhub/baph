@@ -127,6 +127,12 @@ class MemcacheTestCase(TestCase):
         old = self.initial_cache[cache_key]
         new = self.cache.get(cache_key)
         self.assertEqual(new, old+1)
+
+    def assertCacheKeyIncrementedMulti(self, alias):
+        cache_key = self.aliases[alias]
+        old = self.initial_cache[cache_key]
+        new = self.cache.get(cache_key)
+        self.assertTrue(new > old)
         
     def assertCacheKeyInvalidated(self, alias):
         cache_key = self.aliases[alias]
