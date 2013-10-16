@@ -27,7 +27,7 @@ class JsonField(forms.Field):
             try:
                 value = json.loads(value)
             except:
-                raise ValueError(_('JSON could not be deserialized'))
+                raise forms.ValidationError(_('JSON could not be deserialized'))
         return value
 
 class ListField(JsonField):
@@ -41,7 +41,7 @@ class ListField(JsonField):
         # sqlalchemy.ext.associationproxy._AssociationList (and similar) does 
         # not subclass list, so we check for __iter__ to determine validity
         if not hasattr(value, '__iter__') or hasattr(value, 'items'):
-            raise ValueError(_('This field requires a list as input'))
+            raise forms.ValidationError(_('This field requires a list as input'))
         return value
 
 class DictField(JsonField):
@@ -55,7 +55,7 @@ class DictField(JsonField):
         # sqlalchemy.ext.associationproxy._AssociationDict does not subclass
         # dict, so we check for .items to determine validity
         if not hasattr(value, 'items'): 
-            raise ValueError(_('This field requires a dict as input'))
+            raise forms.ValidationError(_('This field requires a dict as input'))
         return value
 
 # TODO: Test these
