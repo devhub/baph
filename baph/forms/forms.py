@@ -1,13 +1,16 @@
 from django import forms
 from django.utils.datastructures import SortedDict
+from django.utils.translation import ugettext_lazy as _
 from sqlalchemy import *
+from sqlalchemy import inspect
 from sqlalchemy.ext.associationproxy import AssociationProxy
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.util import has_identity
 from sqlalchemy.sql.expression import _BinaryExpression, _Label
 
-from baph.db import types
+from baph.auth.models import Organization
+from baph.db import types, ORM
 from baph.forms import fields
 
 
@@ -160,5 +163,24 @@ class BaseSQLAModelForm(forms.forms.BaseForm):
 class SQLAModelForm(BaseSQLAModelForm):
     __metaclass__ = SQLAModelFormMetaclass
 
+    def clean_org_unique_field(self, key, **kwargs):
+        org_key = Organization._meta.model_name + '_id'
+        value = self.cleaned_data[key]
+        if value is None:
+            return value
+        filters = {
+            org_key: Organization.get_current_id(),
+            key: value,
+            }
+        filters.update(kwargs)
+        session = orm.sessionmaker()
+        instance = session.query(self._meta.model) \
+            .filter_by(**filters) \
+            .filter_by(**kwargs) \
+            .first()
+        if instance and instance != self.instance:
+            # this value is already in use
+            raise forms.ValidationError(_('This value is already in use'))
+        return value
 
 
