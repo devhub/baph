@@ -164,6 +164,7 @@ class SQLAModelForm(BaseSQLAModelForm):
     __metaclass__ = SQLAModelFormMetaclass
 
     def clean_org_unique_field(self, key, **kwargs):
+        orm = ORM.get()
         org_key = Organization._meta.model_name + '_id'
         value = self.cleaned_data[key]
         if value is None:
