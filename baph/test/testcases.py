@@ -36,12 +36,14 @@ class TestCase(DjangoTestCase):
 
     def _fixture_teardown(self):
         if hasattr(self, 'fixtures'):
-            #session = orm.sessionmaker()
+            session = orm.sessionmaker()
+            session.expunge_all()
             #session.rollback() #requires transactional db
             params = {
                 'verbosity': 0,
                 'interactive': False,
                 }
+                
             call_command('flush', **params)
             
 class MemcacheTestCase(TestCase):
