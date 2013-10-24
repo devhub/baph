@@ -79,7 +79,6 @@ def model_to_dict(instance, fields=None, exclude=None):
         if exclude and f.name in exclude:
             continue
         try:
-            print 'setting data[%s] to %s' % (f.name, getattr(instance, f.name))
             data[f.name] = getattr(instance, f.name)
         except:
             pass
@@ -135,7 +134,7 @@ def fields_for_model(model, fields=None, exclude=None, widgets=None,
             raise TypeError('formfield_callback must be a function or callable')
         else:
             formfield = formfield_callback(f, **kwargs)
-        #print '\tformfield:', f.name, kwargs['form_class']
+
         if formfield:
             field_list.append((f.name, formfield))
         else:
