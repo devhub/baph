@@ -64,8 +64,6 @@ def save_instance(form, instance, fields=None, fail_message='saved',
 
 def model_to_dict(instance, fields=None, exclude=None):
     opts = instance._meta
-    if not fields:
-        fields = opts.fields
     data = instance_dict(instance)
     for f in opts.fields:
         if issubclass(f.data_type, orm.Base):
@@ -216,9 +214,8 @@ class BaseSQLAModelForm(forms.forms.BaseForm):
 
         if initial is not None:
             object_data.update(initial)
-
-        super(BaseSQLAModelForm, self).__init__(data, files, auto_id, prefix,
-                                                object_data)
+        object_data.update(data)
+        super(BaseSQLAModelForm, self).__init__(object_data, files, auto_id, prefix)
 
         for k in exclude:
             if k in self.fields:
