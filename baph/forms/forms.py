@@ -239,6 +239,26 @@ class BaseSQLAModelForm(forms.forms.BaseForm):
 class SQLAModelForm(BaseSQLAModelForm):
     __metaclass__ = SQLAModelFormMetaclass
 
+    def clean_unique_field(self, key, **kwargs):
+        orm = ORM.get()
+        value = self.cleaned_data[key]
+        print 'val=', value
+        if value is None:
+            return value
+        filters = {
+            key: value,
+            }
+        filters.update(kwargs)
+        session = orm.sessionmaker()
+        instance = session.query(self._meta.model) \
+            .filter_by(**filters) \
+            .filter_by(**kwargs) \
+            .first()
+        if instance and instance != self.instance:
+            # this value is already in use
+            raise forms.ValidationError(_('This value is already in use'))
+        return value
+
     def clean_org_unique_field(self, key, **kwargs):
         orm = ORM.get()
         org_key = Organization._meta.model_name + '_id'
