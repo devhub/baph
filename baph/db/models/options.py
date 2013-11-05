@@ -12,7 +12,7 @@ from sqlalchemy.ext.associationproxy import ASSOCIATION_PROXY
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 
 from baph.db import types
-from baph.db.models.fields import ModelField
+from baph.db.models.fields import Field
 
 
 get_verbose_name = lambda class_name: \
@@ -190,40 +190,8 @@ class Options(object):
         return None
     swapped = property(_swapped)
 
-    def _fill_fields_cache(self):
-        cache = []
-        if not self.model.__mapper__.configured:
-            configure_mappers()
-        for key, attr in inspect(self.model).all_orm_descriptors.items():
-            if attr.is_mapper:
-                continue
-            elif attr.extension_type == HYBRID_METHOD:
-                continue
-            elif attr.extension_type == HYBRID_PROPERTY:
-                field = ModelField.from_hybrid(key, attr)
-            elif attr.extension_type == ASSOCIATION_PROXY:
-                field = ModelField.from_proxy(key, attr, model=self.model)
-            elif isinstance(attr.property, ColumnProperty):
-                field = ModelField.from_column(key, attr)
-            elif isinstance(attr.property, RelationshipProperty):
-                field = ModelField.from_relationship(key, attr)
-            cache.append((key, field))
-        self._field_cache = tuple(cache)
-        self._field_name_cache = [x for x, _ in cache]
-
     @cached_property
     def fields(self):
-        """
-        Returns tuple of (key, ModelField) tuples representing available fields
-        """
-        try:
-            self._field_cache
-        except AttributeError:
-            self._fill_fields_cache()
-        return self._field_cache
-
-    @cached_property
-    def field_names(self):
         """
         The getter for self.fields. This returns the list of field objects
         available to this model (including through parent models).
@@ -237,12 +205,28 @@ class Options(object):
             self._fill_fields_cache()
         return self._field_name_cache
 
+    def _fill_fields_cache(self):
+        cache = []
+        if not self.model.__mapper__.configured:
+            configure_mappers()
+        for key, attr in inspect(self.model).all_orm_descriptors.items():
+            if attr.is_mapper:
+                continue
+            elif attr.extension_type == HYBRID_METHOD:
+                continue
+            elif attr.extension_type == HYBRID_PROPERTY:
+                continue
+            field = Field.field_from_attr(key, attr, self.model)
+            cache.append((field, None))
+        self._field_cache = tuple(cache)
+        self._field_name_cache = [x for x, _ in cache]
+
     def get_field(self, name, many_to_many=True):
         """
         Returns the requested field by name. Raises FieldDoesNotExist on error.
         """
         to_search = self.fields #(self.fields + self.many_to_many) if many_to_many else self.fields
         for f in to_search:
-            if f[0] == name:
-                return f[1]
+            if f.name == name:
+                return f
         raise FieldDoesNotExist('%s has no field named %r' % (self.object_name, name))

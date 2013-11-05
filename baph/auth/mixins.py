@@ -219,10 +219,16 @@ class UserPermissionMixin(object):
         cls = orm.Base._decl_class_registry[cls_name]
 
         requires_load = False
-        for rel in cls._meta.permission_parents:
-            fk = tuple(getattr(cls, rel).property.local_columns)[0].name
-            if not any (key in filters for key in (rel, fk)):
-                requires_load = True
+        if action == 'add':
+            # add operations have no pk info, so we can't load from db
+            pass            
+        else:
+            # if we have all 'protected' fks, we can evaluate without a
+            # load. otherwise, we need to load to validate
+            for rel in cls._meta.permission_parents:
+                fk = tuple(getattr(cls, rel).property.local_columns)[0].name
+                if not any (key in filters for key in (rel, fk)):
+                    requires_load = True
         
         session = orm.sessionmaker()
 

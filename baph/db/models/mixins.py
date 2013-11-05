@@ -267,7 +267,6 @@ class ModelPermissionMixin(object):
                 continue
             if len(attr.property.local_remote_pairs) != 1:
                 continue            
-                
             parent = getattr(self, key)
             if parent and depth == 0:
                 ctx.update(parent.get_context(depth=1))
