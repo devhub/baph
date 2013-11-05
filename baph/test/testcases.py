@@ -36,12 +36,14 @@ class TestCase(DjangoTestCase):
 
     def _fixture_teardown(self):
         if hasattr(self, 'fixtures'):
-            #session = orm.sessionmaker()
+            session = orm.sessionmaker()
+            session.expunge_all()
             #session.rollback() #requires transactional db
             params = {
                 'verbosity': 0,
                 'interactive': False,
                 }
+                
             call_command('flush', **params)
             
 class MemcacheTestCase(TestCase):
@@ -127,6 +129,12 @@ class MemcacheTestCase(TestCase):
         old = self.initial_cache[cache_key]
         new = self.cache.get(cache_key)
         self.assertEqual(new, old+1)
+
+    def assertCacheKeyIncrementedMulti(self, alias):
+        cache_key = self.aliases[alias]
+        old = self.initial_cache[cache_key]
+        new = self.cache.get(cache_key)
+        self.assertTrue(new > old)
         
     def assertCacheKeyInvalidated(self, alias):
         cache_key = self.aliases[alias]

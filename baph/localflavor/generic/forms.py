@@ -26,8 +26,8 @@ from baph.utils.importing import import_any_module, import_attr
 
 
 COUNTRY_DIVISIONS = {
-    'province': ['ar', 'ca', 'es', 'nl', 'za'],
-    'state': ['at', 'au', 'br', 'ch', 'de', 'in', 'mx', 'us'],
+    'province': ['ar', 'be', 'ca', 'es', 'nl', 'za'],
+    'state': ['at', 'au', 'br', 'ch', 'de', 'in_', 'mx', 'us'],
     'department': ['co'],
     }
 COUNTRY_STATES = COUNTRY_DIVISIONS['state']
@@ -35,11 +35,12 @@ COUNTRY_PROVINCES = COUNTRY_DIVISIONS['province']
 
 
 def _get_country_divisions(country, div_type, key_by_code=False):
-    mod_name = 'django_localflavor_%s.%s_%ss' % (country, country, div_type)
+    c2 = country if not country.endswith('_') else country.rstrip('_')
+    mod_name = 'localflavor.%s.%s_%ss' % (country, c2, div_type)
     module = import_module(mod_name)
     choices = getattr(module, '%s_CHOICES' % div_type.upper(), [])
     items = [(k, k if key_by_code else v) for k, v in choices]
-    return (country.upper(), items)
+    return (c2.upper(), items)
 
 STATE_PROVINCE_CHOICES = tuple(sorted(chain(*[
     [_get_country_divisions(country, div_type) 

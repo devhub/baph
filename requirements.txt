@@ -6,6 +6,7 @@ git+git://github.com/dcramer/coffin.git
 cssutils
 Django == 1.5
 # django-piston
+django-localflavor
 hg+http://bitbucket.org/malept/django-piston
 # django-newcache
 # git+git://github.com/ericflo/django-newcache.git

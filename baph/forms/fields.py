@@ -5,16 +5,76 @@ except:
 
 from django import forms
 from django.core import validators
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.translation import ugettext_lazy as _
 
 
-class ObjectField(forms.Field):
-    " allowed values must be sqlalchemy objects (result of resource hydration)"
+class NullCharField(forms.CharField):
+    """
+    CharField that does not cast None to ''
+    """
+    def to_python(self, value):
+        "Returns a Unicode object."
+        if value in validators.EMPTY_VALUES:
+            return None
+        return super(NullCharField, self).to_python(value)
+
+class MultiObjectField(forms.Field):
+    """
+    Field for handling of collections of objects
+    """
+    def __init__(self, related_class=None, collection_class=None, **kwargs):
+        self.related_class = related_class
+        self.collection_class = collection_class
+        super(MultiObjectField, self).__init__(**kwargs)
+
+    def validate_collection(self, data, collection_class=None):
+        if collection_class is None:
+            collection_class = self.collection_class[:]
+        if collection_class == []:
+            # we've drilled down through all collections, now we
+            # check the class type if available
+            if self.related_class and not isinstance(data, self.related_class):
+                raise forms.ValidationError(
+                    _('Expected %s, got %s') % (self.related_class, type(data)))
+            return
+        c_cls = collection_class.pop(0)
+        if c_cls == dict:
+            if not isinstance(data, dict):
+                raise forms.ValidationError(
+                    _('Expected dict, got %s') % type(data))
+            for k,v in data.items():
+                self.validate_collection(v, collection_class)
+        elif c_cls == list:
+            if not isinstance(data, list):
+                raise forms.ValidationError(
+                    _('Expected list, got %s') % type(data))
+            for v in data:
+                self.validate_collection(v, collection_class)
+
     def to_python(self, value):
         from baph.db.orm import Base
         if value in validators.EMPTY_VALUES:
             return None
-        if not isinstance(value, Base):
+        print self.collection_class, self.related_class, value
+        self.validate_collection(value)
+        return value        
+
+class ObjectField(forms.Field):
+    " allowed values must be sqlalchemy objects (result of resource hydration)"
+    def __init__(self, related_class=None, **kwargs):
+        if not related_class:
+            raise ImproperlyConfigured(u'No related class assigned to '
+                                            'ObjectField')
+        self.related_class = related_class
+        super(ObjectField, self).__init__(**kwargs)
+
+
+    def to_python(self, value):
+        from baph.db.orm import Base
+        if value in validators.EMPTY_VALUES:
+            return None
+        if not isinstance(value, self.related_class):
             raise forms.ValidationError(
                 _(u'Provided data did not hydrate to an object'))        
 
@@ -27,7 +87,7 @@ class JsonField(forms.Field):
             try:
                 value = json.loads(value)
             except:
-                raise ValueError(_('JSON could not be deserialized'))
+                raise forms.ValidationError(_('JSON could not be deserialized'))
         return value
 
 class ListField(JsonField):
@@ -41,7 +101,7 @@ class ListField(JsonField):
         # sqlalchemy.ext.associationproxy._AssociationList (and similar) does 
         # not subclass list, so we check for __iter__ to determine validity
         if not hasattr(value, '__iter__') or hasattr(value, 'items'):
-            raise ValueError(_('This field requires a list as input'))
+            raise forms.ValidationError(_('This field requires a list as input'))
         return value
 
 class DictField(JsonField):
@@ -55,7 +115,7 @@ class DictField(JsonField):
         # sqlalchemy.ext.associationproxy._AssociationDict does not subclass
         # dict, so we check for .items to determine validity
         if not hasattr(value, 'items'): 
-            raise ValueError(_('This field requires a dict as input'))
+            raise forms.ValidationError(_('This field requires a dict as input'))
         return value
 
 # TODO: Test these

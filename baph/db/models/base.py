@@ -131,6 +131,16 @@ class Model(CacheMixin, ModelPermissionMixin):
     def is_deleted(self):
         return False
 
+    def save(self, commit=False):
+        from baph.db.orm import ORM
+        orm = ORM.get()
+        session = orm.sessionmaker()
+
+        if commit:
+            if not self in session:
+                session.add(self)
+            session.commit()
+
 class ModelBase(type):
 
     def __init__(cls, name, bases, attrs):

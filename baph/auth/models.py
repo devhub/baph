@@ -357,6 +357,7 @@ class UserGroup(Base):
     '''User groups'''
     __tablename__ = 'baph_auth_user_groups'
     __table_args__ = (
+        PrimaryKeyConstraint('user_id', 'group_id', 'key', 'value'),
         Index('idx_group_context', 'group_id', 'key', 'value'),
         Index('idx_context', 'key', 'value'),
         )
@@ -365,29 +366,27 @@ class UserGroup(Base):
         permission_parents = ['user']
         permission_handler = 'user'
 
-    user_id = Column(Integer, ForeignKey(User.id), primary_key=True,
-        autoincrement=False)
-    group_id = Column(Integer, ForeignKey(Group.id), primary_key=True,
-        autoincrement=False)
-    key = Column(String(32), primary_key=True, default='')
-    value = Column(String(32), primary_key=True, default='')
+    user_id = Column(Integer, ForeignKey(User.id), nullable=False)
+    group_id = Column(Integer, ForeignKey(Group.id), nullable=False)
+    key = Column(String(32), default='')
+    value = Column(String(32), default='')
 
-    user = relationship(User, lazy=True, uselist=False,
-        backref=backref('groups', lazy=True, uselist=True,
-            cascade='all, delete, delete-orphan'))
-    
-    group = relationship(Group, lazy=True, uselist=False,
-        backref=backref('user_groups', lazy=True, uselist=True))
+    user = relationship(User, backref=backref('groups',
+        cascade='all, delete-orphan'))
+    group = relationship(Group, backref=backref('user_groups',
+        cascade='all, delete-orphan'))
 
 class PermissionAssociation(Base):
     __tablename__ = PERMISSION_TABLE + '_assoc'
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey(User.id))
     group_id = Column(Integer, ForeignKey(Group.id))
-    perm_id = Column(Integer, ForeignKey(Permission.id))
+    perm_id = Column(Integer, ForeignKey(Permission.id), nullable=False)
 
-    user = relationship(User, backref='permission_assocs')
-    group = relationship(Group, backref='permission_assocs')
+    user = relationship(User, backref=backref('permission_assocs',
+        cascade='all, delete-orphan'))
+    group = relationship(Group, backref=backref('permission_assocs',
+        cascade='all, delete-orphan'))
     permission = relationship(Permission, lazy='joined')
 
     codename = association_proxy('permission', 'codename')
