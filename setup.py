@@ -5,7 +5,7 @@ from distutils.core import setup
 from setuptools import find_packages
 
 setup(name='baph',
-      version='0.3.7',
+      version='0.3.8',
       install_requires=[
           'Coffin',
           'Django >= 1.5',
