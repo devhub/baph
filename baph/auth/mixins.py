@@ -320,13 +320,19 @@ class UserPermissionMixin(object):
             if not p.key:
                 # this is a boolean permission, so cannot be applied as a filter
                 continue
-            cls = orm.Base._decl_class_registry[resource]
+
             keys = p.key.split(',')
             values = p.value.split(',')
             data = zip(keys, values)
             
             filters = []
             for key, value in data:
+                if key in cls._meta.filter_translations:
+                    lookup, key = cls._meta.filter_translations[key].split('.',1)
+                else:
+                    lookup = resource
+                cls = orm.Base._decl_class_registry[lookup]
+
                 frags = key.split('.')
                 attr = frags.pop()
                 for frag in frags:
