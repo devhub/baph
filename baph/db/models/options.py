@@ -23,6 +23,7 @@ DEFAULT_NAMES = ('verbose_name', 'verbose_name_plural',
                  'app_label', 'swappable', 'auto_created',
                  'cache_detail_keys', 'cache_list_keys', 'cache_pointers',
                  'cache_relations', 'cache_cascades', 
+                 'filter_translations',
                  'permissions', 'permission_scopes', 'form_class',
                  'permission_actions', 'permission_classes',
                  'permission_parents', 'permission_full_parents', 
@@ -71,6 +72,10 @@ class Options(object):
 
         self.permissions = {}
         self.permission_scopes = {}
+        
+        # filter_translations allows mapping of filter keys to 'full' filters
+        # in the event the target column is in another table.
+        self.filter_translations = {}
 
         # permission_parents is a list of *toOne relations which can be
         # considered to refer to 'parents'. These relations will automatically
