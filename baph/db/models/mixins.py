@@ -113,7 +113,7 @@ class CacheMixin(object):
         return self.format_key(cache_key)
         
 
-    def get_cache_keys(self, child_updated=False):
+    def get_cache_keys(self, child_updated=False, force_expire_pointers=False):
         #print 'getting keys from', self
         cache_keys = set()
         version_keys = set()
@@ -174,8 +174,10 @@ class CacheMixin(object):
 
         # pointer records contain only the id of the parent resource
         # if changed, we set the old key to False, and set the new key
+        pointers = []
         for raw_key, attrs, name in self._meta.cache_pointers:
-            if attrs and not any(key in changed_keys for key in attrs):
+            if attrs and not any(key in changed_keys for key in attrs) \
+                     and not force_expire_pointers:
                 # the fields which trigger this key were not changed
                 continue
             cache_key = raw_key % data
@@ -186,6 +188,8 @@ class CacheMixin(object):
                 idkey = idkey[0]
             if not self.is_deleted:
                 cache.set(cache_key, idkey)
+            if force_expire_pointers:
+                cache_keys.add(cache_key)
 
             # if this is an existing object, we need to handle the old key
             if not has_identity(self):

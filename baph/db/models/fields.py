@@ -179,8 +179,6 @@ class Field(object):
             if type(col.type) == Boolean:
                 kwargs['required'] = False
             elif not col.nullable and not kwargs['auto'] and not kwargs['default']: 
-                if key == 'user_id':
-                    print model, key, 'is required'
                 kwargs['required'] = True
             else:
                 kwargs['required'] = False
