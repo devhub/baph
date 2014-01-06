@@ -2,7 +2,8 @@
 '''SQLAlchemy versions of :mod:`django.contrib.auth` utility functions.'''
 
 from datetime import datetime
-from django.contrib.auth import BACKEND_SESSION_KEY, load_backend, SESSION_KEY
+from django.contrib.auth import (SESSION_KEY, BACKEND_SESSION_KEY,
+    load_backend, user_logged_in)
 from django.contrib.auth.models import AnonymousUser
 
 
@@ -37,6 +38,7 @@ def login(request, user):
     request.session[BACKEND_SESSION_KEY] = user.backend
     if hasattr(request, 'user'):
         request.user = user
+    user_logged_in.send(sender=user.__class__, request=request, user=user)    
 
 
 def logout(request):
