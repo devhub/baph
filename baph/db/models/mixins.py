@@ -386,7 +386,14 @@ class ModelPermissionMixin(object):
         prop = attr.property
         local_col, remote_col = prop.local_remote_pairs[0]
         local_key = local_col.key
-        value = getattr(self, local_key)
+        if hasattr(self, local_key):
+            value = getattr(self, local_key)
+        else:
+            # model is missing this key, maybe an aliased column?
+            for k,v in type(self).__mapper__.c.items():
+                if v is local_col:
+                    value = getattr(self, k)
+       
         if not value:
             # no relation and no fk
             return None

@@ -8,7 +8,7 @@ import uuid
 
 from django.conf import settings
 from django.contrib.auth.hashers import (
-    check_password, make_password, is_password_usable, UNUSABLE_PASSWORD)
+    check_password, make_password, is_password_usable)
 from django.contrib.auth.signals import user_logged_in
 from django.core.exceptions import ImproperlyConfigured
 from django.dispatch import receiver
@@ -41,6 +41,7 @@ AUTH_USER_FIELD_TYPE = getattr(settings, 'AUTH_USER_FIELD_TYPE', 'UUID')
 AUTH_USER_FIELD = UUID if AUTH_USER_FIELD_TYPE == 'UUID' else Integer
 PERMISSION_TABLE = getattr(settings, 'BAPH_PERMISSION_TABLE',
                             'baph_auth_permissions')
+UNUSABLE_PASSWORD = '!'
 
 def _generate_user_id_column():
     if AUTH_USER_FIELD_TYPE != 'UUID':
