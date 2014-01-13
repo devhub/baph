@@ -4,8 +4,8 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
 from django.test import _doctest as doctest
-from django.test.simple import get_tests #, build_suite #, build_test
-from django.test.testcases import OutputChecker, DocTestRunner
+from django.test.simple import OutputChecker, DocTestRunner, get_tests #, build_suite #, build_test
+#from django.test.testcases import 
 from django.test.utils import setup_test_environment, teardown_test_environment
 from django.utils import unittest
 from django.utils.importlib import import_module
