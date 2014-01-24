@@ -4,6 +4,7 @@
 ===============================================
 
 .. moduleauthor:: Mark Lee <markl@evomediagroup.com>
+.. moduleauthor:: Gerald Thibault <jt@evomediagroup.com>
 '''
 try:
     import json
@@ -18,6 +19,7 @@ from django.utils.timezone import is_naive, is_aware, make_aware
 from pytz import timezone
 from sqlalchemy import types
 from sqlalchemy.databases import mysql, postgresql
+from sqlalchemy.ext.mutable import Mutable
 
 
 class UUID(types.TypeDecorator):
@@ -69,7 +71,6 @@ class UUID(types.TypeDecorator):
 
     def is_mutable(self):
         return False
-        
 
 class Json(types.TypeDecorator):
     impl = types.Unicode
@@ -94,6 +95,34 @@ class List(JsonText):
     @property
     def python_type(self):
         return list
+
+# http://docs.sqlalchemy.org/en/latest/orm/extensions/mutable.html
+
+class MutableDict(Mutable, dict):
+    @classmethod
+    def coerce(cls, key, value):
+        "Convert plain dictionaries to MutableDict."
+
+        if not isinstance(value, MutableDict):
+            if isinstance(value, dict):
+                return MutableDict(value)
+
+            # this call will raise ValueError
+            return Mutable.coerce(key, value)
+        else:
+            return value
+
+    def __setitem__(self, key, value):
+        "Detect dictionary set events and emit change events."
+
+        dict.__setitem__(self, key, value)
+        self.changed()
+
+    def __delitem__(self, key):
+        "Detect dictionary del events and emit change events."
+
+        dict.__delitem__(self, key)
+        self.changed()
 
 class Dict(JsonText):
 
