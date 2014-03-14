@@ -190,7 +190,8 @@ class AbstractBaseUser(Base, UserPermissionMixin):
     date_joined = Column(DateTime, default=datetime.now, nullable=False)
 
     permissions = association_proxy('permission_assocs', 'permission')
-    codenames = association_proxy('permission_assocs', 'codename')
+    codenames = association_proxy('permission_assocs', 'codename',
+                                  creator=get_or_fail)
 
     # this is to allow the django password reset token generator to work
     @property
