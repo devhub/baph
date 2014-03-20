@@ -256,7 +256,7 @@ class AbstractBaseUser(Base, UserPermissionMixin):
     def _create_user(cls, username, email, password, is_staff, is_superuser,
                      **extra_fields):
         now = datetime.now()
-        if not username:
+        if not getattr(settings, 'BAPH_AUTH_WITHOUT_USERNAMES', False) and not username:
             raise ValueError('The given username must be set')
         org_key = Organization._meta.model_name
         if not any(f in extra_fields for f in (org_key, org_key+'_id')):
