@@ -5,6 +5,7 @@ from django.conf import settings
 from django.core.cache import get_cache
 from sqlalchemy import Column, DateTime, func, inspect
 from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.ext.declarative.clsregistry import _class_resolver
 from sqlalchemy.orm.attributes import get_history, instance_dict
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.util import has_identity, identity_key
@@ -321,17 +322,11 @@ class ModelPermissionMixin(object):
             if len(prop.local_remote_pairs) != 1:
                 continue
 
-            sub_cls = prop.argument
+            sub_cls = cls.get_related_class(key)
             col = prop.local_remote_pairs[0][0]
             col_attr = column_to_attr(cls, col)
             remote_col = prop.local_remote_pairs[0][1]
 
-            if type(sub_cls) == type(lambda x:x):
-                # activate lazy-load functions
-                sub_cls = sub_cls()
-            if hasattr(sub_cls, 'is_mapper') and sub_cls.is_mapper:
-                # we found a mapper, grab the class from it
-                sub_cls = sub_cls.class_
             inc_par = sub_cls._meta.permission_terminator == False or \
                       key in cls._meta.permission_full_parents
             sub_fks = sub_cls.get_fks(include_parents=inc_par,
@@ -368,6 +363,9 @@ class ModelPermissionMixin(object):
         prop = attr.property
         related_cls = prop.argument
         if isinstance(related_cls, types.FunctionType):
+            # lazy-loaded Model
+            related_cls = related_cls()
+        if isinstance(related_cls, _class_resolver):
             # lazy-loaded Model
             related_cls = related_cls()
         if hasattr(related_cls, 'is_mapper') and related_cls.is_mapper:
