@@ -103,7 +103,7 @@ class AbstractBaseOrganization(Base):
             'custom Organization model')
 
     @classmethod
-    def get_current_id(cls):
+    def get_current_id(cls, request=None):
         org = cls.get_current()
         if not org:
             return None
@@ -111,6 +111,14 @@ class AbstractBaseOrganization(Base):
             return org['id']
         else:
             return org.id
+
+    @classmethod
+    def get_column_key(cls):
+        return cls._meta.model_name+'_id'
+
+    @classmethod
+    def get_relation_key(cls):
+        return cls._meta.model_name
 
 class BaseOrganization(AbstractBaseOrganization):
     __tablename__ = 'baph_auth_organizations'
