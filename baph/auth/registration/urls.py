@@ -57,6 +57,10 @@ urlpatterns = patterns('',
        'baph.auth.views.password_reset_done',
        {'template_name': 'registration/password_reset_done.html'},
        name='baph_password_reset_done'),
+    url(r'^password/reset/confirm/complete/$',
+       auth_views.password_reset_complete,
+       {'template_name': 'registration/password_reset_complete.html'},
+        name='baph_password_reset_complete'),
 
     # Disabled account
     url(r'^disabled/$',

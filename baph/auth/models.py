@@ -103,7 +103,7 @@ class AbstractBaseOrganization(Base):
             'custom Organization model')
 
     @classmethod
-    def get_current_id(cls):
+    def get_current_id(cls, request=None):
         org = cls.get_current()
         if not org:
             return None
@@ -111,6 +111,14 @@ class AbstractBaseOrganization(Base):
             return org['id']
         else:
             return org.id
+
+    @classmethod
+    def get_column_key(cls):
+        return cls._meta.model_name+'_id'
+
+    @classmethod
+    def get_relation_key(cls):
+        return cls._meta.model_name
 
 class BaseOrganization(AbstractBaseOrganization):
     __tablename__ = 'baph_auth_organizations'
@@ -256,7 +264,7 @@ class AbstractBaseUser(Base, UserPermissionMixin):
     def _create_user(cls, username, email, password, is_staff, is_superuser,
                      **extra_fields):
         now = datetime.now()
-        if not username:
+        if not getattr(settings, 'BAPH_AUTH_WITHOUT_USERNAMES', False) and not username:
             raise ValueError('The given username must be set')
         org_key = Organization._meta.model_name
         if not any(f in extra_fields for f in (org_key, org_key+'_id')):
