@@ -5,11 +5,11 @@ from distutils.core import setup
 from setuptools import find_packages
 
 setup(name='baph',
-      version='0.3.11',
+      version='0.3.12',
       install_requires=[
-          'Coffin',
-          'Django >= 1.5',
-          'SQLAlchemy >= 0.9.0',
+          'Coffin >= 0.3.8',
+          'Django >= 1.6',
+          'SQLAlchemy >= 0.9.4',
       ],
       include_package_data=True,
       package_data={
