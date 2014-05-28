@@ -97,6 +97,7 @@ def string_to_model(string):
 class PermissionStruct:
     def __init__(self, **entries): 
         self.__dict__.update(entries)
+        self._explicit = False
 
 class UserPermissionMixin(object):
 
@@ -124,7 +125,7 @@ class UserPermissionMixin(object):
             if user_group.key:
                 ctx[user_group.key] = user_group.value
             group = user_group.group
-            org_id = getattr(group, Organization._meta.model_name+'_id')
+            org_id = str(getattr(group, Organization._meta.model_name+'_id'))
             if org_id not in permissions:
                 permissions[org_id] = {}
             perms = permissions[org_id]
@@ -136,6 +137,9 @@ class UserPermissionMixin(object):
                 if perm.action not in perms[model_name]:
                     perms[model_name][perm.action] = set()
                 perm = PermissionStruct(**perm.to_dict())
+                if user_group.key:
+                    perm._explicit = True
+                
                 if perm.value:
                     try:
                         perm.value = perm.value % ctx
@@ -167,7 +171,7 @@ class UserPermissionMixin(object):
         if hasattr(self, '_perm_cache'):
             return self._perm_cache
         from baph.auth.models import Organization
-        current_org_id = Organization.get_current_id()
+        current_org_id = str(Organization.get_current_id())
         perms = {}
         for org_id, org_perms in self.get_all_permissions().items():
             if not org_id in (None, current_org_id):
@@ -251,18 +255,23 @@ class UserPermissionMixin(object):
             parent_res = type(parent_obj).resource_name
             if action != 'view':
                 action = 'edit'
+            
             return self.has_obj_perm(parent_res, action, parent_obj)
 
         ctx = self.get_context()
         perms = self.get_resource_permissions(resource, action)
         if not perms:
+            # user has no valid permissions for this resource/action pair
             return False
             
         perm_map = {}
+        explicit = []
         for p in perms:
             if not p.key:
                 # this is a boolean permission (not a key/value filter)
                 return True
+            if p._explicit:
+                explicit.append(p.key)
             if not p.key in perm_map:
                 perm_map[p.key] = set()
             perm_map[p.key].add(p.value % ctx)
@@ -276,6 +285,7 @@ class UserPermissionMixin(object):
                 if not col_attr.key in perm_map:
                     perm_map[col_attr.key] = set([None])
 
+        add_errors = []
         for k,v in perm_map.items():
             keys = k.split(',')
             key_pieces = [key_to_value(obj, key) for key in keys]
@@ -284,16 +294,33 @@ class UserPermissionMixin(object):
             else:
                 value = ','.join(key_pieces)
 
-            if action == 'add':
-                # for adding items, all filters must match
-                if value and str(value) not in v:
-                    if v == set([None]):
-                        continue
-                    return False
-            else:
-                # for other actions, one relevant perm is enough
-                if value and str(value) in v:
+            if not value:
+                # no value to check
+                continue
+
+            if v == set([None]):
+                # no restriction on allowed values
+                continue
+
+            if str(value) in v:
+                if action == 'add':
+                    if k in explicit:
+                        # this perm indicates it can grant access and override
+                        # restrictions set by broader permissions. If the key/value
+                        # is set on the UserGroup (rather than the permission), the
+                        # permission will be 'explicit'
+                        return True
+                else:
+                    # for non-add permissions, a single matching filter will grant
+                    # access to the resource
                     return True
+            else:
+                if action == 'add':
+                    add_errors.append( (k, value, v) )
+                    continue
+        if add_errors:
+            return False
+
         return action == 'add'
 
     def get_resource_filters(self, resource, action='view'):
