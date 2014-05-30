@@ -1,6 +1,7 @@
 from django.conf import settings
 from sqlalchemy import *
 from sqlalchemy import inspect
+from sqlalchemy.ext.declarative.clsregistry import _class_resolver
 from sqlalchemy.orm import lazyload
 
 from baph.db import ORM
@@ -66,6 +67,8 @@ def key_to_value(obj, key):
 
         related_cls = prop.argument
         if isinstance(related_cls, type(lambda x:x)):
+            related_cls = related_cls()
+        if isinstance(related_cls, _class_resolver):
             related_cls = related_cls()
         related_col = prop.local_remote_pairs[0][0]
         attr_ = column_to_attr(previous_cls, related_col)
