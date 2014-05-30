@@ -49,7 +49,6 @@ class CacheMixin(object):
             ns.append('%s_%s' % (version_key, version))
         if not ns:
             return key
-        #print '%s:%s' % (':'.join(ns), key)
         return '%s:%s' % (':'.join(ns), key)
 
     def get_cache_namespaces(self):
@@ -115,7 +114,6 @@ class CacheMixin(object):
         
 
     def get_cache_keys(self, child_updated=False, force_expire_pointers=False):
-        #print 'getting keys from', self
         cache_keys = set()
         version_keys = set()
 
@@ -146,10 +144,6 @@ class CacheMixin(object):
             if ins or rm:
                 changed_keys.append(attr.key)
         self_updated = bool(changed_keys) or deleted
-
-        #print '\nself:', self
-        #print '\tself_updated:', self_updated, changed_keys
-        #print '\tchild_updated:', child_updated
 
         if not self_updated and not child_updated:
             return (cache_keys, version_keys)
@@ -291,12 +285,13 @@ class ModelPermissionMixin(object):
         # add permission for unrestricted access
         keys.append( ('any', None, None, None, cls_name) )
 
-        # add permission for single instance access
+        # add permission for single instance access (single-col pk only)
         if primary_key:
             col_key = '%s_%s' % (cls._meta.model_name, primary_key)
             value = '%%(%s)s' % col_key
             keys.append( ('single', primary_key, value, col_key, cls_name) )
 
+        # iterate through limiters and create a list of local permissions
         for limiter, pairs in cls._meta.permission_limiters.items():
             col_key = None
             new_key = remote_key or primary_key
@@ -309,8 +304,11 @@ class ModelPermissionMixin(object):
         if not include_parents:
             return keys
 
+        # using this node as a base, grab the keys from parent objects
+        # and create expressions to grant child access via parents
         fks = []
         for key in cls._meta.permission_parents + cls._meta.permission_full_parents:
+            # 'key' is the name of the parent relation attribute
             attr = getattr(cls, key)
             if not attr.is_attribute:
                 continue
@@ -331,12 +329,24 @@ class ModelPermissionMixin(object):
                       key in cls._meta.permission_full_parents
             sub_fks = sub_cls.get_fks(include_parents=inc_par,
                                       remote_key=remote_col.key)
-            
+
             for limiter, key_, value, col_key, base_cls in sub_fks:
                 if not key_:
                     # do not extend the 'any' permission
                     continue
-                key_ = '%s.%s' % (key, key_)
+
+                # prepend the current node string to each filter in the 
+                # limiter expression
+                frags = key_.split(',')
+                frags = ['%s.%s' % (key, frag) for frag in frags]
+                key_ = ','.join(frags)
+
+                frags = value.split(',')
+                if len(frags) > 1:
+                    frags = [f for f in frags if f.find('.') == -1]
+                    if len(frags) == 1:
+                        new_col_key = frags[0][2:-2]
+
                 if limiter == 'single' or not col_key:
                     col_key = col_attr.key
                     attr = getattr(cls, col_attr.key, None)
@@ -350,10 +360,13 @@ class ModelPermissionMixin(object):
                             if v.property.columns[0] == col:
                                 col_key = k
                                 break
+
                 if limiter == 'single':
-                    #print 'single limiter', key_, col_key
+                    # for single limiters, we can eliminate the final join
+                    # and just use the value of the fk instead
                     limiter = key_.split('.')[-2]
                     value = '%%(%s)s' % col_key
+
                 keys.append( (limiter, key_, value, col_key, cls_name) )
         return keys
 
@@ -403,3 +416,45 @@ class ModelPermissionMixin(object):
         parent = session.query(parent_cls).filter_by(**filters).first()
         return parent
 
+    @classmethod
+    def normalize_key(cls, key):
+        limiter = ''
+        frags = key.split('.')
+        if len(frags) > 1:
+            # expression contains multiple relations
+            col_name = frags.pop()
+            rel_name = frags.pop()
+
+            current_cls = base_cls = cls
+            for f in frags:
+                current_cls = current_cls.get_related_class(f)
+            prev_cls = current_cls
+            current_rel = getattr(current_cls, rel_name)
+            current_cls = current_cls.get_related_class(rel_name)
+
+            col = getattr(current_cls, col_name)
+
+            attr = None
+            for loc, rem in current_rel.property.local_remote_pairs:
+                if rem in col.property.columns:
+                    attr = loc.name
+                    for c in inspect(prev_cls).all_orm_descriptors:
+                        try:
+                            cols = c.property.columns
+                            assert len(cols) == 1
+                            if cols[0] == loc:
+                                attr = c.key
+                                break
+                        except:
+                            pass
+                    break
+            if attr:
+                if frags:
+                    limiter = ' ' + ' '.join(reversed(frags))
+                frags.append(attr)
+                key = '.'.join(frags)
+            else:
+                frags.append(rel_name)
+                limiter = ' ' + ' '.join(reversed(frags))
+
+        return (key, limiter)
