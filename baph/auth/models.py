@@ -420,9 +420,9 @@ class OAuthConsumer(Base):
     def __init__(self, **kwargs):
         super(OAuthConsumer, self).__init__(**kwargs)
         if not self.key:
-            self.key = random_string(length=KEY_LEN)
+            self.key = random_string(size=KEY_LEN)
         if not self.secret:
-            self.secret = random_string(length=SECRET_LEN)
+            self.secret = random_string(size=SECRET_LEN)
 
     @classmethod
     def create(cls, user_id, **kwargs):
