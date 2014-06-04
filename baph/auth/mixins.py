@@ -361,13 +361,14 @@ class UserPermissionMixin(object):
                     lookup, key = cls._meta.filter_translations[key].split('.',1)
                 else:
                     lookup = resource
-                cls = orm.Base._decl_class_registry[lookup]
+                cls_ = orm.Base._decl_class_registry[lookup]
 
                 frags = key.split('.')
                 attr = frags.pop()
                 for frag in frags:
-                    cls = cls.get_related_class(frag)
-                col = getattr(cls, attr)
+                    cls_ = cls_.get_related_class(frag)
+
+                col = getattr(cls_, attr)
                 filters.append(col==value)
 
             if len(filters) == 1:
