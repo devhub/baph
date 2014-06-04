@@ -294,6 +294,10 @@ class UserPermissionMixin(object):
             key_pieces = [key_to_value(obj, key) for key in keys]
             if key_pieces == [None]:
                 value = None
+            elif None in key_pieces:
+                # this object lacks the values required to form a key
+                # so this permission is irrelevant to the current obj
+                continue
             else:
                 value = ','.join(key_pieces)
 
