@@ -135,6 +135,7 @@ class Organization(BaseOrganization):
 class AbstractBaseGroup(Base):
     __abstract__ = True
     id = Column(Integer, primary_key=True)
+    context = Column(Dict)
 
     users = association_proxy('user_groups', 'user',
         creator=lambda v: UserGroup(user=v))

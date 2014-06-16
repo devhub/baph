@@ -128,6 +128,9 @@ class UserPermissionMixin(object):
             if user_group.key:
                 ctx[user_group.key] = user_group.value
             group = user_group.group
+            context = ctx.copy()
+            if group.context:
+                context.update(group.context)
             org_id = str(getattr(group, Organization._meta.model_name+'_id'))
             if org_id not in permissions:
                 permissions[org_id] = {}
@@ -145,7 +148,7 @@ class UserPermissionMixin(object):
                 
                 if perm.value:
                     try:
-                        perm.value = perm.value % ctx
+                        perm.value = perm.value % context
                     except KeyError as e:
                         raise Exception('Key %s not found in permission '
                             'context. If this is a single-value permission, '
