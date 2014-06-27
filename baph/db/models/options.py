@@ -19,11 +19,13 @@ get_verbose_name = lambda class_name: \
     re.sub('(((?<=[a-z])[A-Z])|([A-Z](?![A-Z]|$)))', ' \\1', class_name) \
         .lower().strip()
 
-DEFAULT_NAMES = ('verbose_name', 'verbose_name_plural', 
+DEFAULT_NAMES = ('model_name', 'model_name_plural',
+                 'verbose_name', 'verbose_name_plural', 
                  'app_label', 'swappable', 'auto_created',
                  'cache_detail_keys', 'cache_list_keys', 'cache_pointers',
+                 'cache_detail_fields', 'cache_list_fields',
                  'cache_relations', 'cache_cascades', 
-                 'filter_translations',
+                 'filter_translations', 'last_modified',
                  'permissions', 'permission_scopes', 'form_class',
                  'permission_actions', 'permission_classes',
                  'permission_parents', 'permission_full_parents', 
@@ -95,13 +97,8 @@ class Options(object):
         # value containing an expression which will be evaluated against the
         # permission's context
         self.permission_limiters = {}
-
-        #self.permission_actions = []
-        #self.permission_classes = []
-
         self.permission_full_parents = []
         self.permission_terminator = False
-
 
         self.limit = 1000
         self.object_name, self.app_label = None, app_label
@@ -126,6 +123,7 @@ class Options(object):
         self.verbose_name = get_verbose_name(self.object_name)
         if not self.model_name:
             self.model_name = self.object_name.lower()
+        if not self.model_name_plural:
             self.model_name_plural = self.model_name + 's'
 
         # Next, apply any overridden values from 'class Meta'.
@@ -235,3 +233,16 @@ class Options(object):
             if f.name == name:
                 return f
         raise FieldDoesNotExist('%s has no field named %r' % (self.object_name, name))
+
+    @property
+    def base_model_name(self):
+        if inspect(self.model).polymorphic_on is not None:
+            return inspect(self.model).primary_base_mapper.class_._meta.base_model_name
+        return self.model_name
+
+    @property
+    def base_model_name_plural(self):
+        if inspect(self.model).polymorphic_on is not None:
+            return inspect(self.model).primary_base_mapper.class_._meta.base_model_name_plural
+        return self.model_name_plural
+
