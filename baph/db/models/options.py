@@ -22,7 +22,7 @@ get_verbose_name = lambda class_name: \
 DEFAULT_NAMES = ('model_name', 'model_name_plural',
                  'verbose_name', 'verbose_name_plural', 
                  'app_label', 'swappable', 'auto_created',
-                 'cache_detail_keys', 'cache_list_keys', 'cache_pointers',
+                 'cache_pointers',
                  'cache_detail_fields', 'cache_list_fields',
                  'cache_relations', 'cache_cascades', 
                  'filter_translations', 'last_modified',
@@ -35,24 +35,8 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
 
 class Options(object):
     def __init__(self, meta, app_label=None):
-        # cache_detail_keys are primary cache keys which are invalidated
-        # anytime the object changes. Because this key cannot exist prior
-        # to create of the object, these are not processed during CREATE.
-        # format: (cache_key_template, columns)
-        # cache_key_template is a string, with placeholders for formatting
-        # using data from the instance (ex: businesses:detail:id=%(id)s)
-        # columns is a list of columns to monitor for changes (ex: ['city'])
-        # the key will only be invalidated if at least one specified column
-        # has changed, or columns is None
-        self.cache_detail_keys = []
-        # cache_list_keys are keys for lists of objects. These keys are not
-        # singular keys, but "version keys", which are bases for multiple
-        # subsets of the base set (subsets being caused by filters or searches)
-        # format: (cache_key_template, columns) (same as above)
-        # when invalidated, rather than deleting the key, the key is
-        # incremented, so all subsets attempting to use the contained value
-        # for key generation will be invalidated at once
-        self.cache_list_keys = []
+        self.cache_detail_fields = []
+        self.cache_list_fields = []
         # cache_pointers is a list of identity keys which contain no data
         # other than the primary key of the object being pointed at.
         # format: (cache_key_template, columns, name)
@@ -153,7 +137,7 @@ class Options(object):
             del self.meta
         else:
             self.verbose_name_plural = string_concat(self.verbose_name, 's')
-        
+
     def verbose_name_raw(self):
         """
         There are a few places where the untranslated verbose name is needed
@@ -237,12 +221,14 @@ class Options(object):
     @property
     def base_model_name(self):
         if inspect(self.model).polymorphic_on is not None:
-            return inspect(self.model).primary_base_mapper.class_._meta.base_model_name
+            if self.model != inspect(self.model).primary_base_mapper.class_:
+                return inspect(self.model).primary_base_mapper.class_._meta.base_model_name
         return self.model_name
 
     @property
     def base_model_name_plural(self):
         if inspect(self.model).polymorphic_on is not None:
-            return inspect(self.model).primary_base_mapper.class_._meta.base_model_name_plural
+            if self.model != inspect(self.model).primary_base_mapper.class_:
+                return inspect(self.model).primary_base_mapper.class_._meta.base_model_name_plural
         return self.model_name_plural
 

@@ -34,43 +34,108 @@ class TimestampMixin(object):
 
 class CacheMixin(object):
 
-    def format_key(self, key):
-        # if we need to coerce the key for insertion, do it here
-        key = key.replace('/','_')
-            
+    @classmethod
+    def get_cache_namespaces(cls, instance=None):
+        return []
+
+    @property
+    def cache_namespaces(self):
+        return self.get_cache_namespaces(instance=self)
+
+    @classmethod
+    def build_cache_key(cls, mode, **kwargs):
+        """
+        Generates a cache key for the provided mode and the given kwargs
+        mode is one of ['list', 'detail', or 'list_version']
+        if mode is detail, cache_detail_fields must be defined in the cls meta
+        if mode is list or list_version, cache_list_fields must be in the cls meta
+        the associated fields must all be present in kwargs
+        """
+        if mode not in ('detail', 'list', 'list_version'):
+            raise Exception('Invalid mode "%s" for build_cache_key. '
+                'Valid modes are "detail", "list", and "list_version")')
+
+        _mode = 'list' if mode == 'list_version' else mode
+        fields = getattr(cls._meta, 'cache_%s_fields' % _mode, None)
+        if not fields:
+            raise Exception('cache_%s_fields is empty or undefined' % _mode)
+
         cache = get_cache('objects')
-        ns = []
-        for k,v in self.get_cache_namespaces():
-            version_key = '%s_%s' % (k,v)
-            version = cache.get(version_key)
+        cache_pieces = []
+        cache_pieces.append(cls._meta.base_model_name_plural)
+        cache_pieces.append(_mode)
+
+        for key in sorted(fields):
+            # all associated fields must be present in kwargs
+            if not key in kwargs:
+                raise Exception('%s is undefined' % key)
+            cache_pieces.append('%s=%s' % (key, kwargs.pop(key)))
+
+        cache_key = version_key = ':'.join(cache_pieces)
+
+        if mode == 'list_version':
+            return version_key
+
+        for key, value in sorted(cls.get_cache_namespaces()):
+            ns_key = '%s_%s' % (key, value)
+            version = cache.get(ns_key)
             if version is None:
                 version = 1
-                cache.set(version_key, version)
-            ns.append('%s_%s' % (version_key, version))
-        if not ns:
-            return key
-        return '%s:%s' % (':'.join(ns), key)
+                cache.set(ns_key, version)
+            cache_pieces.insert(0, '%s_%s' % (ns_key, version))
 
-    def get_cache_namespaces(self):
-        return []
-        
-    @property
-    def cache_version_keys(self):
-        keys = []
-        for ns in self.get_cache_namespaces():
-            keys.append('%s_%s' % ns)
-        return keys
+        if mode == 'detail':
+            cache_key = ':'.join(cache_pieces)
+            return cache_key
+
+        # treat list keys as version keys, so we can invalidate
+        # multiple subsets (filters, pagination, etc) at once
+        version = cache.get(version_key)
+        if version is None:
+            version = 1
+            cache.set(version_key, version)
+        cache_key = '%s_%s' % (version_key, version)
+
+        filters = []
+        for key, value in sorted(kwargs.items()):
+            filters.append('%s=%s' % (key, value))
+        if filters:
+            cache_key = '%s:%s' % (cache_key, ':'.join(filters))
+
+        return cache_key
 
     @property
-    def cache_detail_key(self, data=None):
-        if not hasattr(self._meta, 'cache_detail_keys'):
-            raise Exception('Class meta has no cache_detail_keys')
+    def cache_key(self):
+        """
+        Instance property which returns the cache key for a single object
+        """
         if not has_identity(self):
-            raise Exception('Cannot generate detail cache key for instance ' \
-                'with no identity')
-        data = data or instance_dict(self)
-        raw_key, attrs = self._meta.cache_detail_keys[0]
-        return self.format_key(raw_key % data)
+            raise Exception('This instance has no identity')
+        if not hasattr(self._meta, 'cache_detail_fields'):
+            raise Exception('Meta.cache_detail_fields is undefined')
+        data = dict((k, getattr(self, k)) for k in self._meta.cache_detail_fields)
+        return self.build_cache_key('detail', **data)
+
+    @property
+    def cache_list_version_key(self):
+        """
+        Instance property which returns the cache list version key for a single object
+        """
+        if not hasattr(self._meta, 'cache_list_fields'):
+            raise Exception('Meta.cache_list_fields is undefined')
+        data = dict((k, getattr(self, k)) for k in self._meta.cache_list_fields)
+        return self.build_cache_key('list_version', **data)
+
+    @property
+    def cache_list_key(self):
+        """
+        Instance property which returns the cache list key for a single object
+        """
+        if not hasattr(self._meta, 'cache_list_fields'):
+            raise Exception('Meta.cache_list_fields is undefined')
+        data = dict((k, getattr(self, k)) for k in self._meta.cache_list_fields)
+        return self.build_cache_key('list', **data)
+
 
     def cache_pointers(self, data=None, columns=[]):
         if not hasattr(self._meta, 'cache_pointers'):
@@ -84,42 +149,19 @@ class CacheMixin(object):
         return keys
 
     @property
-    def cache_list_version_key(self, data=None):
-        if not self._meta.cache_list_keys:
-            raise Exception('Class._meta has no cache_list_keys')
-        if not has_identity(self):
-            raise Exception('Cannot generate list cache key for instance ' \
-                'with no identity')
-        data = data or instance_dict(self)
-        raw_key, attrs = self._meta.cache_list_keys[0]
-        return raw_key % data
-
-    def cache_list_key(self, **kwargs):
-        cache = get_cache('objects')
-        version_key = self.cache_list_version_key
-        version = cache.get(version_key)
-        if not version:
-            version = 1
-            cache.set(version_key, version)
-        cache_key = '%s_%s' % (version_key, version)
-        if not 'limit' in kwargs:
-            kwargs['limit'] = self._meta.limit
-        if not 'offset' in kwargs:
-            kwargs['offset'] = 0
-        filters = []
-        for key, value in sorted(kwargs.items()):
-            filters.append("%s=%s" % (key, value))
-        cache_key = '%s:%s' % (cache_key, ':'.join(filters))
-        return self.format_key(cache_key)
-        
+    def cache_pointer_keys(self):
+        if not hasattr(self._meta, 'cache_pointers'):
+            raise Exception('Meta.cache_pointers is undefined')
+        return self.cache_pointers()
 
     def get_cache_keys(self, child_updated=False, force_expire_pointers=False):
+        #print 'getting cache keys for:', self, 'child_updated=', child_updated
         cache_keys = set()
         version_keys = set()
 
         if not any(getattr(self._meta, k) for k in [
-            'cache_detail_keys',
-            'cache_list_keys',
+            'cache_detail_fields',
+            'cache_list_fields',
             'cache_pointers',
             'cache_cascades',
             'cache_relations',
@@ -148,23 +190,17 @@ class CacheMixin(object):
         if not self_updated and not child_updated:
             return (cache_keys, version_keys)
 
-        if has_identity(self):
-            # we only kill primary cache keys if the object exists
-            # this key won't exist during CREATE
-            for raw_key, attrs in self._meta.cache_detail_keys:
-                if attrs and not any(key in changed_keys for key in attrs):
-                    # the fields which trigger this key were not changed
-                    continue
-                cache_key = self.format_key(raw_key % data)
+        if self._meta.cache_detail_fields:
+            if has_identity(self):
+                # we only kill primary cache keys if the object exists
+                # this key won't exist during CREATE
+                cache_key = self.cache_key
                 cache_keys.add(cache_key)
 
-        # collections will be altered by any action, so we always
-        # kill these keys
-        for raw_key, attrs in self._meta.cache_list_keys:
-            if attrs and not any(key in changed_keys for key in attrs):
-                # the fields which trigger this key were not changed
-                continue
-            cache_key = raw_key % data
+        if self._meta.cache_list_fields:
+            # collections will be altered by any action, so we always
+            # kill these keys
+            cache_key = self.cache_list_version_key
             version_keys.add(cache_key)
 
         # pointer records contain only the id of the parent resource
