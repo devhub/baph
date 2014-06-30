@@ -68,25 +68,28 @@ class MemcacheTestCase(TestCase):
         self.assertEqual(self.cache.get(key), value)
 
     def assertCacheKeyCreated(self, key):
-        self.assertNotIn(key, self.initial_cache)
-        self.assertIn(key, self.cache.get_all_keys())
+        raw_key = self.cache.make_key(key)
+        self.assertNotIn(raw_key, self.initial_cache)
+        self.assertIn(raw_key, self.cache.get_all_keys())
 
     def assertCacheKeyIncremented(self, key):
-        old = self.initial_cache.get(key, 0)
+        raw_key = self.cache.make_key(key)
+        old = self.initial_cache.get(raw_key, 0)
         new = self.cache.get(key)
         self.assertEqual(new, old+1)
 
     def assertCacheKeyIncrementedMulti(self, key):
-        old = self.initial_cache[key]
+        raw_key = self.cache.make_key(key)
+        old = self.initial_cache[raw_key]
         new = self.cache.get(key)
         self.assertTrue(new > old)
         
     def assertCacheKeyInvalidated(self, key):
-        self.assertIn(key, self.initial_cache)
+        raw_key = self.cache.make_key(key)
+        self.assertIn(raw_key, self.initial_cache)
         self.assertEqual(self.cache.get(key), None)
 
     def assertCacheKeyNotInvalidated(self, key):
-        self.assertIn(key, self.initial_cache)
+        raw_key = self.cache.make_key(key)
+        self.assertIn(raw_key, self.initial_cache)
         self.assertNotEqual(self.cache.get(key), None)
-
-
