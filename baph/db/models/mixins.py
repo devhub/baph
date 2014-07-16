@@ -35,6 +35,14 @@ class TimestampMixin(object):
 class CacheMixin(object):
 
     @classmethod
+    def get_cache(cls):
+        """
+        Returns the cache associated with this model, based on the value
+        of meta.cache_alias
+        """
+        return get_cache(cls._meta.cache_alias)
+
+    @classmethod
     def get_cache_namespaces(cls, instance=None):
         return []
 
@@ -60,7 +68,7 @@ class CacheMixin(object):
         if not fields:
             raise Exception('cache_%s_fields is empty or undefined' % _mode)
 
-        cache = get_cache('objects')
+        cache = cls.get_cache()
         cache_pieces = []
         cache_pieces.append(cls._meta.base_model_name_plural)
         cache_pieces.append(_mode)
@@ -136,7 +144,6 @@ class CacheMixin(object):
         data = dict((k, getattr(self, k)) for k in self._meta.cache_list_fields)
         return self.build_cache_key('list', **data)
 
-
     def cache_pointers(self, data=None, columns=[]):
         if not hasattr(self._meta, 'cache_pointers'):
             return {}
@@ -172,7 +179,7 @@ class CacheMixin(object):
         session = orm.sessionmaker()
         deleted = self.is_deleted or self in session.deleted
         data = instance_dict(self)
-        cache = get_cache('objects')
+        cache = self.get_cache()
 
         # get a list of all fields which changed
         changed_keys = []
@@ -266,7 +273,7 @@ class CacheMixin(object):
             for key in version_keys:
                 print '\tversion_key:', key
 
-        cache = get_cache('objects')
+        cache = self.get_cache()
         cache.delete_many(cache_keys)
         for key in version_keys:
             v = cache.get(key)

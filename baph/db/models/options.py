@@ -1,6 +1,7 @@
 import re
 
 from django.conf import settings
+from django.core.cache import DEFAULT_CACHE_ALIAS
 from django.utils.encoding import force_unicode
 from django.utils.functional import cached_property
 from django.utils.translation import (string_concat, get_language, activate,
@@ -22,7 +23,7 @@ get_verbose_name = lambda class_name: \
 DEFAULT_NAMES = ('model_name', 'model_name_plural',
                  'verbose_name', 'verbose_name_plural', 
                  'app_label', 'swappable', 'auto_created',
-                 'cache_pointers',
+                 'cache_alias', 'cache_timeout', 'cache_pointers',
                  'cache_detail_fields', 'cache_list_fields',
                  'cache_relations', 'cache_cascades', 
                  'filter_translations', 'last_modified',
@@ -35,6 +36,8 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
 
 class Options(object):
     def __init__(self, meta, app_label=None):
+        self.cache_alias = DEFAULT_CACHE_ALIAS
+        self.cache_timeout = 86400
         self.cache_detail_fields = []
         self.cache_list_fields = []
         # cache_pointers is a list of identity keys which contain no data

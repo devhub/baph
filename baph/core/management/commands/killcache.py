@@ -2,7 +2,6 @@ import json
 import os
 import sys
 
-from django.core.cache import get_cache
 from MySQLdb.converters import conversions, escape
 from sqlalchemy import inspect
 from sqlalchemy import *
@@ -70,10 +69,10 @@ class Command(NoArgsCommand):
                 continue
 
             print 'found object:', obj
+            cache = obj.get_cache()
             cache_keys, version_keys = obj.get_cache_keys(child_updated=True,
                                                   force_expire_pointers=True)
-
-            cache = get_cache('objects')
+            
             if cache_keys:
                 print 'Killing cache keys:'
                 for k in cache_keys:
