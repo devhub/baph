@@ -1,6 +1,7 @@
 import re
 
 from django.conf import settings
+from django.core.cache import DEFAULT_CACHE_ALIAS, get_cache
 from django.utils.encoding import force_unicode
 from django.utils.functional import cached_property
 from django.utils.translation import (string_concat, get_language, activate,
@@ -32,6 +33,8 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
 
 class Options(object):
     def __init__(self, meta, app_label=None):
+        self.cache_alias = DEFAULT_CACHE_ALIAS
+        self.cache_timeout = None
         self.cache_detail_fields = []
         self.cache_list_fields = []
         # cache_pointers is a list of identity keys which contain no data
@@ -119,6 +122,14 @@ class Options(object):
                     setattr(self, attr_name, meta_attrs.pop(attr_name))
                 elif hasattr(self.meta, attr_name):
                     setattr(self, attr_name, getattr(self.meta, attr_name))
+
+            # verbose_name_plural is a special case because it uses a 's'
+            # by default.
+            if self.verbose_name_plural is None:
+                self.verbose_name_plural = string_concat(self.verbose_name, 's')
+
+            if not self.cache_timeout:
+                self.cache_timeout = get_cache(self.cache_alias).default_timeout
 
             # Any leftover attributes must be invalid.
             if meta_attrs != {}:
