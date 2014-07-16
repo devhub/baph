@@ -56,6 +56,7 @@ class Field(object):
                   default=None, data_type=None, auto_created=False,
                   auto=False, collection_class=None, proxy=False,
                   help_text='', choices=None, uselist=False, required=False,
+                  max_length=None
                 ):
         self.name = name
         self.verbose_name = verbose_name or capfirst(self.name)
@@ -70,6 +71,7 @@ class Field(object):
         self.collection_class = collection_class
         self.uselist = uselist
         self.required = required
+        self.max_length = max_length
 
         # Adjust the appropriate creation counter, and save our local copy.
         if auto_created:
@@ -185,6 +187,10 @@ class Field(object):
                 kwargs['required'] = True
             else:
                 kwargs['required'] = False
+            if hasattr(col.type, 'length'):
+                print col, col.type, col.type.length
+                kwargs['max_length'] = col.type.length
+
         else:
             # multiple join elements, make it readonly
             kwargs['editable'] = False
