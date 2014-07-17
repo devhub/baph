@@ -188,7 +188,6 @@ class Field(object):
             else:
                 kwargs['required'] = False
             if hasattr(col.type, 'length'):
-                print col, col.type, col.type.length
                 kwargs['max_length'] = col.type.length
 
         else:
