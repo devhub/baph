@@ -128,6 +128,9 @@ class UserPermissionMixin(object):
             if user_group.key:
                 ctx[user_group.key] = user_group.value
             group = user_group.group
+            context = ctx.copy()
+            if group.context:
+                context.update(group.context)
             org_id = str(getattr(group, Organization._meta.model_name+'_id'))
             if org_id not in permissions:
                 permissions[org_id] = {}
@@ -145,7 +148,7 @@ class UserPermissionMixin(object):
                 
                 if perm.value:
                     try:
-                        perm.value = perm.value % ctx
+                        perm.value = perm.value % context
                     except KeyError as e:
                         raise Exception('Key %s not found in permission '
                             'context. If this is a single-value permission, '
@@ -294,6 +297,10 @@ class UserPermissionMixin(object):
             key_pieces = [key_to_value(obj, key) for key in keys]
             if key_pieces == [None]:
                 value = None
+            elif None in key_pieces:
+                # this object lacks the values required to form a key
+                # so this permission is irrelevant to the current obj
+                continue
             else:
                 value = ','.join(key_pieces)
 
@@ -361,13 +368,14 @@ class UserPermissionMixin(object):
                     lookup, key = cls._meta.filter_translations[key].split('.',1)
                 else:
                     lookup = resource
-                cls = orm.Base._decl_class_registry[lookup]
+                cls_ = orm.Base._decl_class_registry[lookup]
 
                 frags = key.split('.')
                 attr = frags.pop()
                 for frag in frags:
-                    cls = cls.get_related_class(frag)
-                col = getattr(cls, attr)
+                    cls_ = cls_.get_related_class(frag)
+
+                col = getattr(cls_, attr)
                 filters.append(col==value)
 
             if len(filters) == 1:
