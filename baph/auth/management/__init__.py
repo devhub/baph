@@ -45,12 +45,31 @@ def _get_all_permissions(opts):
                 if (action,limiter) == ('add', 'single'):
                     # this permission makes no sense, skip it
                     continue
-                if key and key.find('.') > -1:
-                    frags = key.split('.')[:-2]
-                    if frags:
-                        limiter += ' ' + ' '.join(reversed(frags))
-                    frags.append(rel_key)
-                    key = '.'.join(frags)
+
+                if not key:
+                    # this is a boolean permission, no key processing needed
+                    pass
+                elif key.find(',') == -1:
+                    # permission uses a single key filter
+                    key, limiter_ = opts.model.normalize_key(key)
+                    limiter += limiter_
+                elif key.find(',') > -1:
+                    # multiple filters present, determine a common prefix
+                    # and use it to format the limiter text
+                    keys = key.split(',')
+                    limiters = set()
+                    keys_ = []
+                    for k in keys:
+                        k_, l_ = opts.model.normalize_key(k)
+                        keys_.append(k_)
+                        limiters.add(l_)
+                    if len(limiters) != 1:
+                        # we'll worry about this if it ever happens
+                        assert False
+                    
+                    key = ','.join(keys)
+                    limiter += limiters.pop()
+
                 perm_name = 'Can %s %s %s' % (action, limiter, resource)
                 codename = perm_name.lower().replace(' ','_')[4:]
                 perms.append(auth_app.Permission(
