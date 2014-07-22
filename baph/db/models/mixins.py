@@ -79,21 +79,24 @@ class CacheMixin(object):
                 raise Exception('%s is undefined' % key)
             cache_pieces.append('%s=%s' % (key, kwargs.pop(key)))
 
-        cache_key = version_key = ':'.join(cache_pieces)
+        version_key = ':'.join(cache_pieces)
 
         if mode == 'list_version':
             return version_key
 
+        ns_pieces = []
         for key, value in sorted(cls.get_cache_namespaces()):
             ns_key = '%s_%s' % (key, value)
             version = cache.get(ns_key)
             if version is None:
                 version = 1
                 cache.set(ns_key, version)
-            cache_pieces.insert(0, '%s_%s' % (ns_key, version))
+            ns_pieces.append('%s_%s' % (ns_key, version))
+
+            #cache_pieces.insert(0, '%s_%s' % (ns_key, version))
 
         if mode == 'detail':
-            cache_key = ':'.join(cache_pieces)
+            cache_key = ':'.join(ns_pieces + cache_pieces)
             return cache_key
 
         # treat list keys as version keys, so we can invalidate
@@ -107,8 +110,8 @@ class CacheMixin(object):
         filters = []
         for key, value in sorted(kwargs.items()):
             filters.append('%s=%s' % (key, value))
-        if filters:
-            cache_key = '%s:%s' % (cache_key, ':'.join(filters))
+
+        cache_key = ':'.join(ns_pieces + [cache_key] + filters)
 
         return cache_key
 
