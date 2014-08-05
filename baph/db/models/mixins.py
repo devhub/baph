@@ -1,4 +1,5 @@
 import datetime
+import time
 import types
 
 from django.conf import settings
@@ -80,7 +81,7 @@ class CacheMixin(object):
             ns_key = '%s_%s' % (key, value)
             version = cache.get(ns_key)
             if version is None:
-                version = 1
+                version = int(time.time())
                 cache.set(ns_key, version)
             cache_pieces.insert(0, '%s_%s' % (ns_key, version))
 
@@ -92,7 +93,7 @@ class CacheMixin(object):
         # multiple subsets (filters, pagination, etc) at once
         version = cache.get(version_key)
         if version is None:
-            version = 1
+            version = int(time.time())
             cache.set(version_key, version)
         cache_key = '%s_%s' % (version_key, version)
 
@@ -271,7 +272,7 @@ class CacheMixin(object):
         for key in version_keys:
             v = cache.get(key)
             if not v:
-                cache.set(key, 1)
+                cache.set(key, int(time.time()))
             else:
                 cache.incr(key)
 

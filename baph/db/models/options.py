@@ -1,6 +1,7 @@
 import re
 
 from django.conf import settings
+from django.core.cache import DEFAULT_CACHE_ALIAS, get_cache
 from django.utils.encoding import force_unicode
 from django.utils.functional import cached_property
 from django.utils.translation import (string_concat, get_language, activate,
@@ -13,11 +14,8 @@ from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 
 from baph.db import types
 from baph.db.models.fields import Field
+from baph.utils.text import camel_case_to_spaces
 
-
-get_verbose_name = lambda class_name: \
-    re.sub('(((?<=[a-z])[A-Z])|([A-Z](?![A-Z]|$)))', ' \\1', class_name) \
-        .lower().strip()
 
 DEFAULT_NAMES = ('model_name', 'model_name_plural',
                  'verbose_name', 'verbose_name_plural', 
@@ -35,6 +33,8 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
 
 class Options(object):
     def __init__(self, meta, app_label=None):
+        self.cache_alias = DEFAULT_CACHE_ALIAS
+        self.cache_timeout = None
         self.cache_detail_fields = []
         self.cache_list_fields = []
         # cache_pointers is a list of identity keys which contain no data
@@ -88,6 +88,7 @@ class Options(object):
         self.object_name, self.app_label = None, app_label
         self.model_name, self.model_name_plural = None, None
         self.verbose_name, self.verbose_name_plural = None, None
+        self.base_model_name, self.base_model_name_plural = None, None
         
         self.pk = None
         self.form_class = None
@@ -100,18 +101,15 @@ class Options(object):
     def contribute_to_class(self, cls, name):
         cls._meta = self
         self.model = cls
-        self.installed = re.sub('\.models$', '', cls.__module__) \
-            in settings.INSTALLED_APPS
         # First, construct the default values for these options.
         self.object_name = cls.__name__
-        self.verbose_name = get_verbose_name(self.object_name)
-        if not self.model_name:
-            self.model_name = self.object_name.lower()
-        if not self.model_name_plural:
-            self.model_name_plural = self.model_name + 's'
+        self.model_name = self.object_name.lower()
+        self.verbose_name = camel_case_to_spaces(self.object_name)
+
+        self.original_attrs = {}
 
         # Next, apply any overridden values from 'class Meta'.
-        if getattr(self, 'meta', None):
+        if self.meta:
             meta_attrs = self.meta.__dict__.copy()
             for name in self.meta.__dict__:
                 # Ignore any private attributes that Django doesn't care about.
@@ -130,13 +128,44 @@ class Options(object):
             if self.verbose_name_plural is None:
                 self.verbose_name_plural = string_concat(self.verbose_name, 's')
 
+            if not self.cache_timeout:
+                self.cache_timeout = get_cache(self.cache_alias).default_timeout
+
             # Any leftover attributes must be invalid.
             if meta_attrs != {}:
                 raise TypeError("'class Meta' got invalid attribute(s): %s" 
                     % ','.join(meta_attrs.keys()))
-            del self.meta
-        else:
-            self.verbose_name_plural = string_concat(self.verbose_name, 's')
+
+        # initialize params that depend on other params being set
+        if self.model_name_plural is None:
+            self.model_name_plural = self.model_name + 's'
+
+        if self.verbose_name_plural is None:
+            self.verbose_name_plural = self.verbose_name + 's'
+
+        if self.cache_timeout is None:
+            self.cache_timeout = get_cache(self.cache_alias).default_timeout
+
+        from baph.db import ORM
+        Base = ORM.get().Base
+
+        base_model_name = self.model_name
+        base_model_name_plural = self.model_name_plural
+        for base in self.model.__mro__:
+            if not issubclass(base, Base):
+                continue
+            if base in (self.model, Base):
+                continue
+            if not hasattr(base, '__mapper_args__'):
+                continue
+            if 'polymorphic_on' in base.__mapper_args__:
+                base_model_name = base._meta.base_model_name
+                base_model_name_plural = base._meta.base_model_name_plural
+                break
+        self.base_model_name = unicode(base_model_name)
+        self.base_model_name_plural = unicode(base_model_name_plural)
+
+        del self.meta
 
     def verbose_name_raw(self):
         """
@@ -217,18 +246,3 @@ class Options(object):
             if f.name == name:
                 return f
         raise FieldDoesNotExist('%s has no field named %r' % (self.object_name, name))
-
-    @property
-    def base_model_name(self):
-        if inspect(self.model).polymorphic_on is not None:
-            if self.model != inspect(self.model).primary_base_mapper.class_:
-                return inspect(self.model).primary_base_mapper.class_._meta.base_model_name
-        return self.model_name
-
-    @property
-    def base_model_name_plural(self):
-        if inspect(self.model).polymorphic_on is not None:
-            if self.model != inspect(self.model).primary_base_mapper.class_:
-                return inspect(self.model).primary_base_mapper.class_._meta.base_model_name_plural
-        return self.model_name_plural
-
