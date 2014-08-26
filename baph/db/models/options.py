@@ -20,7 +20,7 @@ from baph.utils.text import camel_case_to_spaces
 DEFAULT_NAMES = ('model_name', 'model_name_plural',
                  'verbose_name', 'verbose_name_plural', 
                  'app_label', 'swappable', 'auto_created',
-                 'cache_pointers',
+                 'cache_alias', 'cache_timeout', 'cache_pointers',
                  'cache_detail_fields', 'cache_list_fields',
                  'cache_relations', 'cache_cascades', 
                  'filter_translations', 'last_modified',

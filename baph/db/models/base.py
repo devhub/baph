@@ -261,8 +261,8 @@ class ModelBase(type):
 
     @property
     def all_properties(cls):
-        if not cls.__mapper__.configured:
-            configure_mappers()
+        #if not cls.__mapper__.configured:
+        #    configure_mappers()
         for key, attr in inspect(cls).all_orm_descriptors.items():
             if attr.is_mapper:
                 continue
