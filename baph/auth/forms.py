@@ -5,6 +5,7 @@ from coffin.shortcuts import render_to_string
 from django import forms
 from django.contrib.auth.forms import SetPasswordForm as BaseSetPasswordForm
 from django.contrib.auth.tokens import default_token_generator
+from django.template import RequestContext
 from django.utils.datastructures import SortedDict
 from django.utils.http import int_to_base36
 from django.utils.translation import ugettext_lazy as _
@@ -65,11 +66,12 @@ That e-mail address doesn't allow the password to be set.'''))
                 'token': token_generator.make_token(user),
                 'protocol': use_https and 'https' or 'http',
             }
-            subject = render_to_string(subject_template_name, c)
+            subject = render_to_string(subject_template_name, \
+                                       RequestContext(request, c))
             subject = ''.join(subject.splitlines())
-            email = render_to_string(email_template_name, c)
+            email = render_to_string(email_template_name, \
+                                     RequestContext(request, c))
             send_mail(subject, email, from_email, [user.email])
-
 
 class SetPasswordForm(BaseSetPasswordForm):
     '''A form that lets a user change set his/her password without entering
