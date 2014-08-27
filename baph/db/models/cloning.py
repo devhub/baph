@@ -1,3 +1,5 @@
+import copy
+
 from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm.attributes import instance_dict
 from sqlalchemy.orm.collections import MappedCollection
@@ -84,7 +86,7 @@ def clone_obj(obj, user, rules={}, registry={}, path=None, root=None,
 
     if not rules and not hasattr(cls, '__cloning_rules__'):
         raise Exception('Class %s cannot be cloned' % cls)
-    rules = rules or cls.__cloning_rules__
+    rules = copy.deepcopy(rules or cls.__cloning_rules__)
     cls_mapper = class_mapper(obj.__class__)
     if cast_to:
         instance = cast_to()
@@ -92,6 +94,7 @@ def clone_obj(obj, user, rules={}, registry={}, path=None, root=None,
         # one auto-populated by creation of the subclass
         discriminator = cls.__mapper_args__['polymorphic_on']
         rules['Site']['excludes'].append(discriminator)
+        print cls.__cloning_rules__['Site']
     else:
         instance = obj.__class__()
     if not cls in registry:
