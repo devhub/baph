@@ -12,17 +12,18 @@ from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
 from sqlalchemy.ext.declarative.base import (_as_declarative, _add_attribute)
 from sqlalchemy.ext.declarative.clsregistry import add_class
 from sqlalchemy.ext.hybrid import HYBRID_PROPERTY, HYBRID_METHOD
-from sqlalchemy.orm import mapper, configure_mappers, object_session
+from sqlalchemy.orm import mapper, object_session, class_mapper
 from sqlalchemy.orm.attributes import instance_dict, instance_state
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
-from sqlalchemy.orm.util import has_identity
+from sqlalchemy.orm.util import has_identity, identity_key
 from sqlalchemy.schema import ForeignKeyConstraint
 
 from baph.db import ORM
+from baph.db.models import signals
 from baph.db.models.loading import get_model, register_models
 from baph.db.models.mixins import CacheMixin, ModelPermissionMixin
 from baph.db.models.options import Options
-from baph.db.models import signals
+from baph.db.models.utils import class_resolver
 from baph.utils.importing import safe_import, remove_class
 
 
@@ -140,6 +141,31 @@ class Model(CacheMixin, ModelPermissionMixin):
             if not self in session:
                 session.add(self)
             session.commit()
+
+    def globalize(self, commit=True):
+        """
+        Converts object into a global by creating an instance of 
+        Meta.global_class with the same identity key.
+        """
+        from baph.db.orm import ORM
+        orm = ORM.get()
+
+        if not self._meta.global_class:
+            raise Exception('You cannot globalize a class with no value '
+                'for Meta.global_class')
+
+        global_class = type(self).get_global_class()
+        keys = [key.name for key in class_mapper(global_class).primary_key]
+        cls, values = identity_key(instance=self)
+        kwargs = dict(zip(keys, values))
+        obj = global_class(**kwargs)
+        
+        session = orm.sessionmaker()
+        session.add(obj)
+        if commit:
+            session.commit()
+        
+        
 
 class ModelBase(type):
 
@@ -261,8 +287,6 @@ class ModelBase(type):
 
     @property
     def all_properties(cls):
-        #if not cls.__mapper__.configured:
-        #    configure_mappers()
         for key, attr in inspect(cls).all_orm_descriptors.items():
             if attr.is_mapper:
                 continue
@@ -297,6 +321,15 @@ class ModelBase(type):
         except:
             pass
         return cls
+
+    def get_global_class(cls):
+        """
+        Returns the class for the global association object
+        """
+        if not cls._meta.global_class:
+            return None
+        return class_resolver(cls._meta.global_class)
+
 
 def get_declarative_base(**kwargs):
     return declarative_base(cls=Model, 

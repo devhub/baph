@@ -94,7 +94,6 @@ def clone_obj(obj, user, rules={}, registry={}, path=None, root=None,
         # one auto-populated by creation of the subclass
         discriminator = cls.__mapper_args__['polymorphic_on']
         rules['Site']['excludes'].append(discriminator)
-        print cls.__cloning_rules__['Site']
     else:
         instance = obj.__class__()
     if not cls in registry:

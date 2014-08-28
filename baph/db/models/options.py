@@ -29,6 +29,7 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
                  'permission_parents', 'permission_full_parents', 
                  'permission_limiters', 'permission_terminator',
                  'permission_handler', 'permission_resources',
+                 'global_class', 'global_cascades',
                  )
 
 class Options(object):
@@ -55,6 +56,12 @@ class Options(object):
         # invalidations. Use this when an object is cached as a subobject of
         # a larger cache, to signal the parent that it needs to recache
         self.cache_cascades = []
+        # global_class defines the association class which is joined against
+        # the object class to determine globalized objects
+        self.global_class = None
+        # global_cascades is a list of relationships through which 
+        # globalization should propagate (all children become globals)
+        self.global_cascades = []
 
         self.permissions = {}
         self.permission_scopes = {}
