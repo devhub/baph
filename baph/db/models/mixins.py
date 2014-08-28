@@ -7,11 +7,13 @@ from django.core.cache import get_cache
 from sqlalchemy import Column, DateTime, func, inspect
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.declarative.clsregistry import _class_resolver
+from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm.attributes import get_history, instance_dict
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.util import has_identity, identity_key
 
 from baph.db import ORM
+from .utils import column_to_attr, class_resolver
 
 
 # these keys auto-update, so should be ignored when comparing old/new values
@@ -32,6 +34,50 @@ class TimestampMixin(object):
     def modified(cls):
         return Column(DateTime, default=datetime.datetime.now,
             onupdate=datetime.datetime.now, info={'readonly': True})
+
+class GlobalMixin(object):
+
+    def globalize(self, commit=True):
+        """
+        Converts object into a global by creating an instance of 
+        Meta.global_class with the same identity key.
+        """
+        from baph.db.orm import ORM
+        orm = ORM.get()
+
+        if not self._meta.global_column:
+            raise Exception('You cannot globalize a class with no value '
+                'for Meta.global_column')
+
+        # TODO: delete polymorphic extension, leave only the base
+
+        setattr(self, self._meta.global_column, True)
+
+        session = orm.sessionmaker()
+        session.add(self)
+        
+        # handle meta.global_cascades
+        for field in self._meta.global_cascades:
+            value = getattr(self, field, None)
+            if not value:
+                continue
+            if isinstance(value, orm.Base):
+                # single object
+                value.globalize(commit=False)
+            elif hasattr(value, 'iteritems'):
+                # dict-like collection
+                for obj in value.values():
+                    obj.globalize(commit=False)
+            elif hasattr(value, '__iter__'):
+                # list-like collection
+                for obj in value:
+                    obj.globalize(commit=False)
+       
+        if commit:
+            session.commit()
+
+    def is_global(self):
+        return getattr(self, self._meta.global_column)
 
 class CacheMixin(object):
 
@@ -285,15 +331,6 @@ class CacheMixin(object):
                 cache.set(key, int(time.time()))
             else:
                 cache.incr(key)
-
-def column_to_attr(cls, col):
-    for attr_ in inspect(cls).all_orm_descriptors:
-        try:
-            if col in attr_.property.columns:
-                return attr_
-        except:
-            pass    
-    return None
 
 class ModelPermissionMixin(object):
 

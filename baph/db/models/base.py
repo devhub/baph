@@ -21,7 +21,7 @@ from sqlalchemy.schema import ForeignKeyConstraint
 from baph.db import ORM
 from baph.db.models import signals
 from baph.db.models.loading import get_model, register_models
-from baph.db.models.mixins import CacheMixin, ModelPermissionMixin
+from baph.db.models.mixins import CacheMixin, ModelPermissionMixin, GlobalMixin
 from baph.db.models.options import Options
 from baph.db.models.utils import class_resolver
 from baph.utils.importing import safe_import, remove_class
@@ -84,7 +84,7 @@ def set_polymorphic_base_mapper(mapper_, class_):
         polymorphic_map.update(mapper_.polymorphic_map)
         mapper_.polymorphic_map = polymorphic_map
 
-class Model(CacheMixin, ModelPermissionMixin):
+class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
 
     @classmethod
     def create(cls, *args, **kwargs):
@@ -142,29 +142,6 @@ class Model(CacheMixin, ModelPermissionMixin):
                 session.add(self)
             session.commit()
 
-    def globalize(self, commit=True):
-        """
-        Converts object into a global by creating an instance of 
-        Meta.global_class with the same identity key.
-        """
-        from baph.db.orm import ORM
-        orm = ORM.get()
-
-        if not self._meta.global_class:
-            raise Exception('You cannot globalize a class with no value '
-                'for Meta.global_class')
-
-        global_class = type(self).get_global_class()
-        keys = [key.name for key in class_mapper(global_class).primary_key]
-        cls, values = identity_key(instance=self)
-        kwargs = dict(zip(keys, values))
-        obj = global_class(**kwargs)
-        
-        session = orm.sessionmaker()
-        session.add(obj)
-        if commit:
-            session.commit()
-        
         
 
 class ModelBase(type):
@@ -322,13 +299,6 @@ class ModelBase(type):
             pass
         return cls
 
-    def get_global_class(cls):
-        """
-        Returns the class for the global association object
-        """
-        if not cls._meta.global_class:
-            return None
-        return class_resolver(cls._meta.global_class)
 
 
 def get_declarative_base(**kwargs):
