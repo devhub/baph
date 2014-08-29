@@ -15,6 +15,7 @@ from sqlalchemy.ext.hybrid import HYBRID_PROPERTY, HYBRID_METHOD
 from sqlalchemy.orm import mapper, object_session, class_mapper
 from sqlalchemy.orm.attributes import instance_dict, instance_state
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
+from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.util import has_identity, identity_key
 from sqlalchemy.schema import ForeignKeyConstraint
 
@@ -23,7 +24,7 @@ from baph.db.models import signals
 from baph.db.models.loading import get_model, register_models
 from baph.db.models.mixins import CacheMixin, ModelPermissionMixin, GlobalMixin
 from baph.db.models.options import Options
-from baph.db.models.utils import class_resolver
+from baph.db.models.utils import class_resolver, key_to_value
 from baph.utils.importing import safe_import, remove_class
 
 
@@ -300,7 +301,6 @@ class ModelBase(type):
         return cls
 
 
-
 def get_declarative_base(**kwargs):
     return declarative_base(cls=Model, 
         metaclass=ModelBase,
@@ -313,3 +313,20 @@ if getattr(settings, 'CACHE_ENABLED', False):
     @event.listens_for(mapper, 'after_delete')
     def kill_cache(mapper, connection, target):
         target.kill_cache()
+
+@event.listens_for(Session, 'before_flush')
+def check_global_status(session, flush_context, instances):
+    """
+    If global_parents is defined, we check the parents to see if any of them
+    are global. If a global parent is found, we set the child to global as well
+    """
+    for target in session:
+        if target._meta.global_parents:
+            if target.is_global:
+                continue
+            for parent_rel in target._meta.global_parents:
+                parent = key_to_value(target, parent_rel, raw=True)
+                if parent and parent.is_global:
+                    target.globalize(commit=False)
+                    break
+

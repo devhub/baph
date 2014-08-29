@@ -45,12 +45,67 @@ def column_to_attr(cls, col):
     Takes a class and a column and returns the attribute which 
     references the column
     """
+    if hasattr(cls, col.name):
+        # the column name is the same as the attr name
+        return getattr(cls, col.name)
     for attr_ in inspect(cls).all_orm_descriptors:
+        # iterate through descriptors to find one that contains the column
         try:
-            if col in attr_.property.columns:
-                return attr_
+            assert attr_.property.columns == [col]
+            return attr_
         except:
-            pass    
+            continue
     return None
 
+def key_to_value(obj, key, raw=False):
+    """
+    Evaluate chained relations against a target object
+    """
+    from baph.db.orm import ORM
+
+    frags = key.split('.')
+    if not raw:
+        col_key = frags.pop()
+    current_obj = obj
+    
+    while frags:
+        if not current_obj:
+            # we weren't able to follow the chain back, one of the 
+            # fks was probably optional, and had no value
+            return None
+        
+        attr_name = frags.pop(0)
+        previous_obj = current_obj
+        previous_cls = type(previous_obj)
+        current_obj = getattr(previous_obj, attr_name)
+
+        if current_obj:
+            # proceed to next step of the chain
+            continue
+
+        # relation was empty, we'll grab the fk and lookup the
+        # object manually
+        attr = getattr(previous_cls, attr_name)
+        prop = attr.property
+
+        related_cls = class_resolver(prop.argument)
+        related_col = prop.local_remote_pairs[0][0]
+        attr_ = column_to_attr(previous_cls, related_col)
+        related_key = attr_.key
+        related_val = getattr(previous_obj, related_key)
+        if related_val is None:
+            # relation and key are both empty: no parent found
+            return None
+
+        orm = ORM.get()
+        session = orm.sessionmaker()
+        current_obj = session.query(related_cls).get(related_val)
+
+    if raw:
+        return current_obj
+
+    value = getattr(current_obj, col_key, None)
+    if value:
+        return str(value)
+    return None
 

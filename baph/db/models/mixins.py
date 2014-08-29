@@ -53,9 +53,6 @@ class GlobalMixin(object):
 
         setattr(self, self._meta.global_column, True)
 
-        session = orm.sessionmaker()
-        session.add(self)
-        
         # handle meta.global_cascades
         for field in self._meta.global_cascades:
             value = getattr(self, field, None)
@@ -74,6 +71,8 @@ class GlobalMixin(object):
                     obj.globalize(commit=False)
        
         if commit:
+            session = orm.sessionmaker()
+            session.add(self)
             session.commit()
 
     def is_global(self):

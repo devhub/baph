@@ -6,17 +6,8 @@ from sqlalchemy.orm import lazyload
 
 from baph.db import ORM
 from baph.db.models.loading import cache
+from baph.db.models.utils import class_resolver, column_to_attr, key_to_value
 
-
-def column_to_attr(cls, col):
-    """Determine which class attribute references a given column"""
-    for attr_ in inspect(cls).all_orm_descriptors:
-        try:
-            if col in attr_.property.columns:
-                return attr_
-        except:
-            pass    
-    return None
 
 def convert_filter(k, cls=None):
     """Convert a string filter into a column-based filter"""
@@ -39,53 +30,6 @@ def convert_filter(k, cls=None):
     
     col = getattr(model, attr)
     return (col, joins)
-
-def key_to_value(obj, key):
-    """Evaluate chained relations against a target object"""
-    frags = key.split('.')
-    col_key = frags.pop()
-    current_obj = obj
-
-    while frags:
-        if not current_obj:
-            # we weren't able to follow the chain back, one of the 
-            # fks was probably optional, and had no value
-            return None
-        
-        attr_name = frags.pop(0)
-        previous_obj = current_obj
-        previous_cls = type(previous_obj)
-        current_obj = getattr(previous_obj, attr_name)
-        if current_obj:
-            # proceed to next step of the chain
-            continue
-
-        # relation was empty, we'll grab the fk and lookup the
-        # object manually
-        attr = getattr(previous_cls, attr_name)
-        prop = attr.property
-
-        related_cls = prop.argument
-        if isinstance(related_cls, type(lambda x:x)):
-            related_cls = related_cls()
-        if isinstance(related_cls, _class_resolver):
-            related_cls = related_cls()
-        related_col = prop.local_remote_pairs[0][0]
-        attr_ = column_to_attr(previous_cls, related_col)
-        related_key = attr_.key
-        related_val = getattr(previous_obj, related_key)
-        if related_val is None:
-            # relation and key are both empty: no parent found
-            return None
-
-        orm = ORM.get()
-        session = orm.sessionmaker()
-        current_obj = session.query(related_cls).get(related_val)
-
-    value = getattr(current_obj, col_key, None)
-    if value:
-        return str(value)
-    return None
 
 def string_to_model(string):
     from baph.db.orm import Base
