@@ -75,7 +75,10 @@ class GlobalMixin(object):
             session.add(self)
             session.commit()
 
-    def is_global(self):
+    def is_globalized(self):
+        if self._meta.global_column == 'is_globalized':
+            raise Exception('global_column name conflicts with existing '
+                'attribute "is_globalized()"')
         return getattr(self, self._meta.global_column)
 
 class CacheMixin(object):

@@ -322,11 +322,11 @@ def check_global_status(session, flush_context, instances):
     """
     for target in session:
         if target._meta.global_parents:
-            if target.is_global:
+            if target.is_globalized():
                 continue
             for parent_rel in target._meta.global_parents:
                 parent = key_to_value(target, parent_rel, raw=True)
-                if parent and parent.is_global:
+                if parent and parent.is_globalized():
                     target.globalize(commit=False)
                     break
 
