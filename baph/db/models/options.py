@@ -58,7 +58,7 @@ class Options(object):
         self.cache_cascades = []
         # global_column is the name of the boolean column which indicates
         # global status. This must be set in order to use globalization
-        self.global_field = None
+        self.global_column = None
         # global_cascades is a list of relationships through which 
         # globalization should propagate (all children become globals)
         self.global_cascades = []
