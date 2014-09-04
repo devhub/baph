@@ -6,13 +6,14 @@ import time
 
 from django.core.management import call_command
 from django.test import TestCase as DjangoTestCase
+from django.test import LiveServerTestCase as DjangoLSTestCase
 
 from baph.db.orm import ORM
 
-
 orm = ORM.get()
 
-class TestCase(DjangoTestCase):
+
+class BaphFixtureMixin(object):
 
     reset_sequences = False
 
@@ -39,7 +40,16 @@ class TestCase(DjangoTestCase):
                 }
                 
             call_command('flush', **params)
-            
+    
+
+class TestCase(BaphFixtureMixin, DjangoTestCase):
+    pass
+
+
+class LiveServerTestCase(BaphFixtureMixin, DjangoLSTestCase):
+    pass
+
+
 class MemcacheTestCase(TestCase):
     
     def _fixture_setup(self):
