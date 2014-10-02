@@ -1,4 +1,5 @@
 import datetime
+import logging
 import time
 import types
 
@@ -15,6 +16,8 @@ from sqlalchemy.orm.util import has_identity, identity_key
 from baph.db import ORM
 from .utils import column_to_attr, class_resolver
 
+
+cache_logger = logging.getLogger('cache')
 
 # these keys auto-update, so should be ignored when comparing old/new values
 IGNORABLE_KEYS = (
@@ -314,16 +317,18 @@ class CacheMixin(object):
         return (cache_keys, version_keys)
 
     def kill_cache(self, force=False):
+        cache_logger.debug('kill_cache called for %s' % self)
         cache_keys, version_keys = self.get_cache_keys(child_updated=force)
         if not cache_keys and not version_keys:
+            cache_logger.debug('%s has no cache keys' % self)
             return
 
-        if settings.DEBUG:
-            print '\nkill_cache called for', self
-            for key in cache_keys:
-                print '\tcache_key:', key
-            for key in version_keys:
-                print '\tversion_key:', key
+        cache_logger.debug('%s has the following cache keys:' % self)
+        for key in cache_keys:
+            cache_logger.debug('\t%s' % key)
+        cache_logger.debug('%s has the following version keys:' % self)
+        for key in version_keys:
+            cache_logger.debug('\t%s' % key)
 
         cache = self.get_cache()
         cache.delete_many(cache_keys)
