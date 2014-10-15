@@ -73,7 +73,6 @@ That e-mail address doesn't allow the password to be set.'''))
                                      RequestContext(request, c))
             send_mail(subject, email, from_email, [user.email])
 
-
 class SetPasswordForm(BaseSetPasswordForm):
     '''A form that lets a user change set his/her password without entering
     the old password.

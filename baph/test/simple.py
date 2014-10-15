@@ -3,7 +3,7 @@ import unittest as real_unittest
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
-from django.test import _doctest as doctest
+from django.test import _doctest as doctest, runner
 from django.test.simple import OutputChecker, DocTestRunner, get_tests #, build_suite #, build_test
 #from django.test.testcases import 
 from django.test.utils import setup_test_environment, teardown_test_environment
@@ -180,16 +180,7 @@ def build_test(label):
     return unittest.TestSuite(tests)
 
 
-class BaphTestSuiteRunner(object):
-    def __init__(self, verbosity=1, interactive=True, failfast=True, **kwargs):
-        self.verbosity = verbosity
-        self.interactive = interactive
-        self.failfast = failfast
-
-    def setup_test_environment(self, **kwargs):
-        setup_test_environment()
-        settings.DEBUG = False
-        unittest.installHandler()
+class BaphTestSuiteRunner(runner.DiscoverRunner):
 
     def build_suite(self, test_labels, extra_tests=None, **kwargs):
         suite = unittest.TestSuite()
