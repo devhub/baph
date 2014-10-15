@@ -29,6 +29,7 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
                  'permission_parents', 'permission_full_parents', 
                  'permission_limiters', 'permission_terminator',
                  'permission_handler', 'permission_resources',
+                 'global_column', 'global_cascades', 'global_parents',
                  )
 
 class Options(object):
@@ -55,6 +56,16 @@ class Options(object):
         # invalidations. Use this when an object is cached as a subobject of
         # a larger cache, to signal the parent that it needs to recache
         self.cache_cascades = []
+        # global_column is the name of the boolean column which indicates
+        # global status. This must be set in order to use globalization
+        self.global_column = None
+        # global_cascades is a list of relationships through which 
+        # globalization should propagate (all children become globals)
+        self.global_cascades = []
+        # global_parents is a list of relationships which should be checked
+        # on object creation, and if a global parent is found, the new
+        # object will be globalized
+        self.global_parents = []
 
         self.permissions = {}
         self.permission_scopes = {}

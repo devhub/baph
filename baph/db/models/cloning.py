@@ -1,3 +1,5 @@
+import copy
+
 from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm.attributes import instance_dict
 from sqlalchemy.orm.collections import MappedCollection
@@ -11,7 +13,8 @@ from baph.db.orm import ORM
 orm = ORM.get()
 Base = orm.Base
 
-def clone_obj(obj, user, rules={}, registry={}, path=None, root=None):
+def clone_obj(obj, user, rules={}, registry={}, path=None, root=None,
+              cast_to=None):
     """Clones an object and returns the clone.
 
     Default behavior is to only process columns (no relations), and
@@ -83,9 +86,16 @@ def clone_obj(obj, user, rules={}, registry={}, path=None, root=None):
 
     if not rules and not hasattr(cls, '__cloning_rules__'):
         raise Exception('Class %s cannot be cloned' % cls)
-    rules = rules or cls.__cloning_rules__
+    rules = copy.deepcopy(rules or cls.__cloning_rules__)
     cls_mapper = class_mapper(obj.__class__)
-    instance = obj.__class__()
+    if cast_to:
+        instance = cast_to()
+        # we don't want the old discriminator to overwrite the 
+        # one auto-populated by creation of the subclass
+        discriminator = cls.__mapper_args__['polymorphic_on']
+        rules['Site']['excludes'].append(discriminator)
+    else:
+        instance = obj.__class__()
     if not cls in registry:
         registry[cls] = {}
     registry[cls][pk] = instance
