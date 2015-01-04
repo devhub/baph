@@ -106,6 +106,6 @@ def key_to_value(obj, key, raw=False):
 
     value = getattr(current_obj, col_key, None)
     if value:
-        return str(value)
+        return str(value).strip()
     return None
 
