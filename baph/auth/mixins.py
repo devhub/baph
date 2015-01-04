@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from sqlalchemy import *
 from sqlalchemy import inspect
@@ -8,6 +10,8 @@ from baph.db import ORM
 from baph.db.models.loading import cache
 from baph.db.models.utils import class_resolver, column_to_attr, key_to_value
 
+
+logger = logging.getLogger('authorization')
 
 def convert_filter(k, cls=None):
     """Convert a string filter into a column-based filter"""
@@ -155,9 +159,13 @@ class UserPermissionMixin(object):
         return bool(perms)
 
     def has_perm(self, resource, action, filters=None):
+        logger.debug('has_perm %s:%s called for user %s' 
+            % (action, resource, self.id))
+        logger.debug('filters: %s' % filters)
         if not filters:
             filters = {}
         ctx = self.get_context()
+        logger.debug('perm context: %s' % ctx)
         from baph.db.orm import ORM
         if not self.is_authenticated():
             # user is not logged in
@@ -167,6 +175,8 @@ class UserPermissionMixin(object):
         if not perms:
             # user has no applicable permissions
             return False
+        for p in perms:
+            logger.debug('  perm: %s' % p)
 
         orm = ORM.get()
         cls_name = tuple(perms)[0].resource
@@ -195,6 +205,9 @@ class UserPermissionMixin(object):
         return self.has_obj_perm(resource, action, obj)
 
     def has_obj_perm(self, resource, action, obj):
+        logger.debug('\nhas_obj_perm "%s %s" called for user %s'
+            % (action, resource, self.id))
+        logger.debug('  obj: %s' % obj)
         # TODO: auto-generate resource by checking base_mapper of polymorphics
         if type(obj)._meta.permission_handler:
             # permissions for this object are based off parent object
@@ -209,11 +222,17 @@ class UserPermissionMixin(object):
             return self.has_obj_perm(parent_res, action, parent_obj)
 
         ctx = self.get_context()
+        logger.debug('perm context: %s' % ctx)
+
         perms = self.get_resource_permissions(resource, action)
         if not perms:
             # user has no valid permissions for this resource/action pair
+            logger.debug('user has no valid permissions')
             return False
-            
+
+        for p in perms:
+            logger.debug('  perm: %s' % p.codename)
+
         perm_map = {}
         explicit = []
         for p in perms:
@@ -237,6 +256,7 @@ class UserPermissionMixin(object):
 
         add_errors = []
         for k,v in perm_map.items():
+            logger.debug('testing perm: %s=%s' % (k,v))
             keys = k.split(',')
             key_pieces = [key_to_value(obj, key) for key in keys]
             if key_pieces == [None]:
@@ -244,16 +264,19 @@ class UserPermissionMixin(object):
             elif None in key_pieces:
                 # this object lacks the values required to form a key
                 # so this permission is irrelevant to the current obj
+                logger.debug('  object lacks all necessary keys, ignoring perm')
                 continue
             else:
                 value = ','.join(key_pieces)
 
             if not value:
                 # no value to check
+                logger.debug('  object has no value to check')
                 continue
 
             if v == set([None]):
                 # no restriction on allowed values
+                logger.debug('  object has no restrictions on values')
                 continue
 
             if str(value) in v:
@@ -263,19 +286,29 @@ class UserPermissionMixin(object):
                         # restrictions set by broader permissions. If the key/value
                         # is set on the UserGroup (rather than the permission), the
                         # permission will be 'explicit'
+                        logger.debug('[VALID] positive hit on explicit add permission')
                         return True
                 else:
                     # for non-add permissions, a single matching filter will grant
                     # access to the resource
+                    logger.debug('[VALID] positive hit on non-add permission')
                     return True
             else:
                 if action == 'add':
                     add_errors.append( (k, value, v) )
                     continue
         if add_errors:
+            logger.debug('[INVALID] negative hit on add permission')
             return False
 
-        return action == 'add'
+        if action == 'add':
+            logger.debug('[VALID] add permission with no disqualifying '
+                'criteria')
+            return True
+        else:
+            logger.debug('[INVALID] %s permission with no qualifying '
+                'criteria')
+            return False
 
     def get_resource_filters(self, resource, action='view'):
         """
