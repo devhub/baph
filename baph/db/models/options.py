@@ -30,6 +30,7 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
                  'permission_limiters', 'permission_terminator',
                  'permission_handler', 'permission_resources',
                  'global_column', 'global_cascades', 'global_parents',
+                 'latlon_field_names',
                  )
 
 class Options(object):
@@ -94,6 +95,10 @@ class Options(object):
         self.permission_limiters = {}
         self.permission_full_parents = []
         self.permission_terminator = False
+
+        # latlon_field_names is a 2-tuple containing the field names
+        # of the latitude and longitude columns (for geocoding purposes)
+        self.latlon_field_names = None
 
         self.limit = 1000
         self.object_name, self.app_label = None, app_label
