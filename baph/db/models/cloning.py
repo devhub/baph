@@ -119,7 +119,8 @@ def clone_obj(obj, user, rules={}, registry={}, path=None, root=None,
         " should not have copies created. We do this first so we "
         " can handle association proxies, which won't show up in "
         " iterate_properties "
-        setattr(instance, key, getattr(obj, key))
+        if hasattr(instance, key):
+            setattr(instance, key, getattr(obj, key))
         continue
         
     " next, copy over column properties, skipping the props in 'excludes' "
@@ -172,9 +173,10 @@ def clone_obj(obj, user, rules={}, registry={}, path=None, root=None,
             setattr(instance, key, value)
         elif isinstance(value, MappedCollection):
             new_map = {}
+            field = getattr(instance, key)
             for name,item in value.items():
-                new_map[name] = clone_obj(item, user, rules, registry, path_,
-                    root)
+                new_obj = clone_obj(item, user, rules, registry, path_, root)
+                new_map[name] = new_obj
             setattr(instance, key, new_map)
         elif isinstance(value, list): # onetomany or manytomany
             setattr(instance, key, [clone_obj(item, user, rules, registry,
