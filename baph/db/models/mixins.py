@@ -1,13 +1,15 @@
 import datetime
 import logging
+import math
 import time
 import types
 
 from django.conf import settings
 from django.core.cache import get_cache
-from sqlalchemy import Column, DateTime, func, inspect
+from sqlalchemy import *
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.declarative.clsregistry import _class_resolver
+from sqlalchemy.ext.hybrid import hybrid_method
 from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm.attributes import get_history, instance_dict
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
@@ -37,6 +39,60 @@ class TimestampMixin(object):
     def modified(cls):
         return Column(DateTime, default=datetime.datetime.now,
             onupdate=datetime.datetime.now, info={'readonly': True})
+
+class GeoMixin(object):
+
+    @property
+    def distance(self):
+        if not (self._lat and self._lon):
+            # this instance isn't geocoded
+            return None
+        return self._distance(self._lat, self._lon)
+
+    @hybrid_method
+    def _distance(self, lat, lon):
+        fields = self._meta.latlon_field_names
+        _lat = getattr(self, fields[0])
+        _lon = getattr(self, fields[1])
+        return 3959 * math.acos(
+            math.cos(math.radians(self._lat))
+            * math.cos(math.radians(_lat))
+            * math.cos(math.radians(_lon) - math.radians(self._lon))
+            + math.sin(math.radians(self._lat))
+            * math.sin(math.radians(_lat))
+            )
+
+    @_distance.expression
+    def _distance(self, lat, lon):
+        fields = self._meta.latlon_field_names
+        _lat = getattr(self, fields[0])
+        _lon = getattr(self, fields[1])
+        self._lat = lat # set these on the instance, for use later
+        self._lon = lon
+        return 3959 * func.acos(
+            func.cos(func.radians(lat))
+            * func.cos(func.radians(_lat))
+            * func.cos(func.radians(_lon) - func.radians(lon))
+            + func.sin(func.radians(lat))
+            * func.sin(func.radians(_lat))
+            )
+
+    @classmethod
+    def get_distance_filters(cls, lat, lon, threshold):
+        """ returns a list of sqla filters, to be applied to an existing query
+            ie: query.filter(*filters) """
+        field_names = cls._meta.latlon_field_names
+        lat_field = getattr(cls, field_names[0])
+        lon_field = getattr(cls, field_names[1])
+        diff = threshold / 69.0 # miles -> degree variance
+        filters = [
+            lat_field > lat - diff,
+            lat_field < lat + diff,
+            lon_field > lon - diff,
+            lon_field < lon + diff,
+            cls._distance(lat,lon) < threshold, # this sets instance state!
+            ]
+        return filters
 
 class GlobalMixin(object):
 
