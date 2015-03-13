@@ -540,24 +540,22 @@ class ModelPermissionMixin(object):
             return parent
             
         # if nothing was found, grab the fk and lookup manually
+        mapper = inspect(type(self))
         attr = getattr(type(self), attr_name)
         prop = attr.property
         local_col, remote_col = prop.local_remote_pairs[0]
-        local_key = local_col.key
-        if hasattr(self, local_key):
-            value = getattr(self, local_key)
-        else:
-            # model is missing this key, maybe an aliased column?
-            for k,v in type(self).__mapper__.c.items():
-                if v is local_col:
-                    value = getattr(self, k)
-       
+        local_prop = mapper.get_property_by_column(local_col)
+        value = getattr(self, local_prop.key)
+
         if not value:
-            # no relation and no fk
+            # no relation and no fk = no parent
             return None
 
-        filters = {remote_col.key: value}
         parent_cls = type(self).get_related_class(attr_name)
+        mapper = inspect(parent_cls)
+        remote_prop = mapper.get_property_by_column(remote_col)
+        filters = {remote_prop.key: value}
+
         orm = ORM.get()
         session = orm.sessionmaker()
         parent = session.query(parent_cls).filter_by(**filters).first()

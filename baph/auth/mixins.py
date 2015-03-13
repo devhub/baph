@@ -1,3 +1,4 @@
+import json
 import logging
 
 from django.conf import settings
@@ -50,6 +51,13 @@ class PermissionStruct:
         self.__dict__.update(entries)
         self._explicit = False
 
+    @property
+    def opcode(self):
+        if str(self.value).startswith('['):
+            return 'in'
+        else:
+            return 'eq'
+
 class UserPermissionMixin(object):
 
     def get_user_permissions(self):
@@ -73,12 +81,15 @@ class UserPermissionMixin(object):
         ctx = self.get_context()
         permissions = {}
         for user_group in self.groups:
-            if user_group.key:
-                ctx[user_group.key] = user_group.value
-            group = user_group.group
             context = ctx.copy()
+            # if the group association has additional context, add it
+            if user_group.key:
+                context[user_group.key] = user_group.value
+            group = user_group.group
+            # if the group has additional context, add it
             if group.context:
                 context.update(group.context)
+
             org_id = str(getattr(group, Organization._meta.model_name+'_id'))
             if org_id not in permissions:
                 permissions[org_id] = {}
@@ -231,6 +242,7 @@ class UserPermissionMixin(object):
             return False
 
         for p in perms:
+            print p.codename
             logger.debug('  perm: %s' % p.codename)
 
         perm_map = {}
@@ -243,7 +255,15 @@ class UserPermissionMixin(object):
                 explicit.append(p.key)
             if not p.key in perm_map:
                 perm_map[p.key] = set()
-            perm_map[p.key].add(p.value % ctx)
+            if p.opcode == 'in':
+                # this is a json-encoded list of values
+                values = json.loads(p.value)
+            else:
+                # this is a single value
+                values = [p.value]
+            # replace context variables
+            values = [str(value) % ctx for value in values]
+            perm_map[p.key].update(values)
 
         if action == 'add':
             for p in type(obj)._meta.permission_parents:
@@ -336,7 +356,13 @@ class UserPermissionMixin(object):
                 continue
 
             keys = p.key.split(',')
-            values = p.value.split(',')
+            if p.opcode == 'in':
+                # range filter
+                values = [json.loads(p.value)]
+            else:
+                # exact filter
+                values = p.value.split(',')
+
             data = zip(keys, values)
             
             filters = []
@@ -353,7 +379,10 @@ class UserPermissionMixin(object):
                     cls_ = cls_.get_related_class(frag)
 
                 col = getattr(cls_, attr)
-                filters.append(col==value)
+                if p.opcode == 'in':
+                    filters.append(col.in_(value))
+                else:
+                    filters.append(col==value)
 
             if len(filters) == 1:
                 formatted.append(filters[0])
