@@ -40,21 +40,8 @@ class BaphFixtureMixin(object):
                 }
                 
             call_command('flush', **params)
-    
 
-class TestCase(BaphFixtureMixin, DjangoTestCase):
-    pass
-
-
-class LiveServerTestCase(BaphFixtureMixin, DjangoLSTestCase):
-    pass
-
-
-class MemcacheTestCase(TestCase):
-    
-    def _fixture_setup(self):
-        super(MemcacheTestCase, self)._fixture_setup()
-        self.cache.flush_all()
+class MemcacheMixin(object):
 
     def populate_cache(self, objs=[]):
         """
@@ -63,10 +50,6 @@ class MemcacheTestCase(TestCase):
         """
         self.initial_cache = dict((k, self.cache.get(k)) \
             for k in self.cache.get_all_keys())
-
-    def setUp(self, objs={}, counts={}):
-        self.initial_cache = {}
-        super(MemcacheTestCase, self).setUp()
 
     def assertCacheHit(self, rsp):
         self.assertEqual(rsp['x-from-cache'], 'True')
@@ -103,3 +86,31 @@ class MemcacheTestCase(TestCase):
         raw_key = self.cache.make_key(key)
         self.assertIn(raw_key, self.initial_cache)
         self.assertNotEqual(self.cache.get(key), None)
+
+class TestCase(BaphFixtureMixin, DjangoTestCase):
+    pass
+
+
+class LiveServerTestCase(BaphFixtureMixin, DjangoLSTestCase):
+    pass
+
+
+class MemcacheTestCase(MemcacheMixin, TestCase):
+    def _fixture_setup(self):
+        super(MemcacheTestCase, self)._fixture_setup()
+        self.cache.flush_all()
+
+    def setUp(self, objs={}, counts={}):
+        self.initial_cache = {}
+        super(MemcacheTestCase, self).setUp()
+
+class MemcacheLSTestCase(MemcacheMixin, LiveServerTestCase):
+    def _fixture_setup(self):
+        super(MemcacheLSTestCase, self)._fixture_setup()
+        self.cache.flush_all()
+
+    def setUp(self, objs={}, counts={}):
+        self.initial_cache = {}
+        super(MemcacheLSTestCase, self).setUp()
+
+
