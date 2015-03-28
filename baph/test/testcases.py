@@ -57,33 +57,33 @@ class MemcacheMixin(object):
     def assertCacheMiss(self, rsp):
         self.assertEqual(rsp['x-from-cache'], 'False')
 
-    def assertCacheKeyEqual(self, key, value):
-        self.assertEqual(self.cache.get(key), value)
+    def assertCacheKeyEqual(self, key, value, version=None):
+        self.assertEqual(self.cache.get(key, version=version), value)
 
-    def assertCacheKeyCreated(self, key):
-        raw_key = self.cache.make_key(key)
+    def assertCacheKeyCreated(self, key, version=None):
+        raw_key = self.cache.make_key(key, version=version)
         self.assertNotIn(raw_key, self.initial_cache)
         self.assertIn(raw_key, self.cache.get_all_keys())
 
-    def assertCacheKeyIncremented(self, key):
-        raw_key = self.cache.make_key(key)
+    def assertCacheKeyIncremented(self, key, version=None):
+        raw_key = self.cache.make_key(key, version=version)
         old = self.initial_cache.get(raw_key, 0)
         new = self.cache.get(key)
         self.assertEqual(new, old+1)
 
-    def assertCacheKeyIncrementedMulti(self, key):
-        raw_key = self.cache.make_key(key)
+    def assertCacheKeyIncrementedMulti(self, key, version=None):
+        raw_key = self.cache.make_key(key, version=version)
         old = self.initial_cache[raw_key]
         new = self.cache.get(key)
         self.assertTrue(new > old)
         
-    def assertCacheKeyInvalidated(self, key):
-        raw_key = self.cache.make_key(key)
+    def assertCacheKeyInvalidated(self, key, version=None):
+        raw_key = self.cache.make_key(key, version=version)
         self.assertIn(raw_key, self.initial_cache)
         self.assertEqual(self.cache.get(key), None)
 
-    def assertCacheKeyNotInvalidated(self, key):
-        raw_key = self.cache.make_key(key)
+    def assertCacheKeyNotInvalidated(self, key, version=None):
+        raw_key = self.cache.make_key(key, version=version)
         self.assertIn(raw_key, self.initial_cache)
         self.assertNotEqual(self.cache.get(key), None)
 
