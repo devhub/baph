@@ -409,15 +409,17 @@ MAX_KEY_LEN = 255
 MAX_SECRET_LEN = 255
 KEY_LEN = 32
 SECRET_LEN = 32
+UNIQUE_KEY = getattr(settings, 'BAPH_UNIQUE_OAUTH_KEYS', True)
 
 class OAuthConsumer(Base):
     __tablename__ = 'auth_oauth_consumer'
     id = Column(Integer, ForeignKey(User.id), primary_key=True)
-    key = Column(String(MAX_KEY_LEN), unique=True)
+    key = Column(String(MAX_KEY_LEN), unique=UNIQUE_KEY)
     secret = Column(String(MAX_SECRET_LEN))
 
     user = relationship(User, lazy=True, uselist=False)
 
+    '''
     def __init__(self, **kwargs):
         super(OAuthConsumer, self).__init__(**kwargs)
         if not self.key:
@@ -429,7 +431,7 @@ class OAuthConsumer(Base):
     def create(cls, user_id, **kwargs):
         kwargs['id'] = user_id
         return cls(**kwargs)
-
+    '''
     def as_consumer(self):
         '''Creates an oauth.OAuthConsumer object from the DB data.
         :rtype: oauth.OAuthConsumer
@@ -440,6 +442,6 @@ class OAuthNonce(Base):
     __tablename__ = 'auth_oauth_nonce'
     id = Column(Integer, primary_key=True)
     token_key = Column(String(32))
-    consumer_key = Column(String(MAX_KEY_LEN), ForeignKey(OAuthConsumer.key))
+    consumer_key = Column(String(MAX_KEY_LEN))
     key = Column(String(255), nullable=False, unique=True)
 
