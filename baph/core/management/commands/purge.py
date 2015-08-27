@@ -74,25 +74,34 @@ class Command(NoArgsCommand):
                 if not msg.startswith('No module named') or 'management' not in msg:
                     raise
 
-        if interactive:
-            confirm = raw_input("""You have requested a purghe of the database.
-This will IRREVERSIBLY DESTROY all data currently in the database,
-and DELETE ALL TABLES AND SCHEMAS. Are you sure you want to do this?
+        db = options.get('database')
+        orm = ORM.get(db)
+        db_info = orm.settings_dict
+        is_test_db = db_info.get('TEST', False)
+        if not is_test_db:
+            print 'Database "%s" cannot be purged because it is not a test ' \
+                  'database.\nTo flag this as a test database, set TEST to ' \
+                  'True in the database settings.' % db
+            sys.exit()
 
-    Type 'yes' to continue, or 'no' to cancel: """)
+        engine = orm.engine
+        if interactive:
+            confirm = raw_input('\nYou have requested a purge of database ' \
+                '"%s" (%s). This will IRREVERSIBLY DESTROY all data ' \
+                'currently in the database, and DELETE ALL TABLES AND ' \
+                'SCHEMAS. Are you sure you want to do this?\n\n' \
+                'Type "yes" to continue, or "no" to cancel: ' \
+                % (db, engine.url))
         else:
             confirm = 'yes'
 
         if confirm == 'yes':
-            db = options.get('database')
-            orm = ORM.get(db)
-            engine = orm.engine
             conn = engine.connect()
             Base = orm.Base
 
             default_schema = engine.url.database
-            existing_schemas = set([s[0] for s in conn.execute('show databases') 
-                               if s[0]])
+            existing_schemas = set([s[0] for s in 
+                conn.execute('show databases') if s[0]])
             schemas = set([default_schema])
             schemas.update(Base.metadata._schemas)
             schemas = schemas.intersection(existing_schemas)
