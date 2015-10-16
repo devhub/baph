@@ -71,6 +71,12 @@ def Deserializer(stream_or_string, **options):
             yield obj
     except GeneratorExit:
         raise
+    except AttributeError as e:
+        # if the fixture data doesn't match the given class, it's probably
+        # an overridden class, so we should ignore the errors so a future
+        # fixture can be used. loaddata will ignore AttributeError but
+        # fail on DeserializationError
+        raise
     except Exception as e:
         six.reraise(DeserializationError, DeserializationError(e), 
                     sys.exc_info()[2])

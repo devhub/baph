@@ -1,8 +1,8 @@
 from __future__ import unicode_literals
-
 import glob
 import gzip
 from itertools import product
+import logging
 import os
 import zipfile
 from optparse import make_option
@@ -29,6 +29,7 @@ from baph.db.models import get_app_paths
 from baph.db.orm import ORM
 
 
+logger = logging.getLogger(__name__)
 orm = ORM.get()
 
 def humanize(dirname):
@@ -50,11 +51,13 @@ class Command(BaseCommand):
     
     option_list = BaseCommand.option_list + (
         make_option('--database', action='store', dest='database',
-            default=DEFAULT_DB_ALIAS, help='Nominates a specific database to load '
-                'fixtures into. Defaults to the "default" database.'),
-        make_option('--ignorenonexistent', '-i', action='store_true', dest='ignore',
-            default=False, help='Ignores entries in the serialized data for fields'
-                                ' that do not currently exist on the model.'),
+            default=DEFAULT_DB_ALIAS, 
+            help='Nominates a specific database to load fixtures into. '
+                 'Defaults to the "default" database.'),
+        make_option('--ignorenonexistent', '-i', action='store_true',
+            dest='ignore', default=False, help='Ignores entries in the '
+                'serialized data for fields that do not currently exist '
+                'on the model.'),
     )
 
     def handle(self, *fixture_labels, **options):
@@ -67,8 +70,10 @@ class Command(BaseCommand):
                     "No database fixture specified. Please provide the path "
                     "of at least one fixture in the command line.")
 
+        # verbosity is ignored now, in favor of controlling console output
+        # via settings.LOGGING (in order to apply different levels to
+        # different types of logging)
         self.verbosity = int(options.get('verbosity'))
-
         self.loaddata(fixture_labels)
 
     def loaddata(self, fixture_labels):
@@ -117,14 +122,13 @@ class Command(BaseCommand):
                     cursor.execute(line)
                 cursor.close()
         '''
-        if self.verbosity >= 1:
-            if self.fixture_object_count == self.loaded_object_count:
-                self.stdout.write("Installed %d object(s) from %d fixture(s)" %
+        if self.fixture_object_count == self.loaded_object_count:
+            logger.info("Installed %d object(s) from %d fixture(s)" %
                     (self.loaded_object_count, self.fixture_count))
-            else:
-                self.stdout.write("Installed %d object(s) (of %d) from %d fixture(s)" %
-                    (self.loaded_object_count, self.fixture_object_count, self.fixture_count))
-
+        else:
+            logger.info("Installed %d object(s) (of %d) from %d fixture(s)" %
+                    (self.loaded_object_count, self.fixture_object_count,
+                     self.fixture_count))
 
     def load_label(self, fixture_label):
         """
@@ -133,21 +137,20 @@ class Command(BaseCommand):
         session = orm.sessionmaker()
         session.expunge_all()
         
-        #print '\nloading label:', fixture_label
+        logger.info('Loading fixture label: "%s"' % fixture_label)
         identity_map = SortedDict()
-        for fixture_file, fixture_dir, fixture_name in self.find_fixtures(fixture_label):
-            #print '\tfound fixture:', fixture_file, fixture_dir, fixture_name
-            _, ser_fmt, cmp_fmt = self.parse_name(os.path.basename(fixture_file))
+        for fixture_file, fixture_dir, fixture_name \
+                    in self.find_fixtures(fixture_label):
+            logger.info('  Loading fixture: %s' % fixture_file)
+            _, ser_fmt, cmp_fmt = self.parse_name(
+                    os.path.basename(fixture_file))
             open_method = self.compression_formats[cmp_fmt]
             fixture = open_method(fixture_file, 'r')
             try:
                 self.fixture_count += 1
                 objects_in_fixture = 0
                 loaded_objects_in_fixture = 0
-                if self.verbosity >= 2:
-                    self.stdout.write("Installing %s fixture '%s' from %s." %
-                        (ser_fmt, fixture_name, humanize(fixture_dir)))
-
+                    
                 objects = serializers.deserialize(ser_fmt, fixture,
                     using=self.using, ignorenonexistent=self.ignore)
 
@@ -170,10 +173,17 @@ class Command(BaseCommand):
                         
                 self.loaded_object_count += loaded_objects_in_fixture
                 self.fixture_object_count += objects_in_fixture
+            except AttributeError:
+                # if attributes don't match up, it could be a base fixture 
+                # being applied to a subclassed object. We can ignore this
+                # fixture
+                logger.info('    Fixture could not be loaded due to attribute'
+                            ' errors. Skipping')
+                continue
             except Exception as e:
                 if not isinstance(e, CommandError):
-                    e.args = ("Problem installing fixture '%s': %s" % (fixture_file, e),)
-                continue
+                    e.args = ("Problem installing fixture '%s': %s" 
+                              % (fixture_file, e),)
                 raise
             finally:
                 fixture.close()
@@ -196,17 +206,16 @@ class Command(BaseCommand):
         """
         fixture_name, ser_fmt, cmp_fmt = self.parse_name(fixture_label)
         #databases = [self.using, None]
-        cmp_fmts = list(self.compression_formats.keys()) if cmp_fmt is None else [cmp_fmt]
-        ser_fmts = serializers.get_public_serializer_formats() if ser_fmt is None else [ser_fmt]
+        cmp_fmts = list(self.compression_formats.keys()) \
+                if cmp_fmt is None else [cmp_fmt]
+        ser_fmts = serializers.get_public_serializer_formats() \
+                if ser_fmt is None else [ser_fmt]
 
         # Check kept for backwards-compatibility; it doesn't look very useful.
         if '.' in os.path.basename(fixture_name):
             raise CommandError(
                     "Problem installing fixture '%s': %s is not a known "
                     "serialization format." % tuple(fixture_name.rsplit('.')))
-
-        if self.verbosity >= 2:
-            self.stdout.write("Loading '%s' fixtures..." % fixture_name)
 
         if os.path.isabs(fixture_name):
             fixture_dirs = [os.path.dirname(fixture_name)]
@@ -220,17 +229,20 @@ class Command(BaseCommand):
 
         fixture_files = []
         for fixture_dir in fixture_dirs:
-            if self.verbosity >= 2:
-                self.stdout.write("Checking %s for fixtures..." % humanize(fixture_dir))
+            logger.debug("  Checking %s for fixtures..." 
+                        % humanize(fixture_dir))
             fixture_files_in_dir = []
-            for candidate in glob.iglob(os.path.join(fixture_dir, fixture_name + '*')):
+            for candidate in glob.iglob(os.path.join(fixture_dir, 
+                                                     fixture_name + '*')):
                 if os.path.basename(candidate) in targets:
-                    # Save the fixture_dir and fixture_name for future error messages.
-                    fixture_files_in_dir.append((candidate, fixture_dir, fixture_name))
+                    # Save the fixture_dir and fixture_name for future 
+                    # error messages.
+                    logger.debug("    Found fixture: %s" % candidate)
+                    fixture_files_in_dir.append((candidate, fixture_dir,
+                                                fixture_name))
 
-            if self.verbosity >= 2 and not fixture_files_in_dir:
-                self.stdout.write("No fixture '%s' in %s." %
-                                  (fixture_name, humanize(fixture_dir)))
+            if not fixture_files_in_dir:
+                logger.debug("    No fixture found")
 
             # Check kept for backwards-compatibility; it isn't clear why
             # duplicates are only allowed in different directories.

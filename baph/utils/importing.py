@@ -16,7 +16,7 @@ from django.conf import settings
 from django.utils.importlib import import_module
 
 
-logger = logging.getLogger('baph_safe_import')
+logger = logging.getLogger(__name__)
 
 class ImportTransformer(ast.NodeTransformer):
 
@@ -176,16 +176,15 @@ def module_to_filename(module_name):
 
 def safe_import(path, replace_modules=[]):
     " input is a dotted path "
-    
-    
-    logger.debug('safe_import called:\n\tpath=%s\n\treplace_modules=%s'
-        % (path, replace_modules))
+    logger.debug('safe_import called:')
+    logger.debug('  path = %s' % path)
+    logger.debug('  replace_modules = %s' % replace_modules)
     if not replace_modules:
         raise ValueError('replace_modules must contain at least one value')
 
     mod, name = path.rsplit('.',1)
     filename = module_to_filename(mod)
-    logger.debug('\tpath -> filename=%s' % filename)
+    logger.debug('  path -> filename=%s' % filename)
     f = open(filename)
     code = f.read()
     f.close()
@@ -200,10 +199,10 @@ def safe_import(path, replace_modules=[]):
 
     while True:
         code = compile(node, filename, 'exec')
-        logger.debug('\ttrying to exec node %s' % node)
+        logger.debug('  trying to exec node %s' % node)
         try:
             exec code in sys.modules[mod].__dict__
-            logger.debug('\t\tsuccess')
+            logger.debug('    success')
             break
         except:
             exc_type, exc_value, tb_root = sys.exc_info()
@@ -216,7 +215,7 @@ def safe_import(path, replace_modules=[]):
             if tb is None:
                 raise Exception('no tb frame contained an error in '
                     'the source file')
-            logger.debug('\texception at line %s: %s' % (tb.tb_lineno, 
+            logger.debug('    exception at line %s: %s' % (tb.tb_lineno, 
                                                          exc_value))
 
             last_valid_idx = None
@@ -226,15 +225,15 @@ def safe_import(path, replace_modules=[]):
                 else:
                     break
             item = node.body[last_valid_idx]
-            logger.debug('\t\tfailed node index=%s' % last_valid_idx)
-            logger.debug('\t\tfailed node at line %s: %s' % (item.lineno,
+            logger.debug('    failed node index=%s' % last_valid_idx)
+            logger.debug('    failed node at line %s: %s' % (item.lineno,
                                                            item))
 
             if not last_valid_idx:
                 raise Exception('tb line # didn\'t fall in any '
                     'ranges present in source file (how?)')
             del node.body[last_valid_idx]
-            logger.debug('\t\tnode deleted, retrying exec')
+            logger.debug('    node deleted, retrying exec')
             if len(node.body) == 0:
                 raise Exception('Source AST was trimmed to zero trying to '
                     'eliminate circular import errors. "oops".')

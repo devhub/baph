@@ -229,7 +229,7 @@ class UserPermissionMixin(object):
             parent_res = type(parent_obj).resource_name
             if action != 'view':
                 action = 'edit'
-            
+
             return self.has_obj_perm(parent_res, action, parent_obj)
 
         ctx = self.get_context()
@@ -242,7 +242,6 @@ class UserPermissionMixin(object):
             return False
 
         for p in perms:
-            print p.codename
             logger.debug('  perm: %s' % p.codename)
 
         perm_map = {}
