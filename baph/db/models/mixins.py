@@ -273,7 +273,6 @@ class CacheMixin(object):
         return self.cache_pointers()
 
     def get_cache_keys(self, child_updated=False, force_expire_pointers=False):
-        #print 'getting cache keys for:', self, 'child_updated=', child_updated
         cache_keys = set()
         version_keys = set()
 
@@ -354,7 +353,6 @@ class CacheMixin(object):
             old_idkey = cache.get(old_key)
             if old_idkey == idkey:
                 # this object is the current owner of the key
-                #print 'setting %s to False' % old_key, old_idkey, idkey
                 cache.set(old_key, False)
 
         # cascade the cache kill operation to related objects, so parents
@@ -420,7 +418,6 @@ class ModelPermissionMixin(object):
 
     @classmethod
     def get_fks(cls, include_parents=True, remote_key=None):
-        #print 'get fks:', cls, remote_key
         keys = []
         cls_name = cls.__name__
 

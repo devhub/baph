@@ -244,7 +244,6 @@ class SQLAModelForm(BaseSQLAModelForm):
     def clean_unique_field(self, key, **kwargs):
         orm = ORM.get()
         value = self.cleaned_data[key]
-        print 'val=', value
         if value is None:
             return value
         filters = {
