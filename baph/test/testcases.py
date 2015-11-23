@@ -1,45 +1,63 @@
-try:
-    import json
-except:
-    import simplejson as json
+import json
 import time
 
 from django.core.management import call_command
-from django.test import TestCase as DjangoTestCase
-from django.test import LiveServerTestCase as DjangoLSTestCase
+from django import test
+from sqlalchemy import create_engine
 
 from baph.db.orm import ORM
 
-orm = ORM.get()
 
+orm = ORM.get()
 
 class BaphFixtureMixin(object):
 
     reset_sequences = False
 
+    @classmethod
+    def load_fixtures(cls, *fixtures):
+        params = {
+            'verbosity': 0,
+            'database': None,
+            'skip_validation': True,
+            'commit': False,
+            }
+        call_command('loaddata', *fixtures, **params)
+        orm.sessionmaker().expunge_all()
+        cls.session.expunge_all()
+
+    @classmethod
+    def purge_fixtures(cls, *fixtures):
+        orm.sessionmaker().expunge_all()
+        cls.session.expunge_all()
+        cls.session.rollback()
+        params = {
+            'verbosity': 0,
+            'interactive': False,
+            }
+        call_command('flush', **params)
+
+    @classmethod
+    def setUpClass(cls):
+        super(BaphFixtureMixin, cls).setUpClass()
+        cls.session = orm.session_factory()
+        if hasattr(cls, 'persistent_fixtures'):
+            cls.load_fixtures(*cls.persistent_fixtures)
+
+    @classmethod
+    def tearDownClass(cls):
+        super(BaphFixtureMixin, cls).tearDownClass()
+        cls.session.close()
+        if hasattr(cls, 'persistent_fixtures'):
+            cls.purge_fixtures(*cls.persistent_fixtures)
+
     def _fixture_setup(self):
         if hasattr(self, 'fixtures'):
-            params = {
-                'verbosity': 0,
-                'database': None, 
-                'skip_validation': True,
-                'commit': False,
-                }
-            call_command('loaddata', *self.fixtures, **params)
-        session = orm.sessionmaker()
-        session.expunge_all()
+            self.load_fixtures(*self.fixtures)
 
     def _fixture_teardown(self):
         if hasattr(self, 'fixtures'):
-            session = orm.sessionmaker()
-            session.expunge_all()
-            #session.rollback() #requires transactional db
-            params = {
-                'verbosity': 0,
-                'interactive': False,
-                }
-                
-            call_command('flush', **params)
+            self.purge_fixtures(*self.fixtures)
 
 class MemcacheMixin(object):
 
@@ -87,11 +105,11 @@ class MemcacheMixin(object):
         self.assertIn(raw_key, self.initial_cache)
         self.assertNotEqual(self.cache.get(key), None)
 
-class TestCase(BaphFixtureMixin, DjangoTestCase):
+class TestCase(BaphFixtureMixin, test.TestCase):
     pass
 
 
-class LiveServerTestCase(BaphFixtureMixin, DjangoLSTestCase):
+class LiveServerTestCase(BaphFixtureMixin, test.LiveServerTestCase):
     pass
 
 

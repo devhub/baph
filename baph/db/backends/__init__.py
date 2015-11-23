@@ -1,7 +1,9 @@
 from contextlib import contextmanager
+from copy import deepcopy
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.utils.functional import cached_property
 from sqlalchemy import create_engine
 from sqlalchemy.engine.url import URL
 from sqlalchemy.exc import ArgumentError
@@ -65,8 +67,8 @@ class DatabaseWrapper(object):
         self.alias = alias
         self.engine = load_engine(settings_dict)
         self.Base = get_declarative_base(bind=self.engine)
-        self.sessionmaker = scoped_session(sessionmaker(bind=self.engine,
-            autoflush=False))
+        self.session_factory = sessionmaker(bind=self.engine, autoflush=False)
+        self.sessionmaker = scoped_session(self.session_factory)
 
     def __eq__(self, other):
         return self.alias == other.alias
@@ -79,6 +81,39 @@ class DatabaseWrapper(object):
 
     def cursor(self):
         return self.sessionmaker()
+
+    def get_base_engine(self):
+        """ Return an engine with no schema, to allow operations before 
+            schemas have been setup """
+        url = deepcopy(self.engine.url)
+        url.database = None
+        return create_engine(url)
+
+    @cached_property
+    def supports_transactions(self):
+        """ Confirm support for transactions."""
+        session = self.session_factory()
+        session.execute('CREATE TABLE ROLLBACK_TEST (X INT)')
+        session.execute('INSERT INTO ROLLBACK_TEST (X) VALUES (8)')
+        session.rollback()
+        results = session.execute('SELECT COUNT(X) FROM ROLLBACK_TEST')
+        count, = results.fetchone()
+        session.execute('DROP TABLE ROLLBACK_TEST')
+        return count == 0
+
+    @contextmanager
+    def session(self, expunge=False):
+        session = self.session_factory()
+        try:
+            yield session
+            if expunge:
+                session.expunge_all()
+            session.commit()
+        except:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
     def check_constraints(self, table_names=None):
         # TODO: implement this
