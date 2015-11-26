@@ -67,8 +67,9 @@ class DatabaseWrapper(object):
         self.alias = alias
         self.engine = load_engine(settings_dict)
         self.Base = get_declarative_base(bind=self.engine)
-        self.session_factory = sessionmaker(bind=self.engine, autoflush=False)
-        self.sessionmaker = scoped_session(self.session_factory)
+        self.session_factory = sessionmaker(bind=self.engine)
+        self.sessionmaker = scoped_session(sessionmaker(
+            bind=self.engine, autoflush=False))
 
     def __eq__(self, other):
         return self.alias == other.alias
