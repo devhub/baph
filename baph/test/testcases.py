@@ -1,18 +1,52 @@
+from collections import defaultdict
 import json
 import time
 
+from django.conf import settings
 from django.core.management import call_command
 from django import test
 from sqlalchemy import create_engine
 
 from baph.db.orm import ORM
+from .signals import add_timing
 
+
+PRINT_TEST_TIMINGS = getattr(settings, 'PRINT_TEST_TIMINGS', False)
 
 orm = ORM.get()
 
 class BaphFixtureMixin(object):
-
     reset_sequences = False
+    test_start_time = None
+    test_end_time = None
+    tests_run = 0
+    timings = defaultdict(list)
+
+    @classmethod
+    def add_timing(cls, sender, key, time, **kwargs):
+        cls.timings[key].append(time)
+
+    def run(self, *args, **kwargs):
+        type(self).tests_run += 1
+        super(BaphFixtureMixin, self).run(*args, **kwargs)
+
+    @classmethod
+    def print_timings(cls):
+        total = cls.test_end_time - cls.test_start_time
+        items = sorted(cls.timings.items())
+        keys = [item[0] for item in items]
+        for i, key in enumerate(keys):
+            if ':' not in key:
+                continue
+            start, end = key.split(':', 1)
+            if start in keys:
+                keys[i] = '  %s' % end
+        max_key_len = max(len(k) for k in keys)
+        print '\n%s timings:' % cls.__name__
+        print '  %d test(s) run, totalling %.03fs' % (cls.tests_run, total)
+        for i, (k, v) in enumerate(items):
+            print '  %s: %d calls, totalling %.03fs (%.02f%%)' % (
+                keys[i].ljust(max_key_len), len(v), sum(v), 100.0*sum(v)/total)
 
     @classmethod
     def load_fixtures(cls, *fixtures):
@@ -22,7 +56,10 @@ class BaphFixtureMixin(object):
             'skip_validation': True,
             'commit': False,
             }
+        start = time.time()
         call_command('loaddata', *fixtures, **params)
+        if PRINT_TEST_TIMINGS:
+            add_timing.send(None, key='loaddata', time=time.time()-start)
         orm.sessionmaker().expunge_all()
         cls.session.expunge_all()
 
@@ -35,11 +72,17 @@ class BaphFixtureMixin(object):
             'verbosity': 0,
             'interactive': False,
             }
+        start = time.time()
         call_command('flush', **params)
+        if PRINT_TEST_TIMINGS:
+            add_timing.send(None, key='flush', time=time.time()-start)
 
     @classmethod
     def setUpClass(cls):
+        cls.test_start_time = time.time()
         super(BaphFixtureMixin, cls).setUpClass()
+        if PRINT_TEST_TIMINGS:
+            add_timing.connect(cls.add_timing)
         cls.session = orm.session_factory()
         if hasattr(cls, 'persistent_fixtures'):
             cls.load_fixtures(*cls.persistent_fixtures)
@@ -50,6 +93,11 @@ class BaphFixtureMixin(object):
         cls.session.close()
         if hasattr(cls, 'persistent_fixtures'):
             cls.purge_fixtures(*cls.persistent_fixtures)
+        if PRINT_TEST_TIMINGS:
+            add_timing.disconnect(cls.add_timing)
+        cls.test_end_time = time.time()
+        if PRINT_TEST_TIMINGS:
+            cls.print_timings()
 
     def _fixture_setup(self):
         if hasattr(self, 'fixtures'):
