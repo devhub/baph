@@ -10,11 +10,11 @@ from django.utils.translation import ugettext_lazy as _
 
 
 class NullCharField(forms.CharField):
-    """
-    CharField that does not cast None to ''
-    """
+    " CharField that does not cast None to '' "
     def to_python(self, value):
         "Returns a Unicode object."
+        if isinstance(value, basestring):
+            value = value.strip()
         if value in validators.EMPTY_VALUES:
             return None
         return super(NullCharField, self).to_python(value)

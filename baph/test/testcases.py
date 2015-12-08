@@ -20,7 +20,7 @@ class BaphFixtureMixin(object):
     test_start_time = None
     test_end_time = None
     tests_run = 0
-    timings = defaultdict(list)
+    timings = None
 
     @classmethod
     def add_timing(cls, sender, key, time, **kwargs):
@@ -33,6 +33,10 @@ class BaphFixtureMixin(object):
     @classmethod
     def print_timings(cls):
         total = cls.test_end_time - cls.test_start_time
+        print '\n%s timings:' % cls.__name__
+        print '  %d test(s) run, totalling %.03fs' % (cls.tests_run, total)
+        if not cls.timings:
+            return
         items = sorted(cls.timings.items())
         keys = [item[0] for item in items]
         for i, key in enumerate(keys):
@@ -42,8 +46,6 @@ class BaphFixtureMixin(object):
             if start in keys:
                 keys[i] = '  %s' % end
         max_key_len = max(len(k) for k in keys)
-        print '\n%s timings:' % cls.__name__
-        print '  %d test(s) run, totalling %.03fs' % (cls.tests_run, total)
         for i, (k, v) in enumerate(items):
             print '  %s: %d calls, totalling %.03fs (%.02f%%)' % (
                 keys[i].ljust(max_key_len), len(v), sum(v), 100.0*sum(v)/total)
@@ -80,6 +82,7 @@ class BaphFixtureMixin(object):
     @classmethod
     def setUpClass(cls):
         cls.test_start_time = time.time()
+        cls.timings = defaultdict(list)
         super(BaphFixtureMixin, cls).setUpClass()
         if PRINT_TEST_TIMINGS:
             add_timing.connect(cls.add_timing)
