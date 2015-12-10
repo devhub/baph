@@ -28,8 +28,10 @@ from baph.auth.registration import settings as auth_settings
 from baph.db import ORM
 from baph.db.models.loading import cache
 from baph.db.types import UUID, Dict, List
-from baph.utils.strings import random_string
+from baph.utils.collections import LazyDict
 from baph.utils.importing import remove_class
+from baph.utils.strings import random_string
+
 import inspect, sys
 
 
@@ -57,13 +59,19 @@ def update_last_login(sender, user, **kwargs):
     user.save(update_fields=['last_login'])
 user_logged_in.connect(update_last_login)
 
-def get_or_fail(codename):
+def get_codename_map():
+    " returns a dict mapping codenames to permission ids "
     session = orm.sessionmaker()
-    try:
-        perm = session.query(Permission).filter_by(codename=codename).one()
-    except:
+    permissions = session.query(Permission.codename, Permission.id).all()
+    return dict(permissions)
+codename_map = LazyDict(get_codename_map)
+
+def get_or_fail(codename):
+    global codename_map
+    perm_id = codename_map.get(codename)
+    if perm_id is None:
         raise ValueError('%s is not a valid permission codename' % codename)
-    return PermissionAssociation(permission=perm)
+    return PermissionAssociation(perm_id=perm_id)
 
 def string_to_model(string):
     if string in orm.Base._decl_class_registry:
