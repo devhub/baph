@@ -55,8 +55,6 @@ Are you sure you want to do this?
 
         if confirm == 'yes':
             session = orm.sessionmaker()
-            session.execute('SET foreign_key_checks=0')
-
             try:
                 for table in reversed(Base.metadata.sorted_tables):
                     if table.info.get('preserve_during_flush', False):
@@ -67,17 +65,11 @@ Are you sure you want to do this?
                         # table not present
                         pass
                 session.commit()
-                session.execute('SET foreign_key_checks=1')
             except Exception, e:
                 session.rollback()
-                session.execute('SET foreign_key_checks=1')
-                raise
-                raise CommandError("""Database couldn't be flushed. Possible reasons:
-  * The database isn't running or isn't configured correctly.
-  * At least one of the expected database tables doesn't exist.
-  * The SQL was invalid.
-Hint: Look at the output of 'django-admin.py sqlflush'. That's the SQL this command wasn't able to run.
-The full error: %s""")
+                raise CommandError('Could not flush the database')
+            finally:
+                session.close()
 
             # Emit the post sync signal. This allows individual
             # applications to respond as if the database had been

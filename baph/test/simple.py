@@ -1,4 +1,5 @@
 from copy import deepcopy
+import sys
 import unittest as real_unittest
 
 from django.conf import settings
@@ -11,6 +12,7 @@ from django.utils import unittest
 from django.utils.importlib import import_module
 from django.utils.module_loading import module_has_submodule
 from sqlalchemy import inspect, create_engine
+from sqlalchemy.orm.session import Session
 from sqlalchemy.schema import CreateSchema, DropSchema
 
 from baph.db.models import get_app, get_apps
@@ -227,19 +229,21 @@ class BaphTestSuiteRunner(runner.DiscoverRunner):
         # if any of the needed schemas exist, do not proceed
         conflicts = schemas.intersection(existing_schemas)
         if conflicts:
-            import sys
             for c in conflicts:
                 print 'drop schema %s;' % c
             sys.exit('The following schemas are already present: %s. ' \
                 'TestRunner cannot proceeed' % ','.join(conflicts))
         
-        # create schemas        
+        # create schemas
+        session = Session(bind=self.engine)
         for schema in schemas:
-            self.engine.execute(CreateSchema(schema))
+            session.execute(CreateSchema(schema))
+        session.commit()
+        session.bind.dispose()
 
         # create tables
         if len(orm.Base.metadata.tables) > 0:
-            orm.Base.metadata.create_all()
+            orm.Base.metadata.create_all(checkfirst=False)
 
         # generate permissions
         call_command('createpermissions')

@@ -5,19 +5,21 @@ import sys
 
 from django.conf import settings
 from django.forms import ValidationError
-from sqlalchemy import event, inspect
+from sqlalchemy import event, inspect, Column, and_
 from sqlalchemy.ext.associationproxy import ASSOCIATION_PROXY
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
+from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta, declared_attr
 from sqlalchemy.ext.declarative.base import (_as_declarative, _add_attribute)
 from sqlalchemy.ext.declarative.clsregistry import add_class
 from sqlalchemy.ext.hybrid import HYBRID_PROPERTY, HYBRID_METHOD
 from sqlalchemy.orm import mapper, object_session, class_mapper
 from sqlalchemy.orm.attributes import instance_dict, instance_state
+from sqlalchemy.orm.interfaces import MANYTOONE
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.util import has_identity, identity_key
 from sqlalchemy.schema import ForeignKeyConstraint
+from sqlalchemy.util import classproperty
 
 from baph.db import ORM
 from baph.db.models import signals
@@ -25,6 +27,7 @@ from baph.db.models.loading import get_model, register_models
 from baph.db.models.mixins import CacheMixin, ModelPermissionMixin, GlobalMixin
 from baph.db.models.options import Options
 from baph.db.models.utils import class_resolver, key_to_value
+from baph.utils.functional import cachedclassproperty
 from baph.utils.importing import safe_import, remove_class
 
 
@@ -100,6 +103,51 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
         module = import_module(cls_mod)
         return getattr(module, cls_name)
 
+    @cachedclassproperty
+    def post_update_attrs(cls):
+        " returns a list of attribute keys which need to be updated "
+        " via a secondary UPDATE, due to being part of a circular reference "
+        insp = inspect(cls)
+        attrs = []
+        for rel in insp.relationships:
+            if not rel.post_update:
+                continue
+            if rel.direction is not MANYTOONE:
+                continue
+            for col in rel.local_columns:
+                attr = insp.get_property_by_column(col).class_attribute
+                attrs.append(attr)
+        return attrs
+
+    @cachedclassproperty
+    def pk_attrs(cls):
+        " returns a list of all attrs which comprise the primary key "
+        insp = inspect(cls)
+        pk_cols = inspect(cls).primary_key
+        pk_props = [insp.get_property_by_column(c) for c in pk_cols]
+        return [prop.class_attribute for prop in pk_props]    
+
+    @cachedclassproperty
+    def pk_keys(cls):
+        " returns the keys of all attrs which comprise the primary key "
+        return [attr.key for attr in cls.pk_attrs]
+
+    @cachedclassproperty
+    def before_flush_attrs(cls):
+        return [
+            attr for attr in inspect(cls).attrs.values()
+            if hasattr(attr, 'before_flush')]
+
+    def pk_as_query_filters(self):
+        " returns a filter expression for the primary key of the instance "
+        " suitable for use with Query.filter() "
+        cls, pk_values = identity_key(instance=self)
+        if None in pk_values:
+            return None
+        items = zip(self.pk_attrs, pk_values)
+        return and_(attr==value for attr, value in items)
+        return dict(items)
+
     def update(self, data):
         for key, value in data.iteritems():
             if hasattr(self, key) and getattr(self, key) != value:
@@ -143,7 +191,23 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
                 session.add(self)
             session.commit()
 
-        
+    def _before_flush(self, session, add):
+        " private before_flush routine. to provide custom behavior, "
+        " override the public 'before_flush' on the specific class "
+        for attr in self.before_flush_attrs:
+            attr.before_flush(session, add, instance=self)
+        self.before_flush(session, add)
+
+    def before_flush(self, session, add):
+        " the public hook for instance preprocessing before a flush event "
+        pass
+
+@event.listens_for(Session, 'before_flush')
+def before_flush(session, flush_context, instances):
+    for obj in session.new:
+        obj._before_flush(session, add=True)
+    for obj in session.dirty:
+        obj._before_flush(session, add=False)
 
 class ModelBase(type):
 
@@ -162,7 +226,6 @@ class ModelBase(type):
                 _as_declarative(cls, name, cls.__dict__)
 
         type.__init__(cls, name, bases, attrs)
-
 
     def __new__(cls, name, bases, attrs):
         #print '%s.__new__(%s)' % (name, cls)

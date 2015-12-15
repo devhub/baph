@@ -45,6 +45,24 @@ class SingleZipReader(zipfile.ZipFile):
     def read(self):
         return zipfile.ZipFile.read(self, self.namelist()[0])
 
+def get_deferred_updates(session):
+    deferred = []
+    for obj in session:
+        attrs = obj.post_update_attrs
+        if not attrs:
+            continue
+        filters = obj.pk_as_query_filters()
+        if filters is None:
+            continue
+        update = {}
+        for attr in attrs:
+            if getattr(obj, attr.key):
+                update[attr] = getattr(obj, attr.key)
+                delattr(obj, attr.key)
+        if update:
+            deferred.append((type(obj), filters, update))
+    return deferred
+
 class Command(BaseCommand):
     help = 'Installs the named fixture(s) in the database.'
     args = "fixture [fixture ...]"
@@ -195,10 +213,18 @@ class Command(BaseCommand):
                         "No fixture data found for '%s'. "
                         "(File format may be invalid.)" % fixture_name)
 
-        session.execute('SET foreign_key_checks=0')
-        session.commit()
-        session.execute('SET foreign_key_checks=1')
+        try:
+            updates = get_deferred_updates(session)
+            session.flush()
 
+            for cls, filters, update in updates:
+                session.query(cls).filter(filters).update(update)
+            session.commit()
+        except:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
     def _find_fixtures(self, fixture_label):
         """

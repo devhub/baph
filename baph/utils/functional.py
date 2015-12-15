@@ -19,3 +19,12 @@ class memoize(object):
         except KeyError:
             res = self.cache[key] = self.func(*args, **kwargs)
         return res
+
+class cachedclassproperty(object):
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, instance, cls=None):
+        res = self.func(cls)
+        setattr(cls, self.func.__name__, res)
+        return res

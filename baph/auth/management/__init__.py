@@ -71,16 +71,14 @@ def _get_all_permissions(opts):
                     limiter += limiters.pop()
 
                 perm_name = 'Can %s %s %s' % (action, limiter, resource)
-                codename = perm_name.lower().replace(' ','_')[4:]
-                perms.append(auth_app.Permission(
-                    name=perm_name,
-                    codename=codename,
-                    resource=resource,
-                    action=action,
-                    key=key,
-                    value=value,
-                    #base_class=base_class
-                    ))
+                perms.append({
+                    'name': perm_name,
+                    'codename': perm_name.lower().replace(' ','_')[4:],
+                    'resource': resource,
+                    'action': action,
+                    'key': key,
+                    'value': value,
+                    })
 
     return perms
         
@@ -98,7 +96,13 @@ def create_permissions(app, created_models, verbosity, db=DEFAULT_DB_ALIAS,
     if not app_models:
         return
 
+    try:
+        Permission = getattr(auth_app, 'Permission')
+    except:
+        return
+
     searched_perms = list()
+    ctypes = set()
     searched_codenames = set()
     for k, klass in sorted(app_models, key=lambda x: x[0]):
         if klass.__mapper__.polymorphic_on is not None:
@@ -108,27 +112,40 @@ def create_permissions(app, created_models, verbosity, db=DEFAULT_DB_ALIAS,
         elif klass.__subclasses__():
             # ignore base if subclass is present
             continue
+        if not klass._meta.permission_resources:
+            # no resource types
+            continue
 
+        ctypes.update(klass._meta.permission_resources)
         for perm in _get_all_permissions(klass._meta):
-            if perm.codename in searched_codenames:
+            if perm['codename'] in searched_codenames:
                 continue
             searched_perms.append(perm)
-            searched_codenames.add(perm.codename)
+            searched_codenames.add(perm['codename'])
 
-    session = orm.sessionmaker()    
-    all_perms = session.query(auth_app.Permission).all()
-    all_codenames = set(p.codename for p in all_perms)
+    if not ctypes:
+        return
+
+    session = orm.sessionmaker()
+
+    all_perms = session.query(Permission.codename) \
+                       .filter(Permission.resource.in_(ctypes)) \
+                       .all()
+    all_perms = set([perm[0] for perm in all_perms])
 
     perms = [
         perm for perm in searched_perms
-        if perm.codename not in all_codenames
+        if perm['codename'] not in all_perms
         ]
-    session.add_all(perms)
-    session.commit()
+
+    session.execute(Permission.__table__.insert(), perms)
+    session.flush()
 
     if verbosity >= 2:
         for perm in perms:
-            print("Adding permission '%s:%s'" % (perm.resource, perm.codename))
+            print("Adding permission '%s:%s'" % (perm['resource'],
+                                                 perm['codename']))
+
 '''
 def create_superuser(app, created_models, verbosity, db, **kwargs):
     from baph.auth.models import User as UserModel

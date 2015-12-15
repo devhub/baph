@@ -93,7 +93,7 @@ class DatabaseWrapper(object):
     @cached_property
     def supports_transactions(self):
         """ Confirm support for transactions."""
-        session = self.session_factory()
+        session = self.sessionmaker()
         session.execute('CREATE TABLE ROLLBACK_TEST (X INT)')
         session.execute('INSERT INTO ROLLBACK_TEST (X) VALUES (8)')
         session.rollback()
@@ -101,20 +101,6 @@ class DatabaseWrapper(object):
         count, = results.fetchone()
         session.execute('DROP TABLE ROLLBACK_TEST')
         return count == 0
-
-    @contextmanager
-    def session(self, expunge=False):
-        session = self.session_factory()
-        try:
-            yield session
-            if expunge:
-                session.expunge_all()
-            session.commit()
-        except:
-            session.rollback()
-            raise
-        finally:
-            session.close()
 
     def check_constraints(self, table_names=None):
         # TODO: implement this
