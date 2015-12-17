@@ -120,12 +120,19 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
         return attrs
 
     @cachedclassproperty
+    def pk_cols(cls):
+        " returns a list of all columns which comprise the primary key "
+        return inspect(cls).primary_key
+
+    @cachedclassproperty
+    def pk_props(cls):
+        insp = inspect(cls)
+        return [insp.get_property_by_column(c) for c in cls.pk_cols]
+
+    @cachedclassproperty
     def pk_attrs(cls):
         " returns a list of all attrs which comprise the primary key "
-        insp = inspect(cls)
-        pk_cols = inspect(cls).primary_key
-        pk_props = [insp.get_property_by_column(c) for c in pk_cols]
-        return [prop.class_attribute for prop in pk_props]    
+        return [prop.class_attribute for prop in cls.pk_props]
 
     @cachedclassproperty
     def pk_keys(cls):
@@ -138,15 +145,14 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
             attr for attr in inspect(cls).attrs.values()
             if hasattr(attr, 'before_flush')]
 
-    def pk_as_query_filters(self):
+    def pk_as_query_filters(self, force=False):
         " returns a filter expression for the primary key of the instance "
         " suitable for use with Query.filter() "
         cls, pk_values = identity_key(instance=self)
-        if None in pk_values:
+        if None in pk_values and not force:
             return None
         items = zip(self.pk_attrs, pk_values)
         return and_(attr==value for attr, value in items)
-        return dict(items)
 
     def update(self, data):
         for key, value in data.iteritems():

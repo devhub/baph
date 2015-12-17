@@ -1,3 +1,4 @@
+from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
 
@@ -56,6 +57,31 @@ def load_engine(config):
         error_msg = "%r isn't a valid dialect/driver" % url
         raise ImproperlyConfigured(error_msg)
 
+def find_circular_dependencies(metadata):
+    dependencies = defaultdict(set)
+    fks = defaultdict(set)
+    rsp = defaultdict(set)
+
+    for t in metadata.sorted_tables:
+        for fk in t.foreign_key_constraints:
+            dependencies[t.name].add(fk.referred_table.name)
+            fks[(t.name, fk.referred_table.name)].add(fk)
+
+    def walk_graph(name, path=None):
+        if path is None:
+            path = []
+        for dependency in dependencies[name]:
+            if dependency in path:
+                #print "Circular dependency:","->".join(path+[dependency])
+                for fk in fks[(path[-1], dependency)]:
+                    rsp[fk.table].update(fk.column_keys)
+                continue
+            walk_graph(dependency,path+[dependency])
+
+    for name in dependencies.keys():
+        walk_graph(name)
+
+    return rsp
 
 class DatabaseWrapper(object):
     def __init__(self, settings_dict, alias=DEFAULT_DB_ALIAS):
@@ -89,6 +115,10 @@ class DatabaseWrapper(object):
         url = deepcopy(self.engine.url)
         url.database = None
         return create_engine(url)
+
+    @cached_property
+    def circular_dependencies(self):
+        return find_circular_dependencies(self.Base.metadata)
 
     @cached_property
     def supports_transactions(self):

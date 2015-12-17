@@ -34,14 +34,14 @@ class AutoSlugField(ColumnProperty):
         default_lookups = tuple(
             (key, getattr(instance, key))
             for key in self.unique_with)
-        ident = instance.pk_as_query_filters()
         index = 1
 
+        ident = instance.pk_as_query_filters(force=True)
         while True:
             filters = dict(default_lookups, **{self.key: slug})
             conflicts = session.query(type(instance)) \
                                .filter_by(**filters) \
-                               .filter(not_(instance.pk_as_query_filters())) \
+                               .filter(not_(ident)) \
                                .count()
             if not conflicts:
                 return slug

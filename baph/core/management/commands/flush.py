@@ -7,7 +7,7 @@ from django.core.management.color import no_style
 from django.utils.importlib import import_module
 
 from baph.core.management.base import NoArgsCommand, CommandError
-from baph.core.management.sql import emit_post_sync_signal #, sql_flush
+from baph.core.management.sql import emit_post_sync_signal
 from baph.db import ORM, DEFAULT_DB_ALIAS
 from baph.db.models import signals, get_apps, get_models
 
@@ -56,12 +56,13 @@ Are you sure you want to do this?
         if confirm == 'yes':
             session = orm.sessionmaker()
             try:
+                session.execute('set foreign_key_checks=0')
                 for table in reversed(Base.metadata.sorted_tables):
                     if table.info.get('preserve_during_flush', False):
                         continue
                     try:
                         session.execute(table.delete())
-                    except:
+                    except Exception as e:
                         # table not present
                         pass
                 session.commit()
@@ -69,6 +70,7 @@ Are you sure you want to do this?
                 session.rollback()
                 raise CommandError('Could not flush the database')
             finally:
+                session.execute('set foreign_key_checks=1')
                 session.close()
 
             # Emit the post sync signal. This allows individual

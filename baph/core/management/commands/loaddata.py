@@ -218,7 +218,12 @@ class Command(BaseCommand):
             session.flush()
 
             for cls, filters, update in updates:
-                session.query(cls).filter(filters).update(update)
+                # TODO: fix this, it is terrible, but sqla can't handle the
+                # "normal" update method when table inheritance is involved
+                # session.query(cls).filter(filters).update(update)
+                instance = session.query(cls).filter(filters)
+                for attr, value in update.items():
+                    setattr(instance, attr.key, value)
             session.commit()
         except:
             session.rollback()
