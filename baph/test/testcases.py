@@ -6,6 +6,7 @@ from django.conf import settings
 from django.core.management import call_command
 from django import test
 from sqlalchemy import create_engine
+from sqlalchemy.orm.session import Session
 
 from baph.db.orm import ORM
 from .signals import add_timing
@@ -62,8 +63,6 @@ class BaphFixtureMixin(object):
         call_command('loaddata', *fixtures, **params)
         if PRINT_TEST_TIMINGS:
             add_timing.send(None, key='loaddata', time=time.time()-start)
-        orm.sessionmaker().expunge_all()
-        cls.session.expunge_all()
 
     @classmethod
     def purge_fixtures(cls, *fixtures):
@@ -86,27 +85,46 @@ class BaphFixtureMixin(object):
         super(BaphFixtureMixin, cls).setUpClass()
         if PRINT_TEST_TIMINGS:
             add_timing.connect(cls.add_timing)
-        cls.session = orm.session_factory()
-        if hasattr(cls, 'persistent_fixtures'):
-            cls.load_fixtures(*cls.persistent_fixtures)
+
+        cls.connection = orm.engine.connect()
+        cls.session = Session(bind=cls.connection, autoflush=False)
+        orm.sessionmaker.registry.set(cls.session)
+        cls.savepoint = cls.connection.begin()
+        if hasattr(cls, 'fixtures'):
+            cls.load_fixtures(*cls.fixtures)
 
     @classmethod
     def tearDownClass(cls):
         super(BaphFixtureMixin, cls).tearDownClass()
-        cls.session.close()
-        if hasattr(cls, 'persistent_fixtures'):
-            cls.purge_fixtures(*cls.persistent_fixtures)
+        cls.savepoint.rollback()
+        cls.connection.close()
+
         if PRINT_TEST_TIMINGS:
             add_timing.disconnect(cls.add_timing)
         cls.test_end_time = time.time()
         if PRINT_TEST_TIMINGS:
             cls.print_timings()
 
+    def setUp(self):
+        super(BaphFixtureMixin, self).setUp()
+        self.savepoint2 = self.connection.begin_nested()
+        self.savepoint3 = self.connection.begin_nested()
+        self.backup_bind = orm.session_factory.kw['bind']
+        orm.session_factory.configure(bind=self.connection)
+
+    def tearDown(self):
+        orm.session_factory.configure(bind=self.backup_bind)
+        self.savepoint2.rollback()
+        self.session.close()
+        super(BaphFixtureMixin, self).tearDown()
+
     def _fixture_setup(self):
+        return
         if hasattr(self, 'fixtures'):
             self.load_fixtures(*self.fixtures)
 
     def _fixture_teardown(self):
+        return
         if hasattr(self, 'fixtures'):
             self.purge_fixtures(*self.fixtures)
 

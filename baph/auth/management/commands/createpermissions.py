@@ -35,5 +35,7 @@ class Command(NoArgsCommand):
             session.execute(Permission.__table__.delete())
             session.commit()
         
+        session = orm.sessionmaker()
         for app in get_apps():
             create_permissions(app, [], verbosity)
+        session.commit()

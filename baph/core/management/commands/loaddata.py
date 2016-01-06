@@ -112,8 +112,13 @@ class Command(BaseCommand):
         if has_bz2:
             self.compression_formats['bz2'] = bz2.BZ2File
 
+        session = orm.sessionmaker()
+        session.execute('SET FOREIGN_KEY_CHECKS=0')
         for fixture_label in fixture_labels:
             self.load_label(fixture_label)
+        session.commit()
+        session.execute('SET FOREIGN_KEY_CHECKS=1')
+
 
         # Since we disabled constraint checks, we must manually check for
         # any invalid keys that might have been added
@@ -212,7 +217,9 @@ class Command(BaseCommand):
                 raise CommandError(
                         "No fixture data found for '%s'. "
                         "(File format may be invalid.)" % fixture_name)
-
+        
+        session.flush()
+        '''
         try:
             updates = get_deferred_updates(session)
             session.flush()
@@ -230,6 +237,7 @@ class Command(BaseCommand):
             raise
         finally:
             session.close()
+        '''
 
     def _find_fixtures(self, fixture_label):
         """

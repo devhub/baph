@@ -83,6 +83,9 @@ def find_circular_dependencies(metadata):
 
     return rsp
 
+def scopefunc():
+    return 'single'
+
 class DatabaseWrapper(object):
     def __init__(self, settings_dict, alias=DEFAULT_DB_ALIAS):
         # `settings_dict` should be a dictionary containing keys such as
@@ -95,7 +98,7 @@ class DatabaseWrapper(object):
         self.Base = get_declarative_base(bind=self.engine)
         self.session_factory = sessionmaker(bind=self.engine)
         self.sessionmaker = scoped_session(sessionmaker(
-            bind=self.engine, autoflush=False))
+            bind=self.engine, autoflush=False), scopefunc=scopefunc)
 
     def __eq__(self, other):
         return self.alias == other.alias

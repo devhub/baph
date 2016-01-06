@@ -286,7 +286,7 @@ class AbstractBaseUser(Base, UserPermissionMixin):
         user.set_password(password)
         session = orm.sessionmaker()
         session.add(user)
-        session.commit()
+        session.flush()
         return user
 
     @classmethod
