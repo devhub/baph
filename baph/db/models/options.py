@@ -114,9 +114,16 @@ class Options(object):
         self.auto_created = False
         self.required_fields = None
 
+    @property
+    def db_table(self):
+        if self.model.__table__.schema is None:
+            return self.model.__tablename__
+        return '%s.%s' % (self.model.__table__.schema, self.model.__tablename__)
+
     def contribute_to_class(self, cls, name):
         cls._meta = self
         self.model = cls
+
         # First, construct the default values for these options.
         self.object_name = cls.__name__
         self.model_name = self.object_name.lower()
