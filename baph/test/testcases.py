@@ -4,9 +4,12 @@ import time
 
 from django.conf import settings
 from django.core.management import call_command
+from django.db import DEFAULT_DB_ALIAS, connections, transaction
 from django import test
+from django.test.testcases import connections_support_transactions
 from sqlalchemy import create_engine
 from sqlalchemy.orm.session import Session
+from sqlalchemy.orm import sessionmaker
 
 from baph.db.orm import ORM
 from .signals import add_timing
@@ -14,6 +17,7 @@ from .signals import add_timing
 
 PRINT_TEST_TIMINGS = getattr(settings, 'PRINT_TEST_TIMINGS', False)
 
+#Session = sessionmaker()
 orm = ORM.get()
 
 class BaphFixtureMixin(object):
@@ -22,6 +26,175 @@ class BaphFixtureMixin(object):
     test_end_time = None
     tests_run = 0
     timings = None
+
+    '''
+    @classmethod
+    def _databases_names(cls, include_mirrors=True):
+        # If the test case has a multi_db=True flag, act on all databases,
+        # including mirrors or not. Otherwise, just on the default DB.
+        if getattr(cls, 'multi_db', False):
+            return [alias for alias in connections
+                    if include_mirrors or not connections[alias].settings_dict['TEST']['MIRROR']]
+        else:
+            return [DEFAULT_DB_ALIAS]
+
+    @classmethod
+    def _enter_atomics(cls):
+        """Helper method to open atomic blocks for multiple databases"""
+        print '    _enter atomics', cls
+        atomics = {}
+        for db_name in cls._databases_names():
+            atomics[db_name] = transaction.atomic(using=db_name)
+            atomics[db_name].__enter__()
+        return atomics
+
+    @classmethod
+    def _rollback_atomics(cls, atomics):
+        """Rollback atomic blocks opened through the previous method"""
+        print '    _rollback atomics', cls
+        for db_name in reversed(cls._databases_names()):
+            transaction.set_rollback(True, using=db_name)
+            atomics[db_name].__exit__(None, None, None)
+
+    def _should_reload_connections(self):
+        return False
+
+    def _pre_setup(self):
+        print '\npre setup', connections['default'].connection
+        """Performs any pre-test setup. This includes:
+        * If the class has an 'available_apps' attribute, restricting the app
+          registry to these applications, then firing post_migrate -- it must
+          run with the correct set of applications for the test case.
+        * If the class has a 'fixtures' attribute, installing these fixtures.
+        """
+        #print 'pre super setup'
+        #super(BaphFixtureMixin, self)._pre_setup()
+        #print 'post super setup'
+        if self.available_apps is not None:
+            apps.set_available_apps(self.available_apps)
+            setting_changed.send(sender=settings._wrapped.__class__,
+                                 setting='INSTALLED_APPS',
+                                 value=self.available_apps,
+                                 enter=True)
+            for db_name in self._databases_names(include_mirrors=False):
+                emit_post_migrate_signal(verbosity=0, interactive=False, db=db_name)
+        try:
+            self._fixture_setup()
+        except Exception:
+            if self.available_apps is not None:
+                apps.unset_available_apps()
+                setting_changed.send(sender=settings._wrapped.__class__,
+                                     setting='INSTALLED_APPS',
+                                     value=settings.INSTALLED_APPS,
+                                     enter=False)
+
+            raise
+
+    def _post_teardown(self):
+        """Performs any post-test things. This includes:
+        * Flushing the contents of the database, to leave a clean slate. If
+          the class has an 'available_apps' attribute, post_migrate isn't fired.
+        * Force-closing the connection, so the next test gets a clean cursor.
+        """
+        print '\npost teardown', connections['default'].connection
+        try:
+            self._fixture_teardown()
+            #super(BaphFixtureMixin, self)._post_teardown()
+            if self._should_reload_connections():
+                # Some DB cursors include SQL statements as part of cursor
+                # creation. If you have a test that does a rollback, the effect
+                # of these statements is lost, which can affect the operation of
+                # tests (e.g., losing a timezone setting causing objects to be
+                # created with the wrong time). To make sure this doesn't
+                # happen, get a clean connection at the start of every test.
+                for conn in connections.all():
+                    print 'closing:', conn
+                    conn.close()
+        finally:
+            if self.available_apps is not None:
+                apps.unset_available_apps()
+                setting_changed.send(sender=settings._wrapped.__class__,
+                                     setting='INSTALLED_APPS',
+                                     value=settings.INSTALLED_APPS,
+                                     enter=False)
+
+    @classmethod
+    def setUpClass(cls):
+        print 'setupclass start', cls
+        #super(BaphFixtureMixin, cls).setUpClass()
+        cls.test_start_time = time.time()
+        cls.timings = defaultdict(list)
+        if PRINT_TEST_TIMINGS:
+            add_timing.connect(cls.add_timing)
+
+        if not connections_support_transactions():
+            return
+        print '  enter atomics'
+        cls.cls_atomics = cls._enter_atomics()
+        print '  enter atomics done'
+
+        if cls.fixtures:
+            for db_name in cls._databases_names(include_mirrors=False):
+                print 'loaddata start', db_name
+                try:
+                    call_command('loaddata', *cls.fixtures, **{
+                        'verbosity': 0,
+                        'commit': False,
+                        'database': db_name,
+                    })
+                    print 'loaddata end', db_name
+                except Exception as e:
+                    print 'loaddata failed', db_name
+                    cls._rollback_atomics(cls.cls_atomics)
+                    raise
+
+        try:
+            cls.setUpTestData()
+        except Exception:
+            cls._rollback_atomics(cls.cls_atomics)
+            raise
+
+    @classmethod
+    def tearDownClass(cls):
+        print 'teardownclass', cls
+        if connections_support_transactions():
+            cls._rollback_atomics(cls.cls_atomics)
+            for conn in connections.all():
+                conn.close()
+        #super(BaphFixtureMixin, cls).tearDownClass()
+        if PRINT_TEST_TIMINGS:
+            add_timing.disconnect(cls.add_timing)
+        cls.test_end_time = time.time()
+        if PRINT_TEST_TIMINGS:
+            cls.print_timings()
+
+    @classmethod
+    def setUpTestData(cls):
+        """Load initial data for the TestCase"""
+        pass
+
+    def _fixture_setup(self):
+        if not connections_support_transactions():
+            self.setUpTestData()
+            if hasattr(self, 'fixtures'):
+                self.load_fixtures(*self.fixtures)
+            #return super(BaphFixtureMixin, self)._fixture_setup()
+
+        assert not self.reset_sequences, \
+            'reset_sequences cannot be used on TestCase instances'
+        self.atomics = self._enter_atomics()
+        #if hasattr(self, 'fixtures'):
+        #    self.load_fixtures(*self.fixtures)
+
+    def _fixture_teardown(self):
+        if not connections_support_transactions():
+            if hasattr(self, 'fixtures'):
+                self.purge_fixtures(*self.fixtures)
+            #return super(BaphFixtureMixin, self)._fixture_teardown()
+        self._rollback_atomics(self.atomics)
+        #if hasattr(self, 'fixtures'):
+        #    self.purge_fixtures(*self.fixtures)
+    '''
 
     @classmethod
     def add_timing(cls, sender, key, time, **kwargs):
@@ -66,9 +239,6 @@ class BaphFixtureMixin(object):
 
     @classmethod
     def purge_fixtures(cls, *fixtures):
-        orm.sessionmaker().expunge_all()
-        cls.session.expunge_all()
-        cls.session.rollback()
         params = {
             'verbosity': 0,
             'interactive': False,

@@ -5,7 +5,7 @@ import unicodedata
 
 from django.core import exceptions
 from django.core.management.base import CommandError
-from django.db import DEFAULT_DB_ALIAS, router
+from django.db import DEFAULT_DB_ALIAS, router, connections
 from django.utils.encoding import DEFAULT_LOCALE_ENCODING
 #from django.utils import six
 #from django.utils.six.moves import input
@@ -125,7 +125,7 @@ def create_permissions(app, created_models, verbosity, db=DEFAULT_DB_ALIAS,
 
     if not ctypes:
         return
-
+    #connection = connections[db]
     session = orm.sessionmaker()
 
     all_perms = session.query(Permission.codename) \

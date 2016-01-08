@@ -1,9 +1,11 @@
+from __future__ import absolute_import
 from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.db import connections
 from django.utils.functional import cached_property
 from sqlalchemy import create_engine
 from sqlalchemy.engine.url import URL
@@ -98,7 +100,53 @@ class DatabaseWrapper(object):
         self.Base = get_declarative_base(bind=self.engine)
         self.session_factory = sessionmaker(bind=self.engine)
         self.sessionmaker = scoped_session(sessionmaker(
-            bind=self.engine, autoflush=False), scopefunc=scopefunc)
+            bind=self.engine, autoflush=False))
+        # TODO: uncomment line below once transactional tests are ready
+        #    bind=self.engine, autoflush=False), scopefunc=scopefunc)
+    '''
+        self._connection = None
+        #self.session_factory = sessionmaker(bind=self.engine)
+        #self.sessionmaker = scoped_session(sessionmaker(
+        #    bind=self.engine, autoflush=False))
+        self._sessionmaker = None
+        self._session_factory = None
+
+    @property
+    def connection(self):
+        print 'orm.connection called'
+        if self._connection is None:
+            print '  init'
+            #if connections[self.alias].connection is None:
+            #    connections[self.alias].connect()
+            self._connection = connections[self.alias].connection
+            #self._connection = self.engine.connect()
+        print 'returning ', self._connection
+        return self._connection
+
+    @property
+    def sessionmaker(self):
+        connection = connections[self.alias]
+        return connection.sessionmaker
+        print 'orm.sessionmaker called'
+        print connection
+        #assert False
+        if self._sessionmaker is None:
+            print '  init'
+            self._sessionmaker = scoped_session(sessionmaker(
+                bind=self.connection, autoflush=False))
+        print 'returning ', self._sessionmaker
+        print '  bind:', self._sessionmaker.bind
+        return self._sessionmaker
+
+    @property
+    def session_factory(self):
+        connection = connections[self.alias]
+        return connection.session_factory
+        if self._session_factory is None:
+            self._session_factory = sessionmaker(
+                bind=self.connection)
+        return self._session_factory
+    '''
 
     def __eq__(self, other):
         return self.alias == other.alias

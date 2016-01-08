@@ -65,13 +65,13 @@ Are you sure you want to do this?
                     except Exception as e:
                         # table not present
                         pass
-                session.commit()
+                session.flush()
             except Exception, e:
                 session.rollback()
                 raise CommandError('Could not flush the database')
             finally:
                 session.execute('set foreign_key_checks=1')
-                session.close()
+                session.commit()
 
             # Emit the post sync signal. This allows individual
             # applications to respond as if the database had been

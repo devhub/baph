@@ -252,9 +252,12 @@ class BaseCommand(object):
             sys.exit(1)
         finally:
             orm = ORM.get()
-            session = orm.sessionmaker()
-            session.rollback()
-            session.close()
+            try:
+                session = orm.sessionmaker()
+                session.rollback()
+                session.close()
+            except:
+                pass
 
     def execute(self, *args, **options):
         """
