@@ -255,26 +255,34 @@ class BaphFixtureMixin(object):
         super(BaphFixtureMixin, cls).setUpClass()
         if PRINT_TEST_TIMINGS:
             add_timing.connect(cls.add_timing)
-
+        cls.session = orm.session_factory()
+        if hasattr(cls, 'persistent_fixtures'):
+            cls.load_fixtures(*cls.persistent_fixtures)
+        '''
         cls.connection = orm.engine.connect()
         cls.session = Session(bind=cls.connection, autoflush=False)
         orm.sessionmaker.registry.set(cls.session)
         cls.savepoint = cls.connection.begin()
         if hasattr(cls, 'fixtures'):
             cls.load_fixtures(*cls.fixtures)
+        '''
 
     @classmethod
     def tearDownClass(cls):
         super(BaphFixtureMixin, cls).tearDownClass()
+        cls.session.close()
+        '''
         cls.savepoint.rollback()
         cls.connection.close()
-
+        '''
+        if hasattr(cls, 'persistent_fixtures'):
+            cls.purge_fixtures(*cls.persistent_fixtures)
         if PRINT_TEST_TIMINGS:
             add_timing.disconnect(cls.add_timing)
         cls.test_end_time = time.time()
         if PRINT_TEST_TIMINGS:
             cls.print_timings()
-
+    '''
     def setUp(self):
         super(BaphFixtureMixin, self).setUp()
         self.savepoint2 = self.connection.begin_nested()
@@ -287,14 +295,12 @@ class BaphFixtureMixin(object):
         self.savepoint2.rollback()
         self.session.close()
         super(BaphFixtureMixin, self).tearDown()
-
+    '''
     def _fixture_setup(self):
-        return
         if hasattr(self, 'fixtures'):
             self.load_fixtures(*self.fixtures)
 
     def _fixture_teardown(self):
-        return
         if hasattr(self, 'fixtures'):
             self.purge_fixtures(*self.fixtures)
 
