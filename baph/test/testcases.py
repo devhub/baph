@@ -304,6 +304,29 @@ class BaphFixtureMixin(object):
         if hasattr(self, 'fixtures'):
             self.purge_fixtures(*self.fixtures)
 
+    def assertItemsOrderedBy(self, items, field):
+        if not items:
+            # no items, no ordering to check
+            return
+        if isinstance(items[0], dict):
+            key = lambda x: x[field]
+        else:
+            key = lambda x: getattr(x, field)
+        ordered = sorted(items, key=key)
+        self.assertEqual(items, ordered)
+
+    def assertItemsReverseOrderedBy(self, items, field):
+        if not items:
+            # no items, no ordering to check
+            return
+        if isinstance(items[0], dict):
+            key = lambda x: x[field]
+        else:
+            key = lambda x: getattr(x, field)
+        ordered = sorted(items, key=key)[::-1]
+        self.assertEqual(items, ordered)
+
+
 class MemcacheMixin(object):
 
     def populate_cache(self, objs=[]):
