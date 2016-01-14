@@ -165,6 +165,17 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
             session.delete(self)
             session.commit()
 
+    def dictify(self, value):
+        " takes a value, and converts any contained instances into dicts "
+        if hasattr(value, 'to_dict'):
+            return value.to_dict()
+        elif isinstance(value, list):
+            return [self.dictify(v) for v in value]
+        elif isinstance(value, dict):
+            return {k:self.dictify(v) for k,v in value.items()}
+        else:
+            return value
+
     def to_dict(self):
         '''Creates a dictionary out of the column properties of the object.
         This is needed because it's sometimes not possible to just use
@@ -175,12 +186,12 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
         __dict__ = dict([(key, val) for key, val in self.__dict__.iteritems()
                          if not key.startswith('_sa_')])
         if len(__dict__) == 0:
-            for attr in inspect(type(self)).all_orm_descriptors:
-                if not hasattr(attr, 'property'):
-                    continue
-                if not isinstance(attr.property, ColumnProperty):
-                    continue
+            for attr in inspect(type(self)).column_attrs:
                 __dict__[attr.key] = getattr(self, attr.key)
+
+        for key in self._meta.extra_dict_props:
+            value = getattr(self, key)
+            __dict__[key] = self.dictify(value)
         return __dict__
 
     @property

@@ -30,7 +30,7 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
                  'permission_limiters', 'permission_terminator',
                  'permission_handler', 'permission_resources',
                  'global_column', 'global_cascades', 'global_parents',
-                 'latlon_field_names',
+                 'latlon_field_names', 'extra_dict_props',
                  )
 
 class Options(object):
@@ -113,6 +113,10 @@ class Options(object):
         self.swappable = None
         self.auto_created = False
         self.required_fields = None
+
+        # extra_dict_props contains names of additional properties
+        # to be added to the output of instance.to_dict()
+        self.extra_dict_props = []
 
     @property
     def db_table(self):
