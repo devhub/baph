@@ -441,6 +441,7 @@ class OAuthConsumer(Base):
 class OAuthNonce(Base):
     __tablename__ = 'auth_oauth_nonce'
     id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, nullable=False, default=datetime.now)
     token_key = Column(String(32))
     consumer_key = Column(String(MAX_KEY_LEN))
     key = Column(String(255), nullable=False, unique=True)
