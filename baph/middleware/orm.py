@@ -20,13 +20,13 @@ class SQLAlchemyMiddleware(object):
 
     def process_response(self, request, response):
         if hasattr(request, 'orm'):
-            request.orm.sessionmaker.remove()
-            request.orm.sessionmaker.close()
+            session = request.orm.sessionmaker()
+            session.close()
         return response
 
     def process_exception(self, request, exception):
         if hasattr(request, 'orm'):
-            request.orm.sessionmaker.rollback()
-            request.orm.sessionmaker.remove()
-            request.orm.sessionmaker.close()
+            session = request.orm.sessionmaker()
+            session.rollback()
+            session.close()
         return None
