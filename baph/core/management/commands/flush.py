@@ -55,6 +55,7 @@ Are you sure you want to do this?
 
         if confirm == 'yes':
             session = orm.sessionmaker()
+            session.expunge_all()
             try:
                 session.execute('set foreign_key_checks=0')
                 for table in reversed(Base.metadata.sorted_tables):
@@ -66,7 +67,7 @@ Are you sure you want to do this?
                         # table not present
                         pass
                 session.flush()
-            except Exception, e:
+            except Exception as e:
                 session.rollback()
                 raise CommandError('Could not flush the database')
             finally:

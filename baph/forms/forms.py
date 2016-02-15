@@ -30,6 +30,7 @@ FIELD_MAP = {
     types.Json:     fields.JsonField,
     types.List:     fields.ListField,
     types.Dict:     fields.DictField,
+    types.Email:    forms.EmailField,
     'collection':   fields.MultiObjectField,
     'object':       fields.ObjectField,
     }

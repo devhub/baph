@@ -22,6 +22,9 @@ from sqlalchemy.databases import mysql, postgresql
 from sqlalchemy.ext.mutable import Mutable
 
 
+class Email(types.TypeDecorator):
+    impl = types.Unicode
+
 class UUID(types.TypeDecorator):
     '''Generic UUID column type for SQLAlchemy. Includes native support for
     PostgreSQL and a MySQL-specific implementation, in addition to the
