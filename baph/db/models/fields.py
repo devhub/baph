@@ -16,6 +16,7 @@ from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 
 from baph.db import types
 from baph.forms import fields
+from baph.utils.collections import duck_type_collection
 
 
 class NOT_PROVIDED:
@@ -201,10 +202,12 @@ class Field(object):
         kwargs = {'name': attr.key}
         prop = attr.property
         data_type = get_related_class_from_attr(attr)
-        collection_class = prop.collection_class
-        collection_class = normalize_collection_class(collection_class)
-        if not collection_class and prop.uselist:
+        if prop.collection_class:
+            collection_class = duck_type_collection(prop.collection_class)
+        elif prop.uselist:
             collection_class = list
+        else:
+            collection_class = None
 
         kwargs['data_type'] = data_type
         kwargs['uselist'] = prop.uselist
@@ -218,11 +221,13 @@ class Field(object):
     def field_kwargs_from_proxy(cls, key, attr, model):
         proxy = getattr(model, key)
         kwargs = cls.field_kwargs_from_attr(key, attr.remote_attr, model)
-
-        collection_class = attr.local_attr.property.collection_class
-        collection_class = normalize_collection_class(collection_class)
-        if not collection_class and attr.local_attr.property.uselist:
+        prop = attr.local_attr.property
+        if prop.collection_class:
+            collection_class = duck_type_collection(prop.collection_class)
+        elif prop.uselist:
             collection_class = list
+        else:
+            collection_class = None
 
         collections = kwargs.get('collection_class', [])
         if collection_class:

@@ -8,6 +8,24 @@ from django.core import validators
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.translation import ugettext_lazy as _
 
+from baph.utils.collections import duck_type_collection
+
+
+def coerce_to_list(value):
+    " forces value into list form "
+    if isinstance(value, list):
+        # we're all good here
+        return value
+    if isinstance(value, tuple):
+        # cast to list
+        return list(value)
+    if isinstance(value, dict):
+        # this has no ordering, so will probably break things
+        return value.items()
+    if isinstance(value, set):
+        # this has no ordering, so will probably break things
+        return list(value)
+    return [value]
 
 class NullCharField(forms.CharField):
     " CharField that does not cast None to '' "
@@ -25,8 +43,12 @@ class MultiObjectField(forms.Field):
     """
     def __init__(self, related_class=None, collection_class=None, **kwargs):
         self.related_class = related_class
+        if collection_class:
+            # this needs to be a list
+            collection_class = coerce_to_list(collection_class)
         self.collection_class = collection_class
         super(MultiObjectField, self).__init__(**kwargs)
+        #print dir(self)
 
     def validate_collection(self, data, collection_class=None):
         if collection_class is None:
@@ -38,19 +60,16 @@ class MultiObjectField(forms.Field):
                 raise forms.ValidationError(
                     _('Expected %s, got %s') % (self.related_class, type(data)))
             return
-        c_cls = collection_class.pop(0)
-        if c_cls == dict:
-            if not isinstance(data, dict):
-                raise forms.ValidationError(
-                    _('Expected dict, got %s') % type(data))
-            for k,v in data.items():
-                self.validate_collection(v, collection_class)
-        elif c_cls == list:
-            if not isinstance(data, list):
-                raise forms.ValidationError(
-                    _('Expected list, got %s') % type(data))
-            for v in data:
-                self.validate_collection(v, collection_class)
+
+        expected_class = collection_class.pop(0)
+        found_class = duck_type_collection(data)
+        if found_class != expected_class:
+            raise forms.ValidationError(
+                _('Expected %s, got %s') % (expected_class, found_class))
+
+        values = data.itervalues() if isinstance(data, dict) else iter(data)
+        for v in values:
+            self.validate_collection(v, collection_class)
 
     def to_python(self, value):
         from baph.db.orm import Base
@@ -68,16 +87,15 @@ class ObjectField(forms.Field):
         self.related_class = related_class
         super(ObjectField, self).__init__(**kwargs)
 
-
     def to_python(self, value):
-        from baph.db.orm import Base
         if value in validators.EMPTY_VALUES:
             return None
         if not isinstance(value, self.related_class):
             raise forms.ValidationError(
                 _(u'Provided data did not hydrate to an object'))        
+        return value
 
-class JsonField(forms.Field):
+class JsonField(forms.CharField):
 
     def to_python(self, value):
         if value in validators.EMPTY_VALUES:

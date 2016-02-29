@@ -12,8 +12,7 @@ from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta, declar
 from sqlalchemy.ext.declarative.base import (_as_declarative, _add_attribute)
 from sqlalchemy.ext.declarative.clsregistry import add_class
 from sqlalchemy.ext.hybrid import HYBRID_PROPERTY, HYBRID_METHOD
-from sqlalchemy.orm import mapper, object_session, class_mapper
-from sqlalchemy.orm.attributes import instance_dict, instance_state
+from sqlalchemy.orm import mapper, object_session, class_mapper, attributes
 from sqlalchemy.orm.interfaces import MANYTOONE
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.session import Session
@@ -218,6 +217,17 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
     def before_flush(self, session, add):
         " the public hook for instance preprocessing before a flush event "
         pass
+
+    @property
+    def updated_fields(self):
+        " returns a list of fields that have been modified "
+        changed = []
+        insp = inspect(type(self))
+        for attr in insp.column_attrs:
+            history = attributes.get_history(self, attr.key)
+            if bool(history.added) and bool(history.deleted):
+                changed.append(attr.key)
+        return changed
 
 @event.listens_for(Session, 'before_flush')
 def before_flush(session, flush_context, instances):

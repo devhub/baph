@@ -13,10 +13,23 @@
 
 from __future__ import absolute_import
 
-from .importing import import_any_attr
-from collections import defaultdict
-OrderedDict = import_any_attr(['collections', 'ordereddict'], 'OrderedDict')
+from collections import defaultdict, OrderedDict
 
+from sqlalchemy.ext.associationproxy import (
+    _AssociationList, _AssociationDict, _AssociationSet)
+from sqlalchemy.util import duck_type_collection as sqla_duck_type_collection
+
+
+def duck_type_collection(specimen, default=None):
+    " does the same thing as the sqla function, but handles proxy dict "
+    guess = sqla_duck_type_collection(specimen, default=None)
+    if guess is not None:
+        return guess
+
+    isa = isinstance(specimen, type) and issubclass or isinstance
+    if isa(specimen, _AssociationDict):
+        return dict
+    return default
 
 class OrderedDefaultDict(defaultdict, OrderedDict):
     '''A :class:`dict` subclass with the characteristics of both
@@ -51,3 +64,12 @@ class LazyDict(dict):
         if not self.initialized:
             self.populate()
         return dict.get(self, key, default)
+
+if __name__ == '__main__':
+    items = [
+        _AssociationList,
+        _AssociationDict,
+        _AssociationSet,
+    ]
+    for item in items:
+        print (sqla_duck_type_collection(item), duck_type_collection(item))
