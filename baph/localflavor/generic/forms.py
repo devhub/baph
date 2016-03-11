@@ -29,16 +29,24 @@ COUNTRY_DIVISIONS = {
     'province': ['ar', 'be', 'ca', 'es', 'nl', 'za'],
     'state': ['at', 'au', 'br', 'ch', 'de', 'in_', 'mx', 'us'],
     'department': ['co'],
+    'generic': ['bo', 'cl', 'cr', 'do', 'ec', 'gt', 'ni', 'pa', 'py',
+                'pe', 'sv', 'uy'],
     }
 COUNTRY_STATES = COUNTRY_DIVISIONS['state']
 COUNTRY_PROVINCES = COUNTRY_DIVISIONS['province']
 
 
-def _get_country_divisions(country, div_type, key_by_code=False):
+def _get_country_divisions(country, div_type, key_by_code=False, depth=0):
     c2 = country if not country.endswith('_') else country.rstrip('_')
-    mod_name = 'localflavor.%s.%s_%ss' % (country, c2, div_type)
-    module = import_module(mod_name)
-    choices = getattr(module, '%s_CHOICES' % div_type.upper(), [])
+    if div_type == 'generic':
+        mod_name = 'baph.localflavor.generic.data.%s.subdivisions' % country
+        module = import_module(mod_name)
+        subdivision_type = module.SUBDIVISIONS[depth]
+        choices = getattr(module, subdivision_type, [])
+    else:
+        mod_name = 'localflavor.%s.%s_%ss' % (country, c2, div_type)
+        module = import_module(mod_name)
+        choices = getattr(module, '%s_CHOICES' % div_type.upper(), [])
     items = [(k, k if key_by_code else v) for k, v in choices]
     return (c2.upper(), items)
 

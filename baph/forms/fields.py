@@ -48,7 +48,6 @@ class MultiObjectField(forms.Field):
             collection_class = coerce_to_list(collection_class)
         self.collection_class = collection_class
         super(MultiObjectField, self).__init__(**kwargs)
-        #print dir(self)
 
     def validate_collection(self, data, collection_class=None):
         if collection_class is None:
