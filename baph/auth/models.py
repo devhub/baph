@@ -389,6 +389,7 @@ class UserGroup(Base):
     group_id = Column(Integer, ForeignKey(Group.id), nullable=False)
     key = Column(String(32), default='')
     value = Column(String(32), default='')
+    deny = Column(Boolean, default=False)
 
     user = relationship(User, backref=backref('groups',
         cascade='all, delete-orphan'))
