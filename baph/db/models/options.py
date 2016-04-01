@@ -244,15 +244,18 @@ class Options(object):
         cache = []
         if not self.model.__mapper__.configured:
             configure_mappers()
-        for key, attr in inspect(self.model).all_orm_descriptors.items():
-            if attr.is_mapper:
-                continue
-            elif attr.extension_type == HYBRID_METHOD:
-                continue
-            elif attr.extension_type == HYBRID_PROPERTY:
-                continue
-            field = Field.field_from_attr(key, attr, self.model)
+        insp = inspect(self.model)
+
+        for prop in insp.column_attrs + insp.relationships:
+            attr = prop.class_attribute
+            field = Field.field_from_attr(attr.key, attr, self.model)
             cache.append((field, None))
+
+        for key, attr in insp.all_orm_descriptors.items():
+            if attr.extension_type == ASSOCIATION_PROXY:
+                attr = getattr(self.model, key)
+                field = Field.field_from_attr(key, attr, self.model)
+                cache.append((field, None))
         self._field_cache = tuple(cache)
         self._field_name_cache = [x for x, _ in cache]
 

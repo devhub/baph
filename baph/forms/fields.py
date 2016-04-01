@@ -46,6 +46,8 @@ class MultiObjectField(forms.Field):
         if collection_class:
             # this needs to be a list
             collection_class = coerce_to_list(collection_class)
+        else:
+            collection_class = [list]
         self.collection_class = collection_class
         super(MultiObjectField, self).__init__(**kwargs)
 
