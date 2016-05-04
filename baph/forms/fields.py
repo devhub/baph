@@ -101,6 +101,14 @@ class JsonField(forms.CharField):
     def to_python(self, value):
         if value in validators.EMPTY_VALUES:
             return None
+        if self.max_length:
+            if isinstance(value, basestring):
+                check = value
+            else:
+                check = json.dumps(value)
+            if len(check) > self.max_length:
+                raise forms.ValidationError(_('Max length for this field is '
+                    '%s bytes') % self.max_length)
         if isinstance(value, basestring):
             try:
                 value = json.loads(value)
