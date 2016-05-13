@@ -281,7 +281,8 @@ class SQLAModelForm(BaseSQLAModelForm):
             .filter_by(**kwargs) \
             .first()
 
-        if instance and identity_key(instance) != identity_key(self.instance):
+        if instance and identity_key(instance=instance) \
+                    != identity_key(instance=self.instance):
             # this value is already in use
             raise forms.ValidationError(_('This value is already in use'))
         return value
@@ -314,7 +315,8 @@ class SQLAModelForm(BaseSQLAModelForm):
             .filter_by(**kwargs) \
             .first()
 
-        if instance and identity_key(instance) != identity_key(self.instance):
+        if instance and identity_key(instance=instance) \
+                    != identity_key(instance=self.instance):
             # this value is already in use
             raise forms.ValidationError(_('This value is already in use'))
         return value
