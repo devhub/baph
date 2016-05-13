@@ -267,47 +267,13 @@ class SQLAModelForm(BaseSQLAModelForm):
 
         model = self._meta.model
         mapper = inspect(model)
-        base_mapper = mapper.base_mapper
-
-        # if all filter keys exist on the base class, query the base class
-        # if the base class is missing any properties, query the polymorphic
-        # subclass explicitly
-        if all(map(base_mapper.has_property, filters.keys())):
-            model = base_mapper.class_
-
-        session = orm.sessionmaker()
-        instance = session.query(self._meta.model) \
-            .filter_by(**filters) \
-            .filter_by(**kwargs) \
-            .first()
-
-        if instance and identity_key(instance=instance) \
-                    != identity_key(instance=self.instance):
-            # this value is already in use
-            raise forms.ValidationError(_('This value is already in use'))
-        return value
-
-    def clean_org_unique_field(self, key, **kwargs):
-        orm = ORM.get()
-        org_key = Organization._meta.model_name + '_id'
-        value = self.cleaned_data[key]
-        if value is None:
-            return value
-        filters = {
-            org_key: Organization.get_current_id(),
-            key: value,
-            }
-        filters.update(kwargs)
-
-        model = self._meta.model
-        mapper = inspect(model)
-        base_mapper = mapper.base_mapper
-
-        # if all filter keys exist on the base class, query the base class
-        # if the base class is missing any properties, query the polymorphic
-        # subclass explicitly
-        if all(map(base_mapper.has_property, filters.keys())):
-            model = base_mapper.class_
+        if mapper.polymorphic_on is not None:
+            mapper = mapper.base_mapper
+            # if all filter keys exist on the base mapper, query the base class
+            # if the base class is missing any properties, query the 
+            # polymorphic subclass explicitly
+            if all(map(mapper.has_property, filters.keys())):
+                model = mapper.class_
 
         session = orm.sessionmaker()
         instance = session.query(model) \
@@ -320,6 +286,11 @@ class SQLAModelForm(BaseSQLAModelForm):
             # this value is already in use
             raise forms.ValidationError(_('This value is already in use'))
         return value
+
+    def clean_org_unique_field(self, key, **kwargs):
+        org_key = Organization._meta.model_name + '_id'
+        kwargs[org_key] = Organization.get_current_id()
+        return self.clean_unique_field(key, **kwargs)
 
 def modelform_factory(model, form=SQLAModelForm, fields=None, exclude=None,
                       formfield_callback=None, widgets=None, localized_fields=None,
