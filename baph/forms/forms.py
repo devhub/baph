@@ -264,12 +264,24 @@ class SQLAModelForm(BaseSQLAModelForm):
             key: value,
             }
         filters.update(kwargs)
+
+        model = self._meta.model
+        mapper = inspect(model)
+        base_mapper = mapper.base_mapper
+
+        # if all filter keys exist on the base class, query the base class
+        # if the base class is missing any properties, query the polymorphic
+        # subclass explicitly
+        if all(map(base_mapper.has_property, filters.keys())):
+            model = base_mapper.class_
+
         session = orm.sessionmaker()
         instance = session.query(self._meta.model) \
             .filter_by(**filters) \
             .filter_by(**kwargs) \
             .first()
-        if instance and instance != self.instance:
+
+        if instance and identity_key(instance) != identity_key(self.instance):
             # this value is already in use
             raise forms.ValidationError(_('This value is already in use'))
         return value
@@ -286,13 +298,23 @@ class SQLAModelForm(BaseSQLAModelForm):
             }
         filters.update(kwargs)
 
+        model = self._meta.model
+        mapper = inspect(model)
+        base_mapper = mapper.base_mapper
+
+        # if all filter keys exist on the base class, query the base class
+        # if the base class is missing any properties, query the polymorphic
+        # subclass explicitly
+        if all(map(base_mapper.has_property, filters.keys())):
+            model = base_mapper.class_
+
         session = orm.sessionmaker()
-        instance = session.query(self._meta.model) \
+        instance = session.query(model) \
             .filter_by(**filters) \
             .filter_by(**kwargs) \
             .first()
 
-        if instance and instance != self.instance:
+        if instance and identity_key(instance) != identity_key(self.instance):
             # this value is already in use
             raise forms.ValidationError(_('This value is already in use'))
         return value
