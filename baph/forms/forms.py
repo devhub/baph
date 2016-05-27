@@ -135,8 +135,15 @@ def fields_for_model(model, fields=None, exclude=None, widgets=None,
 
         if f.nullable or f.blank:
             kwargs['required'] = False
+        elif f.default is not None:
+            kwargs['required'] = False
+        else:
+            kwargs['required'] = True
+
         if f.max_length and 'collection_class' not in kwargs:
             kwargs['max_length'] = f.max_length
+        if f.content_length_func:
+            kwargs['content_length_func'] = f.content_length_func
 
         if formfield_callback is None:
             formfield = f.formfield(**kwargs)
@@ -264,38 +271,33 @@ class SQLAModelForm(BaseSQLAModelForm):
             key: value,
             }
         filters.update(kwargs)
+
+        model = self._meta.model
+        mapper = inspect(model)
+        if mapper.polymorphic_on is not None:
+            mapper = mapper.base_mapper
+            # if all filter keys exist on the base mapper, query the base class
+            # if the base class is missing any properties, query the 
+            # polymorphic subclass explicitly
+            if all(map(mapper.has_property, filters.keys())):
+                model = mapper.class_
+
         session = orm.sessionmaker()
-        instance = session.query(self._meta.model) \
+        instance = session.query(model) \
             .filter_by(**filters) \
             .filter_by(**kwargs) \
             .first()
-        if instance and instance != self.instance:
+
+        if instance and identity_key(instance=instance) \
+                    != identity_key(instance=self.instance):
             # this value is already in use
             raise forms.ValidationError(_('This value is already in use'))
         return value
 
     def clean_org_unique_field(self, key, **kwargs):
-        orm = ORM.get()
         org_key = Organization._meta.model_name + '_id'
-        value = self.cleaned_data[key]
-        if value is None:
-            return value
-        filters = {
-            org_key: Organization.get_current_id(),
-            key: value,
-            }
-        filters.update(kwargs)
-
-        session = orm.sessionmaker()
-        instance = session.query(self._meta.model) \
-            .filter_by(**filters) \
-            .filter_by(**kwargs) \
-            .first()
-
-        if instance and instance != self.instance:
-            # this value is already in use
-            raise forms.ValidationError(_('This value is already in use'))
-        return value
+        kwargs[org_key] = Organization.get_current_id()
+        return self.clean_unique_field(key, **kwargs)
 
 def modelform_factory(model, form=SQLAModelForm, fields=None, exclude=None,
                       formfield_callback=None, widgets=None, localized_fields=None,
