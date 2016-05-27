@@ -1,7 +1,5 @@
-try:
-    import json
-except:
-    import simplejson as json
+from importlib import import_module
+import json
 
 from django import forms
 from django.core import validators
@@ -98,17 +96,37 @@ class ObjectField(forms.Field):
 
 class JsonField(forms.CharField):
 
+    def __init__(self, *args, **kwargs):
+        content_length_func = kwargs.pop('content_length_func', None)
+        super(JsonField, self).__init__(*args, **kwargs)
+        if isinstance(content_length_func, basestring):
+            module, func_name = content_length_func.rsplit('.', 1)
+            module = import_module(module)
+            content_length_func = getattr(module, func_name)
+        self.content_length_func = content_length_func
+
+    def _as_string(self, value):
+        if isinstance(value, basestring):
+            return value
+        return unicode(value)
+
+    def _get_content_length(self, value):
+        """
+        Returns the length of the data in bytes
+        """
+        string = self._as_string(value)
+        func = self.content_length_func or len
+        return func(string)
+
     def to_python(self, value):
         if value in validators.EMPTY_VALUES:
             return None
         if self.max_length:
-            if isinstance(value, basestring):
-                check = value
-            else:
-                check = json.dumps(value)
-            if len(check) > self.max_length:
+            length = self._get_content_length(value)
+            if length > self.max_length:
                 raise forms.ValidationError(_('Max length for this field is '
                     '%s bytes') % self.max_length)
+
         if isinstance(value, basestring):
             try:
                 value = json.loads(value)

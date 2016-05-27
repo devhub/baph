@@ -135,8 +135,15 @@ def fields_for_model(model, fields=None, exclude=None, widgets=None,
 
         if f.nullable or f.blank:
             kwargs['required'] = False
+        elif f.default is not None:
+            kwargs['required'] = False
+        else:
+            kwargs['required'] = True
+
         if f.max_length and 'collection_class' not in kwargs:
             kwargs['max_length'] = f.max_length
+        if f.content_length_func:
+            kwargs['content_length_func'] = f.content_length_func
 
         if formfield_callback is None:
             formfield = f.formfield(**kwargs)

@@ -397,11 +397,11 @@ def get_declarative_base(**kwargs):
         constructor=constructor,
         **kwargs)
 
-if getattr(settings, 'CACHE_ENABLED', False):
-    @event.listens_for(mapper, 'after_insert')
-    @event.listens_for(mapper, 'after_update')
-    @event.listens_for(mapper, 'after_delete')
-    def kill_cache(mapper, connection, target):
+@event.listens_for(mapper, 'after_insert')
+@event.listens_for(mapper, 'after_update')
+@event.listens_for(mapper, 'after_delete')
+def kill_cache(mapper, connection, target):
+    if getattr(settings, 'CACHE_ENABLED', False):
         target.kill_cache()
 
 @event.listens_for(Session, 'before_flush')
