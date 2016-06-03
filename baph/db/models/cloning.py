@@ -52,8 +52,16 @@ def get_cloning_rules(cls):
   """
   Returns default cloning rules for a class
   """
-  rules = getattr(cls, '__cloning_rules__', {})
-  return copy.deepcopy(rules)
+  rules = {}
+  mapper = inspect(cls)
+  classes = [cls]
+  if mapper.polymorphic_map is not None:
+    for mapper_ in mapper.polymorphic_map.values():
+      classes.append(mapper_.class_)
+  for cls in classes:
+    rules_ = getattr(cls, '__cloning_rules__', {})
+    rules.update(copy.deepcopy(rules_))
+  return rules
 
 def get_default_excludes(cls):
   """
@@ -71,6 +79,22 @@ def get_default_excludes(cls):
   keys = set(prop.key for prop in props)
   return keys
 
+def get_default_columns(cls):
+  """
+  Get the names of columns which will be preserved by default
+  """
+  mapper = inspect(cls)
+  columns = set()
+
+  excludes = get_default_excludes(cls)
+
+  for prop in mapper.column_attrs:
+    key = prop.key
+    if key in excludes:
+      continue
+    columns.add(key)
+  return columns
+
 def is_column(prop):
   return prop.strategy_wildcard_key == 'column'
 
@@ -79,13 +103,16 @@ def is_relationship(prop):
 
 
 class CloneEngine(object):
-  def __init__(self, user=None, ruleset=None, registry=None):
+  def __init__(self, user=None, ruleset=None, registry=None, context=None):
     self.root = None
     self.user = user
     self.ruleset = ruleset or {}
     if registry is None:
       registry = {}
     self.registry = registry
+    if context is None:
+      context = {}
+    self.context = context
 
   @staticmethod
   def get_relationship_kwargs(prop, ruleset, rule_keys):
@@ -103,12 +130,8 @@ class CloneEngine(object):
     """
     Returns the first set of rules with a matching key
     """
-    #print '  possible keys:'
-    #for rule_key in rule_keys:
-    #  print '    ', rule_key
     for rule_key in rule_keys:
       if rule_key in rules:
-        #print '  matched key:', rule_key
         return copy.deepcopy(rules[rule_key])
     return {}
 
@@ -132,7 +155,6 @@ class CloneEngine(object):
     mapper = inspect(cls)
 
     excludes = get_default_excludes(cls)
-    #print 'default excludes:', excludes
     excludes.update(rules.get('excludes', []))
 
     data = {}    
@@ -158,10 +180,11 @@ class CloneEngine(object):
       else:
         # wut
         raise Exception('unknown type: %s' % prop.strategy_wildcard_key)
-    #print 'col data:', data
     return data
 
   def clone_collection(self, value, **kwargs):
+    print 'clone collection:'
+    print '  value:', value
     if not value:
       return value
 
@@ -187,11 +210,12 @@ class CloneEngine(object):
       return item
 
   def clone_obj(self, instance, ruleset=None, rule_keys=None):
-    #print '\ncloning:', instance
+    is_root = self.root is None
+
     base_cls, pk = identity_key(instance=instance)
-    #print '  identity key:', (base_cls, pk)
     if (base_cls, pk) in self.registry:
-      #print '  found in registry'
+      # we already cloned this
+      print '  key exists'
       return self.registry[(base_cls, pk)]
 
     cls = get_polymorphic_subclass(instance)
@@ -206,22 +230,36 @@ class CloneEngine(object):
       ruleset = get_cloning_rules(cls)
 
     rule_keys = rule_keys or []
+    if cls != base_cls:
+      rule_keys = rule_keys + [cls.__name__]
     rule_keys = rule_keys + [base_cls.__name__]
+
     rules = self.get_rules(ruleset, rule_keys)
     callback = rules.get('callback', None)
+    if 'requires' in rules:
+      required = set(rules['requires'])
+      provided = set(self.context.keys())
+      missing = required - provided
+      if missing:
+        raise Exception('The following required params are missing: %s'
+          % ', '.join(missing))
+      extra = provided - required
+      if extra:
+        raise Exception('Unknown params passed to clone_obj: %s'
+          % ', '.join(extra))
 
     data = self.get_column_data(instance, rules)
     clone = cls(**data)
     self.registry[(base_cls, pk)] = clone
+    print 'registry:', (base_cls, pk), '=', clone
 
-    is_root = self.root is None
     if is_root:
       # this is the top-level clone call
       self.root = clone
 
     for key in rules.get('relations', []) + rules.get('relinks', []):
       " copy over all specified relationships "
-      #print 'relation:', key
+      print '\ncopying relation:', (instance, key)
       if not mapper.has_property(key):
         # a missing property is either a mistake, or a property which only 
         # exists on certain polymorphic subclasses. Due to the latter 
@@ -233,11 +271,24 @@ class CloneEngine(object):
         raise Exception('"relations" must contain only relationships')
 
       value = getattr(instance, key)
-      #print '  value:', value
 
       kwargs = self.get_relationship_kwargs(prop, ruleset, rule_keys)
       value = self.clone_collection(value, **kwargs)
+      print 'new value:', value
       setattr(clone, key, value)
+
+    for key, info in rules.get('from_ctx', {}).items():
+      if key not in self.context:
+        continue
+      value = self.context[key]
+      newkey = "%s_%s" % (key, id(value))
+      globals()[newkey] = value
+
+      for attr, source in info.items():
+        source = source.replace(key, newkey)
+        value = eval(source)
+        if value:
+          setattr(clone, attr, value)
 
     if callback:
       clone = callback(clone, self.user, self.root)
@@ -247,8 +298,15 @@ class CloneEngine(object):
       self.root = None
     return clone
 
-def clone_obj(obj, user, rules={}, registry={}, path=None, root=None,
-              cast_to=None):
+def clone_obj(obj, user, rules=None, registry=None, path=None, root=None,
+              cast_to=None, context=None):
+    '''
+    print 'clone obj:'
+    print '  obj:', obj
+    print '  user:', user
+    print '  rules:', rules
+    print '  registry:', registry
+    '''
     """Clones an object and returns the clone.
 
     Default behavior is to only process columns (no relations), and
@@ -308,7 +366,13 @@ def clone_obj(obj, user, rules={}, registry={}, path=None, root=None,
         process, and if found, that object will be used instead of creating a
         new one.
     """
-    engine = CloneEngine(user=user, registry=registry)
+    if rules is None:
+      rules = {}
+    if registry is None:
+      registry = {}
+    if context is None:
+      context = {}
+    engine = CloneEngine(user=user, registry=registry, context=context)
     clone = engine.clone_obj(obj)
     return clone
 
