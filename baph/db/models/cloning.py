@@ -183,8 +183,6 @@ class CloneEngine(object):
     return data
 
   def clone_collection(self, value, **kwargs):
-    print 'clone collection:'
-    print '  value:', value
     if not value:
       return value
 
@@ -215,7 +213,6 @@ class CloneEngine(object):
     base_cls, pk = identity_key(instance=instance)
     if (base_cls, pk) in self.registry:
       # we already cloned this
-      print '  key exists'
       return self.registry[(base_cls, pk)]
 
     cls = get_polymorphic_subclass(instance)
@@ -251,7 +248,6 @@ class CloneEngine(object):
     data = self.get_column_data(instance, rules)
     clone = cls(**data)
     self.registry[(base_cls, pk)] = clone
-    print 'registry:', (base_cls, pk), '=', clone
 
     if is_root:
       # this is the top-level clone call
@@ -259,7 +255,6 @@ class CloneEngine(object):
 
     for key in rules.get('relations', []) + rules.get('relinks', []):
       " copy over all specified relationships "
-      print '\ncopying relation:', (instance, key)
       if not mapper.has_property(key):
         # a missing property is either a mistake, or a property which only 
         # exists on certain polymorphic subclasses. Due to the latter 
@@ -274,7 +269,6 @@ class CloneEngine(object):
 
       kwargs = self.get_relationship_kwargs(prop, ruleset, rule_keys)
       value = self.clone_collection(value, **kwargs)
-      print 'new value:', value
       setattr(clone, key, value)
 
     for key, info in rules.get('from_ctx', {}).items():
@@ -300,13 +294,6 @@ class CloneEngine(object):
 
 def clone_obj(obj, user, rules=None, registry=None, path=None, root=None,
               cast_to=None, context=None):
-    '''
-    print 'clone obj:'
-    print '  obj:', obj
-    print '  user:', user
-    print '  rules:', rules
-    print '  registry:', registry
-    '''
     """Clones an object and returns the clone.
 
     Default behavior is to only process columns (no relations), and
