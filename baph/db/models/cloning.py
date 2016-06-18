@@ -70,9 +70,18 @@ def get_default_excludes(cls):
   mapper = inspect(cls)
   exclude_cols = set()
 
+  if mapper.polymorphic_on is not None:
+    # do not copy the polymorphic discriminator. it will be set automatically
+    # via the polymorphic class, and we don't want to generate flush warnings
+    # by copying the value from one type into an instance of another type
+    discriminator = mapper.polymorphic_on
+    exclude_cols.add(discriminator)
+
   for table in mapper.tables:
+    # do not copy primary key columns
     exclude_cols.update(table.primary_key.columns)
     for fkc in table.foreign_key_constraints:
+      # do not copy foreign key columns
       exclude_cols.update(fkc.columns)
 
   props = map(mapper.get_property_by_column, exclude_cols)
@@ -207,7 +216,7 @@ class CloneEngine(object):
       item = self.clone_obj(value, **kwargs)
       return item
 
-  def clone_obj(self, instance, ruleset=None, rule_keys=None):
+  def clone_obj(self, instance, ruleset=None, rule_keys=None, cast_to=None):
     is_root = self.root is None
 
     base_cls, pk = identity_key(instance=instance)
@@ -215,7 +224,13 @@ class CloneEngine(object):
       # we already cloned this
       return self.registry[(base_cls, pk)]
 
-    cls = get_polymorphic_subclass(instance)
+    if cast_to is not None:
+      # force a specific class to be used
+      cls = cast_to
+    else:
+      # determine the appropriate class automatically
+      cls = get_polymorphic_subclass(instance)
+
     if type(instance) != cls:
       # reload the obj with the correct polymorphic subclass
       instance = reload_object(instance)
@@ -360,7 +375,7 @@ def clone_obj(obj, user, rules=None, registry=None, path=None, root=None,
     if context is None:
       context = {}
     engine = CloneEngine(user=user, registry=registry, context=context)
-    clone = engine.clone_obj(obj)
+    clone = engine.clone_obj(obj, cast_to=cast_to)
     return clone
 
 def full_instance_dict(obj, rules={}, path=None):
