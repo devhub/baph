@@ -1,20 +1,36 @@
-try:
-    import json
-except:
-    import simplejson as json
+from importlib import import_module
+import json
 
 from django import forms
 from django.core import validators
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.translation import ugettext_lazy as _
 
+from baph.utils.collections import duck_type_collection
+
+
+def coerce_to_list(value):
+    " forces value into list form "
+    if isinstance(value, list):
+        # we're all good here
+        return value
+    if isinstance(value, tuple):
+        # cast to list
+        return list(value)
+    if isinstance(value, dict):
+        # this has no ordering, so will probably break things
+        return value.items()
+    if isinstance(value, set):
+        # this has no ordering, so will probably break things
+        return list(value)
+    return [value]
 
 class NullCharField(forms.CharField):
-    """
-    CharField that does not cast None to ''
-    """
+    " CharField that does not cast None to '' "
     def to_python(self, value):
         "Returns a Unicode object."
+        if isinstance(value, basestring):
+            value = value.strip()
         if value in validators.EMPTY_VALUES:
             return None
         return super(NullCharField, self).to_python(value)
@@ -25,6 +41,11 @@ class MultiObjectField(forms.Field):
     """
     def __init__(self, related_class=None, collection_class=None, **kwargs):
         self.related_class = related_class
+        if collection_class:
+            # this needs to be a list
+            collection_class = coerce_to_list(collection_class)
+        else:
+            collection_class = [list]
         self.collection_class = collection_class
         super(MultiObjectField, self).__init__(**kwargs)
 
@@ -38,19 +59,16 @@ class MultiObjectField(forms.Field):
                 raise forms.ValidationError(
                     _('Expected %s, got %s') % (self.related_class, type(data)))
             return
-        c_cls = collection_class.pop(0)
-        if c_cls == dict:
-            if not isinstance(data, dict):
-                raise forms.ValidationError(
-                    _('Expected dict, got %s') % type(data))
-            for k,v in data.items():
-                self.validate_collection(v, collection_class)
-        elif c_cls == list:
-            if not isinstance(data, list):
-                raise forms.ValidationError(
-                    _('Expected list, got %s') % type(data))
-            for v in data:
-                self.validate_collection(v, collection_class)
+
+        expected_class = collection_class.pop(0)
+        found_class = duck_type_collection(data)
+        if found_class != expected_class:
+            raise forms.ValidationError(
+                _('Expected %s, got %s') % (expected_class, found_class))
+
+        values = data.itervalues() if isinstance(data, dict) else iter(data)
+        for v in values:
+            self.validate_collection(v, collection_class)
 
     def to_python(self, value):
         from baph.db.orm import Base
@@ -68,20 +86,47 @@ class ObjectField(forms.Field):
         self.related_class = related_class
         super(ObjectField, self).__init__(**kwargs)
 
-
     def to_python(self, value):
-        from baph.db.orm import Base
         if value in validators.EMPTY_VALUES:
             return None
         if not isinstance(value, self.related_class):
             raise forms.ValidationError(
                 _(u'Provided data did not hydrate to an object'))        
+        return value
 
-class JsonField(forms.Field):
+class JsonField(forms.CharField):
+
+    def __init__(self, *args, **kwargs):
+        content_length_func = kwargs.pop('content_length_func', None)
+        super(JsonField, self).__init__(*args, **kwargs)
+        if isinstance(content_length_func, basestring):
+            module, func_name = content_length_func.rsplit('.', 1)
+            module = import_module(module)
+            content_length_func = getattr(module, func_name)
+        self.content_length_func = content_length_func
+
+    def _as_string(self, value):
+        if isinstance(value, basestring):
+            return value
+        return unicode(value)
+
+    def _get_content_length(self, value):
+        """
+        Returns the length of the data in bytes
+        """
+        string = self._as_string(value)
+        func = self.content_length_func or len
+        return func(string)
 
     def to_python(self, value):
         if value in validators.EMPTY_VALUES:
             return None
+        if self.max_length:
+            length = self._get_content_length(value)
+            if length > self.max_length:
+                raise forms.ValidationError(_('Max length for this field is '
+                    '%s bytes') % self.max_length)
+
         if isinstance(value, basestring):
             try:
                 value = json.loads(value)

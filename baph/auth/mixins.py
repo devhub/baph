@@ -50,6 +50,7 @@ class PermissionStruct:
     def __init__(self, **entries): 
         self.__dict__.update(entries)
         self._explicit = False
+        self._deny = False
 
     @property
     def opcode(self):
@@ -104,6 +105,8 @@ class UserPermissionMixin(object):
                 perm = PermissionStruct(**perm.to_dict())
                 if user_group.key:
                     perm._explicit = True
+                if user_group.deny:
+                    perm._deny = True
                 
                 if perm.value:
                     try:
@@ -246,14 +249,19 @@ class UserPermissionMixin(object):
 
         perm_map = {}
         explicit = []
+        matches = []
         for p in perms:
             if not p.key:
                 # this is a boolean permission (not a key/value filter)
-                return True
+                if p._deny:
+                    return False
+                matches.append(p)
+                continue
             if p._explicit:
                 explicit.append(p.key)
-            if not p.key in perm_map:
-                perm_map[p.key] = set()
+            if not (p.key, p._deny) in perm_map:
+                perm_map[(p.key, p._deny)] = set()
+
             if p.opcode == 'in':
                 # this is a json-encoded list of values
                 values = json.loads(p.value)
@@ -262,7 +270,7 @@ class UserPermissionMixin(object):
                 values = [p.value]
             # replace context variables
             values = [str(value) % ctx for value in values]
-            perm_map[p.key].update(values)
+            perm_map[(p.key, p._deny)].update(values)
 
         if action == 'add':
             for p in type(obj)._meta.permission_parents:
@@ -271,13 +279,14 @@ class UserPermissionMixin(object):
                 col = prop.local_remote_pairs[0][0]
                 col_attr = column_to_attr(type(obj), col)
                 if not col_attr.key in perm_map:
-                    perm_map[col_attr.key] = set([None])
+                    perm_map[(col_attr.key, False)] = set([None])
 
         add_errors = []
-        for k,v in perm_map.items():
+        for (k, deny), v in perm_map.items():
             logger.debug('testing perm: %s=%s' % (k,v))
             keys = k.split(',')
             key_pieces = [key_to_value(obj, key) for key in keys]
+
             if key_pieces == [None]:
                 value = None
             elif None in key_pieces:
@@ -305,13 +314,17 @@ class UserPermissionMixin(object):
                         # restrictions set by broader permissions. If the key/value
                         # is set on the UserGroup (rather than the permission), the
                         # permission will be 'explicit'
-                        logger.debug('[VALID] positive hit on explicit add permission')
-                        return True
+                        logger.debug('match on explicit add permission. deny=%s' % deny)
+                        if deny:
+                            return False
+                        matches.append(v)
                 else:
                     # for non-add permissions, a single matching filter will grant
                     # access to the resource
-                    logger.debug('[VALID] positive hit on non-add permission')
-                    return True
+                    logger.debug('match on non-add permission. deny=%s' % deny)
+                    if deny:
+                        return False
+                    matches.append(v)
             else:
                 if action == 'add':
                     add_errors.append( (k, value, v) )
@@ -321,12 +334,17 @@ class UserPermissionMixin(object):
             return False
 
         if action == 'add':
-            logger.debug('[VALID] add permission with no disqualifying '
-                'criteria')
-            return True
+            logger.debug('match on add permission with no disqualifying '
+                'criteria. deny=%s' % deny)
+            if deny:
+                return False
+            matches.append(v)
+
+        if matches:
+            logger.debug('[VALID] applicable permissions were found')
+            return matches
         else:
-            logger.debug('[INVALID] %s permission with no qualifying '
-                'criteria')
+            logger.debug('[INVALID] %s permission with no qualifying criteria')
             return False
 
     def get_resource_filters(self, resource, action='view'):
@@ -348,7 +366,8 @@ class UserPermissionMixin(object):
         if not perms:
             return False
 
-        formatted = []
+        allow_filters = []
+        deny_filters = []
         for p in perms:
             if not p.key:
                 # this is a boolean permission, so cannot be applied as a filter
@@ -382,10 +401,15 @@ class UserPermissionMixin(object):
                     filters.append(col.in_(value))
                 else:
                     filters.append(col==value)
-
             if len(filters) == 1:
-                formatted.append(filters[0])
+                filter_ = filters[0]
             else:
-                formatted.append(and_(*filters))
-        return formatted
+                filter_ = and_(*filters)
+            if p._deny:
+                deny_filters.append(not_(filter_))
+            else:
+                allow_filters.append(filter_)
 
+        final_filters = deny_filters[:]
+        final_filters.append(or_(*allow_filters))
+        return [and_(*final_filters)]

@@ -7,7 +7,7 @@ from django.core.management.color import no_style
 from django.utils.importlib import import_module
 
 from baph.core.management.base import NoArgsCommand, CommandError
-from baph.core.management.sql import emit_post_sync_signal #, sql_flush
+from baph.core.management.sql import emit_post_sync_signal
 from baph.db import ORM, DEFAULT_DB_ALIAS
 from baph.db.models import signals, get_apps, get_models
 
@@ -55,29 +55,24 @@ Are you sure you want to do this?
 
         if confirm == 'yes':
             session = orm.sessionmaker()
-            session.execute('SET foreign_key_checks=0')
-
+            session.expunge_all()
             try:
+                session.execute('set foreign_key_checks=0')
                 for table in reversed(Base.metadata.sorted_tables):
                     if table.info.get('preserve_during_flush', False):
                         continue
                     try:
                         session.execute(table.delete())
-                    except:
+                    except Exception as e:
                         # table not present
                         pass
-                session.commit()
-                session.execute('SET foreign_key_checks=1')
-            except Exception, e:
+                session.flush()
+            except Exception as e:
                 session.rollback()
-                session.execute('SET foreign_key_checks=1')
-                raise
-                raise CommandError("""Database couldn't be flushed. Possible reasons:
-  * The database isn't running or isn't configured correctly.
-  * At least one of the expected database tables doesn't exist.
-  * The SQL was invalid.
-Hint: Look at the output of 'django-admin.py sqlflush'. That's the SQL this command wasn't able to run.
-The full error: %s""")
+                raise CommandError('Could not flush the database')
+            finally:
+                session.execute('set foreign_key_checks=1')
+                session.commit()
 
             # Emit the post sync signal. This allows individual
             # applications to respond as if the database had been

@@ -28,5 +28,4 @@ class SQLAlchemyMiddleware(object):
         if hasattr(request, 'orm'):
             session = request.orm.sessionmaker()
             session.rollback()
-            session.close()
         return None

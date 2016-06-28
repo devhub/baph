@@ -1,4 +1,5 @@
 from django import forms
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.datastructures import SortedDict
 from django.utils.translation import ugettext_lazy as _
 from sqlalchemy import *
@@ -30,6 +31,7 @@ FIELD_MAP = {
     types.Json:     fields.JsonField,
     types.List:     fields.ListField,
     types.Dict:     fields.DictField,
+    types.Email:    forms.EmailField,
     'collection':   fields.MultiObjectField,
     'object':       fields.ObjectField,
     }
@@ -64,42 +66,48 @@ def save_instance(form, instance, fields=None, fail_message='saved',
 
 def model_to_dict(instance, fields=None, exclude=None):
     opts = instance._meta
-    data = instance_dict(instance)
+    data = {}
+    unloaded_attrs = inspect(instance).unloaded
     for f in opts.fields:
-        if issubclass(f.data_type, orm.Base):
-            # skip relations
-            continue
-
-        if not f.editable:
+        if f.name in unloaded_attrs:
+            if issubclass(f.data_type, orm.Base):
+                # skip relations that haven't been loaded yet
+                continue
+        if not getattr(f, 'editable', False):
             continue
         if fields and not f.name in fields:
             continue
         if exclude and f.name in exclude:
             continue
-        try:
-            data[f.name] = getattr(instance, f.name)
-        except:
-            pass
+        data[f.name] = getattr(instance, f.name)
     return data
 
 def fields_for_model(model, fields=None, exclude=None, widgets=None, 
                      formfield_callback=None, localized_fields=None,
-                     labels=None, help_texts=None, error_messages=None):
+                     labels=None, help_texts=None, error_messages=None,
+                     field_classes=None):
     orm = ORM.get()
     Base = orm.Base
     field_list = []
     ignored = []
     opts = model._meta
+
     for f in sorted(opts.fields):
-        if not f.editable:
+        if not getattr(f, 'editable', False):
             continue
         if fields is not None and not f.name in fields:
             continue
         if exclude and f.name in exclude:
             continue
+
         if issubclass(f.data_type, Base):
             # TODO: Auto-generate fields, control via 'fields' param
-            continue
+            if fields is not None and f.name in fields:
+                # manually included field
+                pass
+            else:
+                # skip relations unless manually requested
+                continue
 
         kwargs = {}
         if widgets and f.name in widgets:
@@ -112,6 +120,8 @@ def fields_for_model(model, fields=None, exclude=None, widgets=None,
             kwargs['help_text'] = help_texts[f.name]
         if error_messages and f.name in error_messages:
             kwargs['error_messages'] = error_messages[f.name]
+        if field_classes and f.name in field_classes:
+            kwargs['form_class'] = field_classes[f.name]
 
         if f.collection_class:
             kwargs['form_class'] = FIELD_MAP['collection']
@@ -125,8 +135,15 @@ def fields_for_model(model, fields=None, exclude=None, widgets=None,
 
         if f.nullable or f.blank:
             kwargs['required'] = False
+        elif f.default is not None:
+            kwargs['required'] = False
+        else:
+            kwargs['required'] = True
+
         if f.max_length and 'collection_class' not in kwargs:
             kwargs['max_length'] = f.max_length
+        if f.content_length_func:
+            kwargs['content_length_func'] = f.content_length_func
 
         if formfield_callback is None:
             formfield = f.formfield(**kwargs)
@@ -141,11 +158,13 @@ def fields_for_model(model, fields=None, exclude=None, widgets=None,
             ignored.append(f.name)
 
     field_dict = SortedDict(field_list)
+
     if fields:
         field_dict = SortedDict(
             [(f, field_dict.get(f)) for f in fields
                 if ((not exclude) or (exclude and f not in exclude)) and (f not in ignored)]
         )
+
     return field_dict
 
 class SQLAModelFormOptions(object):
@@ -153,14 +172,16 @@ class SQLAModelFormOptions(object):
         self.model = getattr(options, 'model', None)
         self.fields = getattr(options, 'fields', None)
         self.exclude = getattr(options, 'exclude', [])
-        self.exclude_on_create = getattr(options, 'exclude_on_create', [])
-        self.exclude_on_update = getattr(options, 'exclude_on_update', [])
-        self.exclude_on_nested = getattr(options, 'exclude_on_nested', [])
         self.widgets = getattr(options, 'widgets', None)
         self.localized_fields = getattr(options, 'localized_fields', None)
         self.labels = getattr(options, 'labels', None)
         self.help_texts = getattr(options, 'help_texts', None)
         self.error_messages = getattr(options, 'error_messages', None)
+        self.field_classes = getattr(options, 'field_classes', None)
+        # TODO: get rid of these
+        self.exclude_on_create = getattr(options, 'exclude_on_create', [])
+        self.exclude_on_update = getattr(options, 'exclude_on_update', [])
+        self.exclude_on_nested = getattr(options, 'exclude_on_nested', [])
 
 
 class SQLAModelFormMetaclass(type):
@@ -250,35 +271,74 @@ class SQLAModelForm(BaseSQLAModelForm):
             key: value,
             }
         filters.update(kwargs)
+
+        model = self._meta.model
+        mapper = inspect(model)
+        if mapper.polymorphic_on is not None:
+            mapper = mapper.base_mapper
+            # if all filter keys exist on the base mapper, query the base class
+            # if the base class is missing any properties, query the 
+            # polymorphic subclass explicitly
+            if all(map(mapper.has_property, filters.keys())):
+                model = mapper.class_
+
         session = orm.sessionmaker()
-        instance = session.query(self._meta.model) \
+        instance = session.query(model) \
             .filter_by(**filters) \
             .filter_by(**kwargs) \
             .first()
-        if instance and instance != self.instance:
+
+        if instance and identity_key(instance=instance) \
+                    != identity_key(instance=self.instance):
             # this value is already in use
             raise forms.ValidationError(_('This value is already in use'))
         return value
 
     def clean_org_unique_field(self, key, **kwargs):
-        orm = ORM.get()
         org_key = Organization._meta.model_name + '_id'
-        value = self.cleaned_data[key]
-        if value is None:
-            return value
-        filters = {
-            org_key: Organization.get_current_id(),
-            key: value,
-            }
-        filters.update(kwargs)
-        session = orm.sessionmaker()
-        instance = session.query(self._meta.model) \
-            .filter_by(**filters) \
-            .filter_by(**kwargs) \
-            .first()
-        if instance and instance != self.instance:
-            # this value is already in use
-            raise forms.ValidationError(_('This value is already in use'))
-        return value
+        kwargs[org_key] = Organization.get_current_id()
+        return self.clean_unique_field(key, **kwargs)
 
+def modelform_factory(model, form=SQLAModelForm, fields=None, exclude=None,
+                      formfield_callback=None, widgets=None, localized_fields=None,
+                      labels=None, help_texts=None, error_messages=None,
+                      field_classes=None):
+    " Returns a ModelForm containing form fields for the given model. "
+    attrs = {'model': model}
+    if fields is not None:
+        attrs['fields'] = fields
+    if exclude is not None:
+        attrs['exclude'] = exclude
+    if widgets is not None:
+        attrs['widgets'] = widgets
+    if localized_fields is not None:
+        attrs['localized_fields'] = localized_fields
+    if labels is not None:
+        attrs['labels'] = labels
+    if help_texts is not None:
+        attrs['help_texts'] = help_texts
+    if error_messages is not None:
+        attrs['error_messages'] = error_messages
+    if field_classes is not None:
+        attrs['field_classes'] = field_classes
 
+    parent = (object,)
+    if hasattr(form, 'Meta'):
+        parent = (form.Meta, object)
+    Meta = type(str('Meta'), parent, attrs)
+
+    class_name = model.__name__ + str('Form')
+
+    form_class_attrs = {
+        'Meta': Meta,
+        'formfield_callback': formfield_callback,
+    }
+
+    if (getattr(Meta, 'fields', None) is None and
+            getattr(Meta, 'exclude', None) is None):
+        raise ImproperlyConfigured(
+            "Calling modelform_factory without defining 'fields' or "
+            "'exclude' explicitly is prohibited."
+        )
+
+    return type(form)(class_name, (form,), form_class_attrs)
