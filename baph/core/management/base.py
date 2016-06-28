@@ -16,6 +16,8 @@ from django.core.management.color import color_style
 #from django.utils.six import StringIO
 from cStringIO import StringIO
 
+from baph.db.orm import ORM
+
 
 class CommandError(Exception):
     """
@@ -248,6 +250,14 @@ class BaseCommand(object):
             else:
                 stderr.write('%s: %s' % (e.__class__.__name__, e))
             sys.exit(1)
+        finally:
+            orm = ORM.get()
+            try:
+                session = orm.sessionmaker()
+                session.rollback()
+                session.close()
+            except:
+                pass
 
     def execute(self, *args, **options):
         """

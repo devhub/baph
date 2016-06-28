@@ -1,3 +1,5 @@
+from copy import deepcopy
+import sys
 import unittest as real_unittest
 
 from django.conf import settings
@@ -5,12 +7,12 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
 from django.test import _doctest as doctest, runner
 from django.test.simple import OutputChecker, DocTestRunner, get_tests #, build_suite #, build_test
-#from django.test.testcases import 
 from django.test.utils import setup_test_environment, teardown_test_environment
 from django.utils import unittest
 from django.utils.importlib import import_module
 from django.utils.module_loading import module_has_submodule
-from sqlalchemy import create_engine
+from sqlalchemy import inspect, create_engine
+from sqlalchemy.orm.session import Session
 from sqlalchemy.schema import CreateSchema, DropSchema
 
 from baph.db.models import get_app, get_apps
@@ -216,28 +218,32 @@ class BaphTestSuiteRunner(runner.DiscoverRunner):
         schemas = set(t.schema or default_schema \
             for t in Base.metadata.tables.values())
 
+        url = deepcopy(orm.engine.url)
+        url.database = None
+        self.engine = create_engine(url)
+        insp = inspect(self.engine)
+
         # get a list of already-existing schemas
-        new_url = str(orm.engine.url).rsplit('/',1)[0]
-        self.engine = create_engine(new_url)
-        conn = self.engine.connect()
-        existing_schemas = set(self.engine.dialect.get_schema_names(conn))
+        existing_schemas = set(insp.get_schema_names())
 
         # if any of the needed schemas exist, do not proceed
         conflicts = schemas.intersection(existing_schemas)
         if conflicts:
-            import sys
             for c in conflicts:
                 print 'drop schema %s;' % c
             sys.exit('The following schemas are already present: %s. ' \
                 'TestRunner cannot proceeed' % ','.join(conflicts))
         
-        # create schemas        
+        # create schemas
+        session = Session(bind=self.engine)
         for schema in schemas:
-            self.engine.execute(CreateSchema(schema))
+            session.execute(CreateSchema(schema))
+        session.commit()
+        session.bind.dispose()
 
         # create tables
         if len(orm.Base.metadata.tables) > 0:
-            orm.Base.metadata.create_all()
+            orm.Base.metadata.create_all(checkfirst=False)
 
         # generate permissions
         call_command('createpermissions')

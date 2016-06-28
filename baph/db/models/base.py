@@ -5,19 +5,20 @@ import sys
 
 from django.conf import settings
 from django.forms import ValidationError
-from sqlalchemy import event, inspect
+from sqlalchemy import event, inspect, Column, and_
 from sqlalchemy.ext.associationproxy import ASSOCIATION_PROXY
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
+from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta, declared_attr
 from sqlalchemy.ext.declarative.base import (_as_declarative, _add_attribute)
 from sqlalchemy.ext.declarative.clsregistry import add_class
 from sqlalchemy.ext.hybrid import HYBRID_PROPERTY, HYBRID_METHOD
-from sqlalchemy.orm import mapper, object_session, class_mapper
-from sqlalchemy.orm.attributes import instance_dict, instance_state
+from sqlalchemy.orm import mapper, object_session, class_mapper, attributes
+from sqlalchemy.orm.interfaces import MANYTOONE
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.util import has_identity, identity_key
 from sqlalchemy.schema import ForeignKeyConstraint
+from sqlalchemy.util import classproperty
 
 from baph.db import ORM
 from baph.db.models import signals
@@ -25,6 +26,7 @@ from baph.db.models.loading import get_model, register_models
 from baph.db.models.mixins import CacheMixin, ModelPermissionMixin, GlobalMixin
 from baph.db.models.options import Options
 from baph.db.models.utils import class_resolver, key_to_value
+from baph.utils.functional import cachedclassproperty
 from baph.utils.importing import safe_import, remove_class
 
 
@@ -100,6 +102,57 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
         module = import_module(cls_mod)
         return getattr(module, cls_name)
 
+    @cachedclassproperty
+    def post_update_attrs(cls):
+        " returns a list of attribute keys which need to be updated "
+        " via a secondary UPDATE, due to being part of a circular reference "
+        insp = inspect(cls)
+        attrs = []
+        for rel in insp.relationships:
+            if not rel.post_update:
+                continue
+            if rel.direction is not MANYTOONE:
+                continue
+            for col in rel.local_columns:
+                attr = insp.get_property_by_column(col).class_attribute
+                attrs.append(attr)
+        return attrs
+
+    @cachedclassproperty
+    def pk_cols(cls):
+        " returns a list of all columns which comprise the primary key "
+        return inspect(cls).primary_key
+
+    @cachedclassproperty
+    def pk_props(cls):
+        insp = inspect(cls)
+        return [insp.get_property_by_column(c) for c in cls.pk_cols]
+
+    @cachedclassproperty
+    def pk_attrs(cls):
+        " returns a list of all attrs which comprise the primary key "
+        return [prop.class_attribute for prop in cls.pk_props]
+
+    @cachedclassproperty
+    def pk_keys(cls):
+        " returns the keys of all attrs which comprise the primary key "
+        return [attr.key for attr in cls.pk_attrs]
+
+    @cachedclassproperty
+    def before_flush_attrs(cls):
+        return [
+            attr for attr in inspect(cls).attrs.values()
+            if hasattr(attr, 'before_flush')]
+
+    def pk_as_query_filters(self, force=False):
+        " returns a filter expression for the primary key of the instance "
+        " suitable for use with Query.filter() "
+        cls, pk_values = identity_key(instance=self)
+        if None in pk_values and not force:
+            return None
+        items = zip(self.pk_attrs, pk_values)
+        return and_(attr==value for attr, value in items)
+
     def update(self, data):
         for key, value in data.iteritems():
             if hasattr(self, key) and getattr(self, key) != value:
@@ -111,6 +164,17 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
             session.delete(self)
             session.commit()
 
+    def dictify(self, value):
+        " takes a value, and converts any contained instances into dicts "
+        if hasattr(value, 'to_dict'):
+            return value.to_dict()
+        elif isinstance(value, list):
+            return [self.dictify(v) for v in value]
+        elif isinstance(value, dict):
+            return {k:self.dictify(v) for k,v in value.items()}
+        else:
+            return value
+
     def to_dict(self):
         '''Creates a dictionary out of the column properties of the object.
         This is needed because it's sometimes not possible to just use
@@ -121,12 +185,12 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
         __dict__ = dict([(key, val) for key, val in self.__dict__.iteritems()
                          if not key.startswith('_sa_')])
         if len(__dict__) == 0:
-            for attr in inspect(type(self)).all_orm_descriptors:
-                if not hasattr(attr, 'property'):
-                    continue
-                if not isinstance(attr.property, ColumnProperty):
-                    continue
+            for attr in inspect(type(self)).column_attrs:
                 __dict__[attr.key] = getattr(self, attr.key)
+
+        for key in self._meta.extra_dict_props:
+            value = getattr(self, key)
+            __dict__[key] = self.dictify(value)
         return __dict__
 
     @property
@@ -143,7 +207,34 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
                 session.add(self)
             session.commit()
 
-        
+    def _before_flush(self, session, add):
+        " private before_flush routine. to provide custom behavior, "
+        " override the public 'before_flush' on the specific class "
+        for attr in self.before_flush_attrs:
+            attr.before_flush(session, add, instance=self)
+        self.before_flush(session, add)
+
+    def before_flush(self, session, add):
+        " the public hook for instance preprocessing before a flush event "
+        pass
+
+    @property
+    def updated_fields(self):
+        " returns a list of fields that have been modified "
+        changed = []
+        insp = inspect(type(self))
+        for attr in insp.column_attrs:
+            history = attributes.get_history(self, attr.key)
+            if bool(history.added) and bool(history.deleted):
+                changed.append(attr.key)
+        return changed
+
+@event.listens_for(Session, 'before_flush')
+def before_flush(session, flush_context, instances):
+    for obj in session.new:
+        obj._before_flush(session, add=True)
+    for obj in session.dirty:
+        obj._before_flush(session, add=False)
 
 class ModelBase(type):
 
@@ -162,7 +253,6 @@ class ModelBase(type):
                 _as_declarative(cls, name, cls.__dict__)
 
         type.__init__(cls, name, bases, attrs)
-
 
     def __new__(cls, name, bases, attrs):
         #print '%s.__new__(%s)' % (name, cls)
@@ -307,11 +397,11 @@ def get_declarative_base(**kwargs):
         constructor=constructor,
         **kwargs)
 
-if getattr(settings, 'CACHE_ENABLED', False):
-    @event.listens_for(mapper, 'after_insert')
-    @event.listens_for(mapper, 'after_update')
-    @event.listens_for(mapper, 'after_delete')
-    def kill_cache(mapper, connection, target):
+@event.listens_for(mapper, 'after_insert')
+@event.listens_for(mapper, 'after_update')
+@event.listens_for(mapper, 'after_delete')
+def kill_cache(mapper, connection, target):
+    if getattr(settings, 'CACHE_ENABLED', False):
         target.kill_cache()
 
 @event.listens_for(Session, 'before_flush')

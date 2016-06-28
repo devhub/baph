@@ -1,8 +1,11 @@
+from __future__ import absolute_import
+from collections import defaultdict
 from contextlib import contextmanager
 from copy import deepcopy
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.db import connections
 from django.utils.functional import cached_property
 from sqlalchemy import create_engine
 from sqlalchemy.engine.url import URL
@@ -56,6 +59,34 @@ def load_engine(config):
         error_msg = "%r isn't a valid dialect/driver" % url
         raise ImproperlyConfigured(error_msg)
 
+def find_circular_dependencies(metadata):
+    dependencies = defaultdict(set)
+    fks = defaultdict(set)
+    rsp = defaultdict(set)
+
+    for t in metadata.sorted_tables:
+        for fk in t.foreign_key_constraints:
+            dependencies[t.name].add(fk.referred_table.name)
+            fks[(t.name, fk.referred_table.name)].add(fk)
+
+    def walk_graph(name, path=None):
+        if path is None:
+            path = []
+        for dependency in dependencies[name]:
+            if dependency in path:
+                #print "Circular dependency:","->".join(path+[dependency])
+                for fk in fks[(path[-1], dependency)]:
+                    rsp[fk.table].update(fk.column_keys)
+                continue
+            walk_graph(dependency,path+[dependency])
+
+    for name in dependencies.keys():
+        walk_graph(name)
+
+    return rsp
+
+def scopefunc():
+    return 'single'
 
 class DatabaseWrapper(object):
     def __init__(self, settings_dict, alias=DEFAULT_DB_ALIAS):
@@ -70,6 +101,52 @@ class DatabaseWrapper(object):
         self.session_factory = sessionmaker(bind=self.engine)
         self.sessionmaker = scoped_session(sessionmaker(
             bind=self.engine, autoflush=False))
+        # TODO: uncomment line below once transactional tests are ready
+        #    bind=self.engine, autoflush=False), scopefunc=scopefunc)
+    '''
+        self._connection = None
+        #self.session_factory = sessionmaker(bind=self.engine)
+        #self.sessionmaker = scoped_session(sessionmaker(
+        #    bind=self.engine, autoflush=False))
+        self._sessionmaker = None
+        self._session_factory = None
+
+    @property
+    def connection(self):
+        print 'orm.connection called'
+        if self._connection is None:
+            print '  init'
+            #if connections[self.alias].connection is None:
+            #    connections[self.alias].connect()
+            self._connection = connections[self.alias].connection
+            #self._connection = self.engine.connect()
+        print 'returning ', self._connection
+        return self._connection
+
+    @property
+    def sessionmaker(self):
+        connection = connections[self.alias]
+        return connection.sessionmaker
+        print 'orm.sessionmaker called'
+        print connection
+        #assert False
+        if self._sessionmaker is None:
+            print '  init'
+            self._sessionmaker = scoped_session(sessionmaker(
+                bind=self.connection, autoflush=False))
+        print 'returning ', self._sessionmaker
+        print '  bind:', self._sessionmaker.bind
+        return self._sessionmaker
+
+    @property
+    def session_factory(self):
+        connection = connections[self.alias]
+        return connection.session_factory
+        if self._session_factory is None:
+            self._session_factory = sessionmaker(
+                bind=self.connection)
+        return self._session_factory
+    '''
 
     def __eq__(self, other):
         return self.alias == other.alias
@@ -91,9 +168,13 @@ class DatabaseWrapper(object):
         return create_engine(url)
 
     @cached_property
+    def circular_dependencies(self):
+        return find_circular_dependencies(self.Base.metadata)
+
+    @cached_property
     def supports_transactions(self):
         """ Confirm support for transactions."""
-        session = self.session_factory()
+        session = self.sessionmaker()
         session.execute('CREATE TABLE ROLLBACK_TEST (X INT)')
         session.execute('INSERT INTO ROLLBACK_TEST (X) VALUES (8)')
         session.rollback()
@@ -101,20 +182,6 @@ class DatabaseWrapper(object):
         count, = results.fetchone()
         session.execute('DROP TABLE ROLLBACK_TEST')
         return count == 0
-
-    @contextmanager
-    def session(self, expunge=False):
-        session = self.session_factory()
-        try:
-            yield session
-            if expunge:
-                session.expunge_all()
-            session.commit()
-        except:
-            session.rollback()
-            raise
-        finally:
-            session.close()
 
     def check_constraints(self, table_names=None):
         # TODO: implement this

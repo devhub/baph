@@ -16,10 +16,8 @@ from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 
 from baph.db import types
 from baph.forms import fields
+from baph.utils.collections import duck_type_collection
 
-
-class NOT_PROVIDED:
-    pass
 
 def get_related_class_from_attr(attr):
     prop = attr.property
@@ -56,7 +54,7 @@ class Field(object):
                   default=None, data_type=None, auto_created=False,
                   auto=False, collection_class=None, proxy=False,
                   help_text='', choices=None, uselist=False, required=False,
-                  max_length=None
+                  max_length=None, content_length_func=None
                 ):
         self.name = name
         self.verbose_name = verbose_name or capfirst(self.name)
@@ -72,6 +70,7 @@ class Field(object):
         self.uselist = uselist
         self.required = required
         self.max_length = max_length
+        self.content_length_func = content_length_func
 
         # Adjust the appropriate creation counter, and save our local copy.
         if auto_created:
@@ -97,7 +96,7 @@ class Field(object):
         """
         Returns a boolean of whether this field has a default value.
         """
-        return self.default is not NOT_PROVIDED
+        return self.default is not None
 
     def get_default(self):
         """
@@ -113,6 +112,8 @@ class Field(object):
         defaults = {'required': self.required,
                     'label': capfirst(self.verbose_name),
                     'help_text': self.help_text}
+        if self.content_length_func:
+            defaults['content_length_func'] = self.content_length_func
         if self.has_default():
             if callable(self.default):
                 defaults['initial'] = self.default
@@ -171,6 +172,9 @@ class Field(object):
     def field_kwargs_from_column(cls, key, attr, model):
         kwargs = {'name': attr.key}
         col = attr.property.columns[0]
+        if hasattr(col, 'info'):
+            if 'content_length_func' in col.info:
+                kwargs['content_length_func'] = col.info['content_length_func']
         kwargs['data_type'] = type(col.type)
         if len(col.proxy_set) == 1:
             # single column
@@ -201,10 +205,12 @@ class Field(object):
         kwargs = {'name': attr.key}
         prop = attr.property
         data_type = get_related_class_from_attr(attr)
-        collection_class = prop.collection_class
-        collection_class = normalize_collection_class(collection_class)
-        if not collection_class and prop.uselist:
+        if prop.collection_class:
+            collection_class = duck_type_collection(prop.collection_class)
+        elif prop.uselist:
             collection_class = list
+        else:
+            collection_class = None
 
         kwargs['data_type'] = data_type
         kwargs['uselist'] = prop.uselist
@@ -218,11 +224,13 @@ class Field(object):
     def field_kwargs_from_proxy(cls, key, attr, model):
         proxy = getattr(model, key)
         kwargs = cls.field_kwargs_from_attr(key, attr.remote_attr, model)
-
-        collection_class = attr.local_attr.property.collection_class
-        collection_class = normalize_collection_class(collection_class)
-        if not collection_class and attr.local_attr.property.uselist:
+        prop = attr.local_attr.property
+        if prop.collection_class:
+            collection_class = duck_type_collection(prop.collection_class)
+        elif prop.uselist:
             collection_class = list
+        else:
+            collection_class = None
 
         collections = kwargs.get('collection_class', [])
         if collection_class:

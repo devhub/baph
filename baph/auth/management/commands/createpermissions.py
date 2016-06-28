@@ -29,11 +29,11 @@ class Command(NoArgsCommand):
         flush = options.get('flush')
         self.style = no_style()
 
+        session = orm.sessionmaker()
         if flush:
             # clear existing permissions
-            session = orm.sessionmaker()
             session.execute(Permission.__table__.delete())
-            session.commit()
-        
         for app in get_apps():
             create_permissions(app, [], verbosity)
+        session.commit()
+        session.close()

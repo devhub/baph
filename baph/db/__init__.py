@@ -1,9 +1,8 @@
 from django.conf import settings
 from django.core import signals
 from django.core.exceptions import ImproperlyConfigured
-from django.db.utils import (ConnectionRouter,
-    DatabaseError, IntegrityError)
-from sqlalchemy.orm import scoped_session, sessionmaker
+from django.db import (ConnectionHandler, ConnectionRouter,
+                       DefaultConnectionProxy, DatabaseError, IntegrityError)
 
 from baph.db.utils import EngineHandler, DEFAULT_DB_ALIAS
 
@@ -14,8 +13,8 @@ __all__ = ('ORM', 'DEFAULT_DB_ALIAS', 'engines', 'EngineHandler',
 
 ORM = EngineHandler(settings.DATABASES)
 
-# TODO: implement routing
-#router = ConnectionRouter()
+connections = ConnectionHandler()
 
-#connection = DefaultConnectionProxy()
+router = ConnectionRouter()
 
+connection = DefaultConnectionProxy()

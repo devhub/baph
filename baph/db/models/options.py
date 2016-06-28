@@ -30,7 +30,7 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
                  'permission_limiters', 'permission_terminator',
                  'permission_handler', 'permission_resources',
                  'global_column', 'global_cascades', 'global_parents',
-                 'latlon_field_names',
+                 'latlon_field_names', 'extra_dict_props',
                  )
 
 class Options(object):
@@ -114,9 +114,20 @@ class Options(object):
         self.auto_created = False
         self.required_fields = None
 
+        # extra_dict_props contains names of additional properties
+        # to be added to the output of instance.to_dict()
+        self.extra_dict_props = []
+
+    @property
+    def db_table(self):
+        if self.model.__table__.schema is None:
+            return self.model.__tablename__
+        return '%s.%s' % (self.model.__table__.schema, self.model.__tablename__)
+
     def contribute_to_class(self, cls, name):
         cls._meta = self
         self.model = cls
+
         # First, construct the default values for these options.
         self.object_name = cls.__name__
         self.model_name = self.object_name.lower()
@@ -241,15 +252,18 @@ class Options(object):
         cache = []
         if not self.model.__mapper__.configured:
             configure_mappers()
-        for key, attr in inspect(self.model).all_orm_descriptors.items():
-            if attr.is_mapper:
-                continue
-            elif attr.extension_type == HYBRID_METHOD:
-                continue
-            elif attr.extension_type == HYBRID_PROPERTY:
-                continue
-            field = Field.field_from_attr(key, attr, self.model)
+        insp = inspect(self.model)
+
+        for prop in insp.column_attrs + insp.relationships:
+            attr = prop.class_attribute
+            field = Field.field_from_attr(attr.key, attr, self.model)
             cache.append((field, None))
+
+        for key, attr in insp.all_orm_descriptors.items():
+            if attr.extension_type == ASSOCIATION_PROXY:
+                attr = getattr(self.model, key)
+                field = Field.field_from_attr(key, attr, self.model)
+                cache.append((field, None))
         self._field_cache = tuple(cache)
         self._field_name_cache = [x for x, _ in cache]
 
