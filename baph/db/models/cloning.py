@@ -1,5 +1,6 @@
 import copy
 
+from sqlalchemy import inspect
 from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm.attributes import instance_dict
 from sqlalchemy.orm.collections import MappedCollection
@@ -8,13 +9,306 @@ from sqlalchemy.orm.session import object_session
 from sqlalchemy.orm.util import identity_key
 
 from baph.db.orm import ORM
+from baph.utils.collections import duck_type_collection
 
 
 orm = ORM.get()
 Base = orm.Base
 
-def clone_obj(obj, user, rules={}, registry={}, path=None, root=None,
-              cast_to=None):
+def reload_object(instance):
+  """
+  Reloads an instance with the correct polymorphic subclass
+  """
+  cls, pk_vals = identity_key(instance=instance)
+  mapper = inspect(cls)
+  pk_cols = [col.key for col in mapper.primary_key]
+  pk = dict(zip(pk_cols, pk_vals))
+  session = object_session(instance)
+  session.expunge(instance)
+  instance = session.query(cls) \
+    .with_polymorphic('*') \
+    .filter_by(**pk) \
+    .one()
+  return instance
+
+def get_polymorphic_subclass(instance):
+  """
+  Return the appropriate polymorphic subclass for an instance which may not 
+  have been loaded polymorphically, by checking the discriminator against
+  the polymorphic map of the base class. for non-polymorphic classes, it
+  returns the class
+  """
+  cls, pk = identity_key(instance=instance)
+  base_mapper = inspect(cls)
+  if base_mapper.polymorphic_on is None:
+    # this is not a polymorphic class
+    return cls
+  discriminator = base_mapper.polymorphic_on.key
+  poly_ident = getattr(instance, discriminator)
+  poly_mapper = base_mapper.polymorphic_map[poly_ident]
+  return poly_mapper.class_
+
+def get_cloning_rules(cls):
+  """
+  Returns default cloning rules for a class
+  """
+  rules = {}
+  mapper = inspect(cls)
+  classes = [cls]
+  if mapper.polymorphic_map is not None:
+    for mapper_ in mapper.polymorphic_map.values():
+      classes.append(mapper_.class_)
+  for cls in classes:
+    rules_ = getattr(cls, '__cloning_rules__', {})
+    rules.update(copy.deepcopy(rules_))
+  return rules
+
+def get_default_excludes(cls):
+  """
+  By default, exclude pks and fks
+  """
+  mapper = inspect(cls)
+  exclude_cols = set()
+
+  if mapper.polymorphic_on is not None:
+    # do not copy the polymorphic discriminator. it will be set automatically
+    # via the polymorphic class, and we don't want to generate flush warnings
+    # by copying the value from one type into an instance of another type
+    discriminator = mapper.polymorphic_on
+    exclude_cols.add(discriminator)
+
+  for table in mapper.tables:
+    # do not copy primary key columns
+    exclude_cols.update(table.primary_key.columns)
+    for fkc in table.foreign_key_constraints:
+      # do not copy foreign key columns
+      exclude_cols.update(fkc.columns)
+
+  props = map(mapper.get_property_by_column, exclude_cols)
+  keys = set(prop.key for prop in props)
+  return keys
+
+def get_default_columns(cls):
+  """
+  Get the names of columns which will be preserved by default
+  """
+  mapper = inspect(cls)
+  columns = set()
+
+  excludes = get_default_excludes(cls)
+
+  for prop in mapper.column_attrs:
+    key = prop.key
+    if key in excludes:
+      continue
+    columns.add(key)
+  return columns
+
+def is_column(prop):
+  return prop.strategy_wildcard_key == 'column'
+
+def is_relationship(prop):
+  return prop.strategy_wildcard_key == 'relationship'
+
+
+class CloneEngine(object):
+  def __init__(self, user=None, ruleset=None, registry=None, context=None):
+    self.root = None
+    self.user = user
+    self.ruleset = ruleset or {}
+    if registry is None:
+      registry = {}
+    self.registry = registry
+    if context is None:
+      context = {}
+    self.context = context
+
+  @staticmethod
+  def get_relationship_kwargs(prop, ruleset, rule_keys):
+    related_class = prop.mapper.class_
+    related_ruleset = get_cloning_rules(related_class)
+    related_ruleset.update(ruleset)
+    related_rule_keys = ['%s.%s' % (rule_key, prop.key) for rule_key in rule_keys]
+    return {
+      'ruleset': related_ruleset,
+      'rule_keys': related_rule_keys,
+      }
+
+  @staticmethod
+  def get_rules(rules, rule_keys):
+    """
+    Returns the first set of rules with a matching key
+    """
+    for rule_key in rule_keys:
+      if rule_key in rules:
+        return copy.deepcopy(rules[rule_key])
+    return {}
+
+  @property
+  def user_id(self):
+    if not self.user:
+      return None
+    cls, pk = identity_key(instance=self.user)
+    if len(pk) > 1:
+      raise Exception('chown cannot used for multi-column user pks. To '
+        'specify ownership for a user with a multi-column pk, add the '
+        'relationship attribute key to the chown rules')
+    return pk[0]
+
+  def get_column_data(self, instance, rules):
+    """
+    returns a dict of data containing values from all non-relation keys
+    (relations are included if they are 'chown' or 'preserve' types)
+    """
+    cls = type(instance)
+    mapper = inspect(cls)
+
+    excludes = get_default_excludes(cls)
+    excludes.update(rules.get('excludes', []))
+
+    data = {}    
+
+    for prop in mapper.column_attrs:
+      " start with all non-excluded column attrs "
+      key = prop.key
+      if key in excludes:
+        continue
+      data[key] = getattr(instance, key)
+
+    for key in rules.get('preserve', []):
+      " copy over preserved values with no modifications "
+      data[key] = getattr(instance, key)
+
+    for key in rules.get('chown', []):
+      " assign given user to ownership fields "
+      prop = mapper.get_property(key)
+      if is_column(prop):
+        data[key] = self.user_id
+      elif is_relationship(prop):
+        data[key] = self.user
+      else:
+        # wut
+        raise Exception('unknown type: %s' % prop.strategy_wildcard_key)
+    return data
+
+  def clone_collection(self, value, **kwargs):
+    if not value:
+      return value
+
+    collection_class = duck_type_collection(value)
+
+    if collection_class == dict:
+      # mapped onetomany or manytomany
+      items = {}
+      for name, item in value.items():
+        new_item = self.clone_obj(item, **kwargs)
+        items[name] = new_item
+      return items
+    elif collection_class == list:
+      # onetomany or manytomany
+      items = []
+      for item in value:
+        new_item = self.clone_obj(item, **kwargs)
+        items.append(new_item)
+      return items
+    else:
+      # onetoone or manytoone
+      item = self.clone_obj(value, **kwargs)
+      return item
+
+  def clone_obj(self, instance, ruleset=None, rule_keys=None, cast_to=None):
+    is_root = self.root is None
+
+    base_cls, pk = identity_key(instance=instance)
+    if (base_cls, pk) in self.registry:
+      # we already cloned this
+      return self.registry[(base_cls, pk)]
+
+    if cast_to is not None:
+      # force a specific class to be used
+      cls = cast_to
+    else:
+      # determine the appropriate class automatically
+      cls = get_polymorphic_subclass(instance)
+
+    if type(instance) != cls:
+      # reload the obj with the correct polymorphic subclass
+      instance = reload_object(instance)
+    mapper = inspect(cls)
+
+    if ruleset is None:
+      ruleset = self.ruleset
+    if not ruleset:
+      ruleset = get_cloning_rules(cls)
+
+    rule_keys = rule_keys or []
+    if cls != base_cls:
+      rule_keys = rule_keys + [cls.__name__]
+    rule_keys = rule_keys + [base_cls.__name__]
+
+    rules = self.get_rules(ruleset, rule_keys)
+    callback = rules.get('callback', None)
+    if 'requires' in rules:
+      required = set(rules['requires'])
+      provided = set(self.context.keys())
+      missing = required - provided
+      if missing:
+        raise Exception('The following required params are missing: %s'
+          % ', '.join(missing))
+      extra = provided - required
+      if extra:
+        raise Exception('Unknown params passed to clone_obj: %s'
+          % ', '.join(extra))
+
+    data = self.get_column_data(instance, rules)
+    clone = cls(**data)
+    self.registry[(base_cls, pk)] = clone
+
+    if is_root:
+      # this is the top-level clone call
+      self.root = clone
+
+    for key in rules.get('relations', []) + rules.get('relinks', []):
+      " copy over all specified relationships "
+      if not mapper.has_property(key):
+        # a missing property is either a mistake, or a property which only 
+        # exists on certain polymorphic subclasses. Due to the latter 
+        # possibility, we can't raise an error, so we just skip it
+        continue
+
+      prop = mapper.get_property(key)
+      if not is_relationship(prop):
+        raise Exception('"relations" must contain only relationships')
+
+      value = getattr(instance, key)
+
+      kwargs = self.get_relationship_kwargs(prop, ruleset, rule_keys)
+      value = self.clone_collection(value, **kwargs)
+      setattr(clone, key, value)
+
+    for key, info in rules.get('from_ctx', {}).items():
+      if key not in self.context:
+        continue
+      value = self.context[key]
+      newkey = "%s_%s" % (key, id(value))
+      globals()[newkey] = value
+
+      for attr, source in info.items():
+        source = source.replace(key, newkey)
+        value = eval(source)
+        if value:
+          setattr(clone, attr, value)
+
+    if callback:
+      clone = callback(clone, self.user, self.root)
+    
+    if is_root:
+      # reset the root so the engine can be re-used
+      self.root = None
+    return clone
+
+def clone_obj(obj, user, rules=None, registry=None, path=None, root=None,
+              cast_to=None, context=None):
     """Clones an object and returns the clone.
 
     Default behavior is to only process columns (no relations), and
@@ -74,164 +368,16 @@ def clone_obj(obj, user, rules={}, registry={}, path=None, root=None,
         process, and if found, that object will be used instead of creating a
         new one.
     """
-    cls, pk = identity_key(instance=obj)
-    if not path:
-        # we need to force a complete reload to ensure all polymorphic 
-        # relations are using their subclasses, and not the base class
-        session = object_session(obj)
-        session.expunge_all()
-        session.close()
-        session = orm.sessionmaker()
-        obj = session.query(cls).get(pk)
+    if rules is None:
+      rules = {}
+    if registry is None:
+      registry = {}
+    if context is None:
+      context = {}
+    engine = CloneEngine(user=user, registry=registry, context=context)
+    clone = engine.clone_obj(obj, cast_to=cast_to)
+    return clone
 
-    if not rules and not hasattr(cls, '__cloning_rules__'):
-        raise Exception('Class %s cannot be cloned' % cls)
-    rules = copy.deepcopy(rules or cls.__cloning_rules__)
-    cls_mapper = class_mapper(obj.__class__)
-    if cast_to:
-        instance = cast_to()
-        # we don't want the old discriminator to overwrite the 
-        # one auto-populated by creation of the subclass
-        discriminator = cls.__mapper_args__['polymorphic_on']
-        rules['Site']['excludes'].append(discriminator)
-    else:
-        instance = obj.__class__()
-    if not cls in registry:
-        registry[cls] = {}
-    registry[cls][pk] = instance
-    if not path:
-        path = cls.__name__
-    if not root:
-        root = instance
-
-    local_rules = rules.get(path, {})
-    chown = local_rules.get('chown', [])
-    relations = local_rules.get('relations', [])
-    excludes = local_rules.get('excludes', [])
-    relinks = local_rules.get('relinks', [])
-    preserve = local_rules.get('preserve', [])
-    callback = local_rules.get('callback', None)
-
-    " first, copy over all preserved values "
-    for key in preserve:
-        " this value will be carried over regardless, useful for "
-        " handling fks or relationships to fixed objects which "
-        " should not have copies created. We do this first so we "
-        " can handle association proxies, which won't show up in "
-        " iterate_properties "
-        if hasattr(instance, key):
-            setattr(instance, key, getattr(obj, key))
-        continue
-        
-    " next, copy over column properties, skipping the props in 'excludes' "
-    for prop in cls_mapper.iterate_properties:
-        if prop.key in preserve:
-            " we just handled this "
-            continue
-        if prop.key in chown:
-            " this value will be replaced with the new owner "
-            if isinstance(prop, ColumnProperty):
-                setattr(instance, prop.key, user.id)
-            elif isinstance(prop, RelationshipProperty):
-                setattr(instance, prop.key, user)
-            else:
-                raise Exception('cannot chown field of type %s'
-                    % type(prop))
-            continue
-        if not isinstance(prop, ColumnProperty):
-            " relations are not processed automatically, to prevent "
-            " infinite loops caused by backrefs, and to allow them "
-            " to be processed in a specific order if necessary "
-            continue
-        if prop.key in excludes:
-            continue
-        cols = prop.columns
-        if any(cols[i].foreign_keys for i in range(0, len(cols))):
-            " an associated column has foreign keys- skip it "
-            " to carry over a foreign key during the cloning process, "
-            " add it to 'preserve' "
-            continue
-        if any(cols[i].primary_key for i in range(0, len(cols))):
-            " not possible to carry over a primary key "
-            continue
-        setattr(instance, prop.key, getattr(obj, prop.key))
-
-    " next, process any specified relations in the given order "
-    for key in relations:
-        try:
-            prop = cls_mapper.get_property(key)
-        except: # prop not found, possibly a polymorphic prop missing on base
-            continue
-
-        if not isinstance(prop, RelationshipProperty):
-            raise ValueError('"relations" must contain only relationships')
-
-        value = getattr(obj, key)
-        path_ = '.'.join((path, key))
-
-        if not value:
-            setattr(instance, key, value)
-        elif isinstance(value, MappedCollection):
-            new_map = {}
-            field = getattr(instance, key)
-            for name,item in value.items():
-                new_obj = clone_obj(item, user, rules, registry, path_, root)
-                new_map[name] = new_obj
-            setattr(instance, key, new_map)
-        elif isinstance(value, list): # onetomany or manytomany
-            setattr(instance, key, [clone_obj(item, user, rules, registry,
-                path_, root) for item in value])
-        else: # onetoone or manytoone
-            setattr(instance, key, clone_obj(value, user, rules, registry,
-                path_, root))
-    
-    " now try using the registry to relink any relationships "
-    " which link to cloned items that have been generated already "
-    for key in relinks:
-        try:
-            prop = cls_mapper.get_property(key)
-        except: # prop not found, possibly a polymorphic prop missing on base
-            continue
-
-        if not isinstance(prop, RelationshipProperty):
-            raise ValueError('"relinks" must contain only relationships')
-        value = getattr(obj, key)
-        path_ = '.'.join((path, key))
-
-        if not value:
-            setattr(instance, key, value)
-        elif isinstance(value, list): # onetomany or manytomany
-            objs = []
-            for item in value:
-                cls_, pk_ = identity_key(instance=item)
-                if not cls_ in registry:
-                    raise ValueError('Class %s isn\'t present in the registry'
-                        % cls_)
-                try:
-                    objs.append(registry[cls_][pk_])
-                except:
-                    objs.append(clone_obj(item, user, rules, registry, path_, root))
-                    #raise ValueError('Object of class %s with pk %s was not '
-                    #    'found in the registry' % (cls_, pk_))
-            setattr(instance, key, objs)
-        else: # onetoone or manytoone
-            cls_, pk_ = identity_key(instance=value)
-            if not cls_ in registry:
-                raise ValueError('Class %s isn\'t present in the registry'
-                    % cls_)
-            try:
-                setattr(instance, key, registry[cls_][pk_])
-            except:
-                setattr(instance, key, 
-                    clone_obj(value, user, rules, registry, path_, root))
-                #raise ValueError('Object of class %s with pk %s was not '
-                #    'found in the registry' % (cls_, pk_))
-
-    if callback:
-        instance = callback(instance, user, root)
-    
-    return instance
-    
 def full_instance_dict(obj, rules={}, path=None):
     if path is None:
         path = obj.__class__.__mapper__.base_mapper.class_.__name__
