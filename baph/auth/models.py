@@ -436,10 +436,13 @@ class OAuthConsumer(Base):
 
 class OAuthNonce(Base):
     __tablename__ = 'auth_oauth_nonce'
+    __table_args__ = (
+        UniqueConstraint('consumer_key', 'key', 'timestamp',
+            name='uix_consumer_nonce_timestamp'),
+    )
     id = Column(Integer, primary_key=True)
-    timestamp = Column(DateTime, nullable=False, index=True,
-        default=datetime.now)
+    timestamp = Column(DateTime, nullable=False, index=True)
     token_key = Column(String(32))
-    consumer_key = Column(String(MAX_KEY_LEN))
-    key = Column(String(255), nullable=False, unique=True)
+    consumer_key = Column(String(MAX_KEY_LEN), nullable=False)
+    key = Column(String(255), nullable=False)
 
