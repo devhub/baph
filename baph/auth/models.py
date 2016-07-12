@@ -428,19 +428,6 @@ class OAuthConsumer(Base):
 
     user = relationship(User, lazy=True, uselist=False)
 
-    '''
-    def __init__(self, **kwargs):
-        super(OAuthConsumer, self).__init__(**kwargs)
-        if not self.key:
-            self.key = random_string(size=KEY_LEN)
-        if not self.secret:
-            self.secret = random_string(size=SECRET_LEN)
-
-    @classmethod
-    def create(cls, user_id, **kwargs):
-        kwargs['id'] = user_id
-        return cls(**kwargs)
-    '''
     def as_consumer(self):
         '''Creates an oauth.OAuthConsumer object from the DB data.
         :rtype: oauth.OAuthConsumer
@@ -450,7 +437,8 @@ class OAuthConsumer(Base):
 class OAuthNonce(Base):
     __tablename__ = 'auth_oauth_nonce'
     id = Column(Integer, primary_key=True)
-    timestamp = Column(DateTime, nullable=False, default=datetime.now)
+    timestamp = Column(DateTime, nullable=False, index=True,
+        default=datetime.now)
     token_key = Column(String(32))
     consumer_key = Column(String(MAX_KEY_LEN))
     key = Column(String(255), nullable=False, unique=True)

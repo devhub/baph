@@ -16,7 +16,7 @@ DEPARTMENTS = (
   ('FD', _('Florida')),
   ('LA', _('Lavalleja')),
   ('MA', _('Maldonado')),
-  ('MO', _('Montenegro')),
+  ('MO', _('Montevideo')),
   ('PA', _('Paysandú')),
   ('RN', _('Río Negro')),
   ('RV', _('Rivera')),
