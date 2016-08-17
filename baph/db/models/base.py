@@ -348,7 +348,6 @@ class ModelBase(type):
         if attrs.get('__tablename__', None):
           table_args = attrs.pop('__table_args__', None)
           attrs['__table_args__'] = generate_table_args(table_args)
-          print 'table args:', attrs['__table_args__']
 
         # Add all attributes to the class.
         for obj_name, obj in attrs.items():
