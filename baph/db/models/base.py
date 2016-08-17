@@ -236,6 +236,26 @@ def before_flush(session, flush_context, instances):
     for obj in session.dirty:
         obj._before_flush(session, add=False)
 
+def generate_table_args(table_args):
+  """
+  merges table_args with defaults specified in settings
+  """
+  kwargs = getattr(settings, 'BAPH_DEFAULT_TABLE_ARGS', {}).copy()
+  args = []
+  if not table_args:
+    pass
+  elif isinstance(table_args, dict):
+    kwargs.update(table_args)
+  elif isinstance(table_args, (list, tuple)):
+    if isinstance(table_args[-1], dict):
+      args = table_args[:-1]
+      kwargs.update(table_args[-1])
+    else:
+      args = table_args
+  if kwargs:
+    args += (kwargs,)
+  return args
+
 class ModelBase(type):
 
     def __init__(cls, name, bases, attrs):
@@ -319,6 +339,10 @@ class ModelBase(type):
                     # removed from appcache/cls registry/mod registry
                     remove_class(b, name)
             return model
+
+        if attrs.get('__tablename__', None):
+          table_args = attrs.pop('__table_args__', None)
+          attrs['__table_args__'] = generate_table_args(table_args)
 
         # Add all attributes to the class.
         for obj_name, obj in attrs.items():
