@@ -372,7 +372,7 @@ class MemcacheMixin(object):
 
     def assertCacheKeyNotInvalidated(self, key, version=None):
         raw_key = self.cache.make_key(key, version=version)
-        current_value = self.cache.get(key, version=verision)
+        current_value = self.cache.get(key, version=version)
         self.assertIn(raw_key, self.initial_cache)
         self.assertNotEqual(current_value, None)
 
