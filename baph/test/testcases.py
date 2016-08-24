@@ -334,8 +334,8 @@ class MemcacheMixin(object):
         reads the current key/value pairs from the cache and
         stores it in self.initial_data, for comparison with post-test results
         """
-        self.initial_cache = dict((k, self.cache.get(k)) \
-            for k in self.cache.get_all_keys())
+        self.initial_cache = {k: self.cache._cache.get(k)
+            for k in self.cache.get_all_keys()}
 
     def assertCacheHit(self, rsp):
         self.assertEqual(rsp['x-from-cache'], 'True')
@@ -344,7 +344,8 @@ class MemcacheMixin(object):
         self.assertEqual(rsp['x-from-cache'], 'False')
 
     def assertCacheKeyEqual(self, key, value, version=None):
-        self.assertEqual(self.cache.get(key, version=version), value)
+        current_value = self.cache.get(key, version=version)
+        self.assertEqual(current_value, value)
 
     def assertCacheKeyCreated(self, key, version=None):
         raw_key = self.cache.make_key(key, version=version)
@@ -353,25 +354,27 @@ class MemcacheMixin(object):
 
     def assertCacheKeyIncremented(self, key, version=None):
         raw_key = self.cache.make_key(key, version=version)
-        old = self.initial_cache.get(raw_key, 0)
-        new = self.cache.get(key)
-        self.assertEqual(new, old+1)
+        initial_value = self.initial_cache.get(raw_key, 0)
+        current_value = self.cache.get(key, version=version)
+        self.assertEqual(current_value, initial_value+1)
 
     def assertCacheKeyIncrementedMulti(self, key, version=None):
         raw_key = self.cache.make_key(key, version=version)
-        old = self.initial_cache[raw_key]
-        new = self.cache.get(key)
-        self.assertTrue(new > old)
+        initial_value = self.initial_cache[raw_key]
+        current_value = self.cache.get(key, version=version)
+        self.assertGreater(current_value, initial_value)
         
     def assertCacheKeyInvalidated(self, key, version=None):
         raw_key = self.cache.make_key(key, version=version)
+        current_value = self.cache.get(key, version=version)
         self.assertIn(raw_key, self.initial_cache)
-        self.assertEqual(self.cache.get(key), None)
+        self.assertEqual(current_value, None)
 
     def assertCacheKeyNotInvalidated(self, key, version=None):
         raw_key = self.cache.make_key(key, version=version)
+        current_value = self.cache.get(key, version=version)
         self.assertIn(raw_key, self.initial_cache)
-        self.assertNotEqual(self.cache.get(key), None)
+        self.assertNotEqual(current_value, None)
 
 class TestCase(BaphFixtureMixin, test.TestCase):
     pass

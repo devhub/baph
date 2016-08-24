@@ -1,3 +1,4 @@
+from collections import defaultdict
 import datetime
 import logging
 import math
@@ -7,6 +8,7 @@ import types
 from django.conf import settings
 from django.core.cache import get_cache
 from sqlalchemy import *
+from sqlalchemy import inspect
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.declarative.clsregistry import _class_resolver
 from sqlalchemy.ext.hybrid import hybrid_method
@@ -290,6 +292,7 @@ class CacheMixin(object):
         deleted = self.is_deleted or self in session.deleted
         data = instance_dict(self)
         cache = self.get_cache()
+        cache_alias = self._meta.cache_alias
 
         # get a list of all fields which changed
         changed_keys = []
@@ -299,7 +302,9 @@ class CacheMixin(object):
                 continue
             if attr.key in IGNORABLE_KEYS:
                 continue
-            ins, eq, rm = get_history(self, attr.key)
+            insp = inspect(self)
+            attr_ = getattr(insp.attrs, attr.key)
+            ins, eq, rm = attr_.history
             if ins or rm:
                 changed_keys.append(attr.key)
         self_updated = bool(changed_keys) or deleted
@@ -312,13 +317,13 @@ class CacheMixin(object):
                 # we only kill primary cache keys if the object exists
                 # this key won't exist during CREATE
                 cache_key = self.cache_key
-                cache_keys.add(cache_key)
+                cache_keys.add((cache_alias, cache_key))
 
         if self._meta.cache_list_fields:
             # collections will be altered by any action, so we always
             # kill these keys
             cache_key = self.cache_list_version_key
-            version_keys.add(cache_key)
+            version_keys.add((cache_alias, cache_key))
 
         # pointer records contain only the id of the parent resource
         # if changed, we set the old key to False, and set the new key
@@ -337,7 +342,7 @@ class CacheMixin(object):
             if not self.is_deleted:
                 cache.set(cache_key, idkey)
             if force_expire_pointers:
-                cache_keys.add(cache_key)
+                cache_keys.add((cache_alias, cache_key))
 
             # if this is an existing object, we need to handle the old key
             if not has_identity(self):
@@ -364,34 +369,43 @@ class CacheMixin(object):
             if not isinstance(objs, list):
                 objs = [objs]
             for obj in objs:
-                k1,k2 = obj.get_cache_keys(child_updated=True)
+                k1, k2 = obj.get_cache_keys(child_updated=True)
                 cache_keys.update(k1)
                 version_keys.update(k2)
-
         return (cache_keys, version_keys)
 
     def kill_cache(self, force=False):
-        cache_logger.debug('kill_cache called for %s' % self)
-        cache_keys, version_keys = self.get_cache_keys(child_updated=force)
-        if not cache_keys and not version_keys:
-            cache_logger.debug('%s has no cache keys' % self)
-            return
+      cache_logger.debug('kill_cache called for %s' % self)
+      cache_keys, version_keys = self.get_cache_keys(child_updated=force)
+      if not cache_keys and not version_keys:
+        cache_logger.debug('%s has no cache keys' % self)
+        return
 
-        cache_logger.debug('%s has the following cache keys:' % self)
-        for key in cache_keys:
-            cache_logger.debug('\t%s' % key)
-        cache_logger.debug('%s has the following version keys:' % self)
-        for key in version_keys:
-            cache_logger.debug('\t%s' % key)
+      keymap = {}
 
-        cache = self.get_cache()
-        cache.delete_many(cache_keys)
-        for key in version_keys:
-            v = cache.get(key)
-            if not v:
-                cache.set(key, int(time.time()))
-            else:
-                cache.incr(key)
+      cache_logger.debug('%s has the following cache keys:' % self)
+      for alias, key in cache_keys:
+        cache_logger.debug('\t[%s] %s' % (alias, key))
+        if alias not in keymap:
+          keymap[alias] = {'cache': set(), 'version': set()}
+        keymap[alias]['cache'].add(key)
+
+      cache_logger.debug('%s has the following version keys:' % self)
+      for alias, key in version_keys:
+        cache_logger.debug('\t[%s] %s' % (alias, key))
+        if alias not in keymap:
+          keymap[alias] = {'cache': set(), 'version': set()}
+        keymap[alias]['version'].add(key)
+
+      for cache_alias, keys in keymap.items():
+        cache = get_cache(cache_alias)
+        cache.delete_many(keys['cache'])
+        for key in keys['version']:
+          v = cache.get(key)
+          if not v:
+            cache.set(key, int(time.time()))
+          else:
+            cache.incr(key)
 
 class ModelPermissionMixin(object):
 

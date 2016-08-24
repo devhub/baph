@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from django.conf import settings
 from oauth_provider.store import InvalidConsumerError, InvalidTokenError, Store
 from sqlalchemy import or_
@@ -47,10 +49,14 @@ class ModelStore(Store):
                 - timestamp > NONCE_VALID_PERIOD:
             return False
 
+        timestamp = datetime.fromtimestamp(timestamp) \
+                            .strftime('%Y-%m-%d %H:%M:%S')
+
         session = orm.sessionmaker()
         params = {
             'consumer_key': oauth_request['oauth_consumer_key'],
             'key': oauth_request['oauth_nonce'],
+            'timestamp': timestamp,
             }
         nonce = session.query(OAuthNonce).filter_by(**params).first()
         if nonce:
