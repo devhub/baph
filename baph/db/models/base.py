@@ -345,7 +345,7 @@ class ModelBase(type):
                     remove_class(b, name)
             return model
 
-        if attrs.get('__tablename__', None):
+        if attrs.get('__tablename__', None) and not attrs.get('__abstract__'):
           table_args = attrs.pop('__table_args__', None)
           attrs['__table_args__'] = generate_table_args(table_args)
 
