@@ -1,7 +1,10 @@
+from collections import defaultdict
 import json
 import os
 import sys
 
+from django.core.cache import get_cache
+from django.utils.termcolors import make_style
 from MySQLdb.converters import conversions, escape
 from sqlalchemy import inspect
 from sqlalchemy import *
@@ -13,6 +16,11 @@ from sqlalchemy.sql import compiler
 from baph.core.management.base import BaseCommand #NoArgsCommand
 from baph.db.orm import ORM
 
+
+success_msg = make_style(fg='green')
+notice_msg = make_style(fg='yellow')
+error_msg = make_style(fg='red')
+info_msg = make_style(fg='blue')
 
 orm = ORM.get()
 Base = orm.Base
@@ -74,6 +82,7 @@ class Command(BaseCommand):
         else:
             pks = None
 
+        print ''
         while True:
             if not model_name:
                 model_name = prompt_for_model_name()
@@ -81,7 +90,7 @@ class Command(BaseCommand):
                 # quit
                 break
             if not model_name in Base._decl_class_registry:
-                print 'Invalid model name: %s' % model_name
+                print error_msg('Invalid model name: %s' % model_name)
                 model_name = None
                 continue
             model = Base._decl_class_registry[model_name]
@@ -92,27 +101,38 @@ class Command(BaseCommand):
             
             session = orm.sessionmaker()
             for pk in pks:
+                print info_msg('\nLooking up %r with pk=%s' % (model_name, pk))
                 obj = session.query(model).get(pk)
                 if not obj:
-                    print '\nNo %s found with PK %s' % (model_name, pk)
+                    print error_msg('  No %s found with PK %s' % (model_name, pk))
                     continue
 
-                print '\nFound object:', obj
-                cache = obj.get_cache()
+                print success_msg('  Found object: %r' % obj)
+
+                caches = defaultdict(lambda: {
+                    'cache_keys': set(),
+                    'version_keys': set(),
+                })
                 cache_keys, version_keys = obj.get_cache_keys(
                     child_updated=True, force_expire_pointers=True)
 
                 if cache_keys:
-                    print '  Killing cache keys:'
-                    for k in cache_keys:
-                        print '    %s' % k
-                    cache.delete_many(cache_keys)
+                    for alias, cache_key in cache_keys:
+                        caches[alias]['cache_keys'].add(cache_key)
 
                 if version_keys:
-                    print '  Incrementing version keys:'
-                    for k in version_keys:
-                        print '    %s' % k
-                        cache.incr(k)
+                    for alias, version_key in version_keys:
+                        caches[alias]['version_keys'].add(version_key)
+
+                for alias, keys in caches.items():
+                    print info_msg('Processing keys on cache %r' % alias)
+                    cache = get_cache(alias)
+                    for key in keys['cache_keys']:
+                        print '  Killing cache key: %r' % key
+                    cache.delete_many(keys['cache_keys'])
+                    for key in keys['version_keys']:
+                        print '  Incrementing version key: %r' % key
+                        cache.incr(key)
 
             model_name = None
             pks = None
