@@ -1,3 +1,5 @@
+import itertools
+
 from django.template.defaultfilters import slugify
 
 from sqlalchemy import *
@@ -37,15 +39,23 @@ def is_conflict(obj, session_obj, rel_keys, col_keys, slug_key, slug_value):
 
   return True
 
-def has_conflicts(obj, rel_keys, col_keys, slug_key, slug_value):
+def has_session_conflicts(obj, rel_keys, col_keys, slug_key, slug_value):
+  """
+  checks in the session for items which conflict with the provided slug
+  this is necessary for times when multiple items will be committed at
+  the same time, in order to resolve conflict issues before the commit
+  """
   session = object_session(obj)
-
-  # check the session first
-  for o in session.new.union(session.dirty):
+  for o in itertools.chain(session.new, session.dirty):
     if is_conflict(obj, o, rel_keys, col_keys, slug_key, slug_value):
       return True
+  return False
 
-  # now check the db
+def has_db_conflicts(obj, rel_keys, col_keys, slug_key, slug_value):
+  """
+  Checks in the database for items with conflicting slugs
+  """
+  session = object_session(obj)
   ident = obj.pk_as_query_filters(force=True)
   filters = {key: getattr(obj, key) for key in col_keys}
   filters[slug_key] = slug_value
@@ -53,10 +63,15 @@ def has_conflicts(obj, rel_keys, col_keys, slug_key, slug_value):
                              .filter_by(**filters) \
                              .filter(not_(ident)) \
                              .count()
-  if conflicts:
+  return conflicts > 0
+
+def has_conflicts(obj, rel_keys, col_keys, slug_key, slug_value):
+  # check the session first
+  if has_session_conflicts(obj, rel_keys, col_keys, slug_key, slug_value):
     return True
 
-  return False
+  # now check the db
+  return has_db_conflicts(obj, rel_keys, col_keys, slug_key, slug_value)
 
 class AutoSlugField(ColumnProperty):
     def __init__(self, *args, **kwargs):
@@ -92,32 +107,22 @@ class AutoSlugField(ColumnProperty):
           if isinstance(prop, RelationshipProperty):
             cols = [col.key for col in prop.local_columns]
             vals = [getattr(instance, k) for k in cols]
+            rel_keys.append(key)
+            col_keys.extend(cols)
 
-            if None not in vals:
-              # all fks are populated, safe to use these values
-              col_keys.extend(cols)
-            elif value is None:
+            if value is None and None in vals:
               # not sure when this would happen
               assert False
-            elif has_identity(value):
-              # parent already exists in the db
-              col_keys.extend(cols)
-            else:
-              # parent is a new instance
-              rel_keys.append(key)
           else:
             # column property
             col_keys.append(key)
 
         index = 1
-        base_col_keys = col_keys[:]
-
-        while True:
-          if not has_conflicts(instance, rel_keys, col_keys, self.key, slug):
-            return slug
+        while has_conflicts(instance, rel_keys, col_keys, self.key, slug):
           index += 1
           data = dict(slug=original_slug, sep=self.index_sep, index=index)
           slug = '%(slug)s%(sep)s%(index)d' % data
+        return slug
 
     def before_flush(self, session, add, instance):
         history = attributes.get_history(instance, self.key)
