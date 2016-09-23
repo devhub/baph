@@ -46,6 +46,8 @@ def has_session_conflicts(obj, rel_keys, col_keys, slug_key, slug_value):
   the same time, in order to resolve conflict issues before the commit
   """
   session = object_session(obj)
+  # session.new must be processed first, so that when a conflict arises,
+  #the original owner of the slug is allowed to keep it
   for o in itertools.chain(session.new, session.dirty):
     if is_conflict(obj, o, rel_keys, col_keys, slug_key, slug_value):
       return True
@@ -59,10 +61,11 @@ def has_db_conflicts(obj, rel_keys, col_keys, slug_key, slug_value):
   ident = obj.pk_as_query_filters(force=True)
   filters = {key: getattr(obj, key) for key in col_keys}
   filters[slug_key] = slug_value
-  conflicts = session.query(type(obj)) \
+  query = session.query(type(obj)) \
                              .filter_by(**filters) \
-                             .filter(not_(ident)) \
-                             .count()
+                             .filter(not_(ident))
+  with session.no_autoflush:
+    conflicts = query.count()
   return conflicts > 0
 
 def has_conflicts(obj, rel_keys, col_keys, slug_key, slug_value):
@@ -105,14 +108,26 @@ class AutoSlugField(ColumnProperty):
           value = getattr(instance, key)
           prop = mapper.get_property(key)
           if isinstance(prop, RelationshipProperty):
-            cols = [col.key for col in prop.local_columns]
-            vals = [getattr(instance, k) for k in cols]
+            # add the relationship key to the comparison list
             rel_keys.append(key)
-            col_keys.extend(cols)
-
-            if value is None and None in vals:
-              # not sure when this would happen
-              assert False
+            # add the foreign keys to the list of columns to check
+            for column in prop.local_columns:
+              val = getattr(instance, column.key)
+              if val is None:
+                # incomplete or missing fk
+                if value is None:
+                  # no related obj and no fk, not sure how this could
+                  # happen, as existing objects will always have both
+                  # populated, and new objects should have at least one
+                  # error for now, and figure out how to handle it if
+                  # the situation arises
+                  assert False
+              else:
+                # only add the column key as a comparison field if we have
+                # a value, otherwise false positives can occur during conflict
+                # checking. If the fk isn't populated, the related object will
+                # still allow proper conflict detection
+                col_keys.append(column.key)
           else:
             # column property
             col_keys.append(key)
