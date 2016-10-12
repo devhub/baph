@@ -32,6 +32,7 @@ class CommandParser(ArgumentParser):
       raise base.CommandError("Error: %s" % message)
 
 class BaseCommand(base.BaseCommand):
+  is_subcommand = False
 
   def create_parser(self, prog_name, subcommand):
     """
@@ -76,6 +77,12 @@ class BaseCommand(base.BaseCommand):
     self.add_arguments(parser)
     return parser
 
+  def add_arguments(self, parser):
+    """
+    Entry point for subclassed commands to add custom arguments.
+    """
+    pass
+
   def run_from_argv(self, argv):
     """
     Set up any environment changes requested (e.g., Python path
@@ -87,10 +94,16 @@ class BaseCommand(base.BaseCommand):
     self._called_from_command_line = True
     parser = self.create_parser(argv[0], argv[1])
 
-    options = parser.parse_args(argv[2:])
-    cmd_options = vars(options)
-    # Move positional args out of options to mimic legacy optparse
-    args = cmd_options.pop('args', ())
+    if self.is_subcommand:
+      options, args = parser.parse_known_args(argv[2:])
+      cmd_options = vars(options)
+      # pass unknown args to the subcommand
+      args = list(args)
+    else:
+      options = parser.parse_args(argv[2:])
+      cmd_options = vars(options)
+      # Move positional args out of options to mimic legacy optparse
+      args = cmd_options.pop('args', ())
     base.handle_default_options(options)
     try:
       self.execute(*args, **cmd_options)
