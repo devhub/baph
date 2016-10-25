@@ -136,17 +136,29 @@ class JsonField(forms.CharField):
 
 class ListField(JsonField):
     " allowed values must be in list form "
+    def __init__(self, *args, **kwargs):
+      self.strip = kwargs.pop('strip', False)
+      super(ListField, self).__init__(*args, **kwargs)
+
+    def _clean_value(self, value):
+      """
+      Clean a single value in a list
+      """
+      if self.strip and isinstance(value, basestring):
+        return value.strip()
+      return value
+
     def to_python(self, value):
-        if value is None:
-            return value
-        if value in validators.EMPTY_VALUES:
-            return []
-        value = super(ListField, self).to_python(value)
-        # sqlalchemy.ext.associationproxy._AssociationList (and similar) does 
-        # not subclass list, so we check for __iter__ to determine validity
-        if not hasattr(value, '__iter__') or hasattr(value, 'items'):
-            raise forms.ValidationError(_('This field requires a list as input'))
+      if value is None:
         return value
+      if value in validators.EMPTY_VALUES:
+        return []
+      value = super(ListField, self).to_python(value)
+      # sqlalchemy.ext.associationproxy._AssociationList (and similar) does 
+      # not subclass list, so we check for __iter__ to determine validity
+      if not hasattr(value, '__iter__') or hasattr(value, 'items'):
+        raise forms.ValidationError(_('This field requires a list as input'))
+      return [self._clean_value(v) for v in value]
 
 class DictField(JsonField):
     " allowed values must be in dict form "
