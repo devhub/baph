@@ -38,7 +38,7 @@ class Options(object):
         self.cache_alias = DEFAULT_CACHE_ALIAS
         self.cache_timeout = None
         self.cache_detail_fields = []
-        self.cache_list_fields = []
+        self.cache_list_fields = None
         # cache_pointers is a list of identity keys which contain no data
         # other than the primary key of the object being pointed at.
         # format: (cache_key_template, columns, name)

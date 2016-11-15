@@ -161,6 +161,23 @@ class CacheMixin(object):
         return self.get_cache_namespaces(instance=self)
 
     @classmethod
+    def get_cache_prefix(cls):
+        namespaces = cls.get_cache_namespaces()
+        if not namespaces:
+            return None
+
+        cache = cls.get_cache()
+        pieces = []
+        for key, value in sorted(namespaces):
+            ns_key = '%s_%s' % (key, value)
+            version = cache.get(ns_key)
+            if version is None:
+                version = int(time.time())
+                cache.set(ns_key, version)
+            pieces.append('%s_%s' % (ns_key, version))
+        return ':'.join(pieces)
+
+    @classmethod
     def build_cache_key(cls, mode, **kwargs):
         """
         Generates a cache key for the provided mode and the given kwargs
@@ -169,17 +186,30 @@ class CacheMixin(object):
         if mode is list or list_version, cache_list_fields must be in the cls meta
         the associated fields must all be present in kwargs
         """
+        '''
+        print 'build_cache_key:'
+        print '  cls:', cls
+        print '  mode:', mode
+        print '  kwargs:', kwargs
+        '''
         if mode not in ('detail', 'list', 'list_version'):
             raise Exception('Invalid mode "%s" for build_cache_key. '
                 'Valid modes are "detail", "list", and "list_version")')
 
-        _mode = 'list' if mode == 'list_version' else mode
+        _mode = mode.split('_')[0]
+        #_mode = 'list' if mode == 'list_version' else mode
         fields = getattr(cls._meta, 'cache_%s_fields' % _mode, None)
-        if not fields:
-            raise Exception('cache_%s_fields is empty or undefined' % _mode)
+        if fields is None:
+            raise Exception('cache_%s_fields is undefined' % _mode)
+        if not fields and mode == 'detail':
+            raise Exception('cache_%s_fields is empty' % _mode)
 
         cache = cls.get_cache()
+        prefix = cls.get_cache_prefix()
+
         cache_pieces = []
+        if prefix:
+            cache_pieces.append(prefix)
         cache_pieces.append(cls._meta.base_model_name_plural)
         cache_pieces.append(_mode)
 
@@ -189,40 +219,29 @@ class CacheMixin(object):
                 raise Exception('%s is undefined' % key)
             cache_pieces.append('%s=%s' % (key, kwargs.pop(key)))
 
-        version_key = ':'.join(cache_pieces)
+        cache_key = ':'.join(cache_pieces)
 
-        if mode == 'list_version':
-            return version_key
-
-        ns_pieces = []
-        for key, value in sorted(cls.get_cache_namespaces()):
-            ns_key = '%s_%s' % (key, value)
-            version = cache.get(ns_key)
-            if version is None:
-                version = int(time.time())
-                cache.set(ns_key, version)
-            ns_pieces.append('%s_%s' % (ns_key, version))
-
-            #cache_pieces.insert(0, '%s_%s' % (ns_key, version))
-
-        if mode == 'detail':
-            cache_key = ':'.join(ns_pieces + cache_pieces)
+        if mode in ('detail', 'list_version'):
             return cache_key
 
         # treat list keys as version keys, so we can invalidate
         # multiple subsets (filters, pagination, etc) at once
+        version_key = cache_key
         version = cache.get(version_key)
         if version is None:
             version = int(time.time())
             cache.set(version_key, version)
         cache_key = '%s_%s' % (version_key, version)
 
-        filters = []
+        if kwargs.get('offset', True) == 0:
+            kwargs.pop('offset')
+
+        suffix_pieces = []
         for key, value in sorted(kwargs.items()):
-            filters.append('%s=%s' % (key, value))
+            suffix_pieces.append('%s=%s' % (key, value))
+        suffix = ':'.join(suffix_pieces)
 
-        cache_key = ':'.join(ns_pieces + [cache_key] + filters)
-
+        cache_key = ':'.join((cache_key, suffix))
         return cache_key
 
     @property
@@ -244,7 +263,8 @@ class CacheMixin(object):
         """
         if not hasattr(self._meta, 'cache_list_fields'):
             raise Exception('Meta.cache_list_fields is undefined')
-        data = dict((k, getattr(self, k)) for k in self._meta.cache_list_fields)
+        keys = self._meta.cache_list_fields or []
+        data = dict((k, getattr(self, k)) for k in keys)
         return self.build_cache_key('list_version', **data)
 
     @property
@@ -254,7 +274,8 @@ class CacheMixin(object):
         """
         if not hasattr(self._meta, 'cache_list_fields'):
             raise Exception('Meta.cache_list_fields is undefined')
-        data = dict((k, getattr(self, k)) for k in self._meta.cache_list_fields)
+        keys = self._meta.cache_list_fields or []
+        data = dict((k, getattr(self, k)) for k in keys)
         return self.build_cache_key('list', **data)
 
     def cache_pointers(self, data=None, columns=[]):
@@ -278,7 +299,7 @@ class CacheMixin(object):
         cache_keys = set()
         version_keys = set()
 
-        if not any(getattr(self._meta, k) for k in [
+        if not any(getattr(self._meta, k, None) is not None for k in [
             'cache_detail_fields',
             'cache_list_fields',
             'cache_pointers',
@@ -319,7 +340,7 @@ class CacheMixin(object):
                 cache_key = self.cache_key
                 cache_keys.add((cache_alias, cache_key))
 
-        if self._meta.cache_list_fields:
+        if self._meta.cache_list_fields is not None:
             # collections will be altered by any action, so we always
             # kill these keys
             cache_key = self.cache_list_version_key
