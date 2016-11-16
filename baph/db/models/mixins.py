@@ -407,24 +407,26 @@ class CacheMixin(object):
         return (cache_keys, version_keys)
 
     def kill_cache(self, force=False):
-      cache_logger.debug('kill_cache called for %s' % self)
+      ident = '%s(%s)' % (self.__class__.__name__, id(self))
+      cache_logger.debug('kill_cache called for %s' % ident)
+
       cache_keys, version_keys = self.get_cache_keys(child_updated=force)
       if not cache_keys and not version_keys:
-        cache_logger.debug('%s has no cache keys' % self)
+        cache_logger.debug('  %s has no cache keys' % ident)
         return
 
       keymap = {}
 
-      cache_logger.debug('%s has the following cache keys:' % self)
+      cache_logger.debug('  %s has the following cache keys:' % ident)
       for alias, key in cache_keys:
-        cache_logger.debug('\t[%s] %s' % (alias, key))
+        cache_logger.debug('    [%s] %s' % (alias, key))
         if alias not in keymap:
           keymap[alias] = {'cache': set(), 'version': set()}
         keymap[alias]['cache'].add(key)
 
-      cache_logger.debug('%s has the following version keys:' % self)
+      cache_logger.debug('  %s has the following version keys:' % ident)
       for alias, key in version_keys:
-        cache_logger.debug('\t[%s] %s' % (alias, key))
+        cache_logger.debug('    [%s] %s' % (alias, key))
         if alias not in keymap:
           keymap[alias] = {'cache': set(), 'version': set()}
         keymap[alias]['version'].add(key)
