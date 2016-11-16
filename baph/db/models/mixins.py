@@ -178,71 +178,82 @@ class CacheMixin(object):
         return ':'.join(pieces)
 
     @classmethod
-    def build_cache_key(cls, mode, **kwargs):
-        """
-        Generates a cache key for the provided mode and the given kwargs
-        mode is one of ['list', 'detail', or 'list_version']
-        if mode is detail, cache_detail_fields must be defined in the cls meta
-        if mode is list or list_version, cache_list_fields must be in the cls meta
-        the associated fields must all be present in kwargs
-        """
-        '''
-        print 'build_cache_key:'
-        print '  cls:', cls
-        print '  mode:', mode
-        print '  kwargs:', kwargs
-        '''
-        if mode not in ('detail', 'list', 'list_version'):
-            raise Exception('Invalid mode "%s" for build_cache_key. '
-                'Valid modes are "detail", "list", and "list_version")')
+    def build_cache_key(cls, mode, *args, **kwargs):
+      """
+      Generates a cache key for the provided mode and the given kwargs
+      mode is one of ['list', 'detail', or 'list_version']
+      if mode is detail, cache_detail_fields must be defined in the cls meta
+      if mode is list or list_version, cache_list_fields must be in the cls meta
+      the associated fields must all be present in kwargs
+      """
+      '''
+      print 'build_cache_key:'
+      print '  cls:', cls
+      print '  mode:', mode
+      print '  kwargs:', kwargs
+      '''
+      valid_modes = ('detail', 'list', 'list_version', 'pointer')
+      if mode not in valid_modes:
+        raise Exception('Invalid mode "%s" for build_cache_key. '
+          'Valid modes are %s' % ', '.join(valid_modes))
 
-        _mode = mode.split('_')[0]
-        #_mode = 'list' if mode == 'list_version' else mode
-        fields = getattr(cls._meta, 'cache_%s_fields' % _mode, None)
-        if fields is None:
-            raise Exception('cache_%s_fields is undefined' % _mode)
-        if not fields and mode == 'detail':
-            raise Exception('cache_%s_fields is empty' % _mode)
+      _mode = mode.split('_')[0]
+      if _mode == 'pointer':
+        if len(args) != 1:
+          raise Exception('build_cache_key requires one positional arg'
+                          'if mode=="pointer"')
+        rows = [x for x in cls._meta.cache_pointers if x[2] == args[0]]
+        if len(rows) == 0:
+          raise Exception('could not find a cache_pointer with name %r'
+                          % args[0])
+        raw_key, attrs, name = rows[0]
+        return raw_key % kwargs
 
-        cache = cls.get_cache()
-        prefix = cls.get_cache_prefix()
+      fields = getattr(cls._meta, 'cache_%s_fields' % _mode, None)
+      if fields is None:
+          raise Exception('cache_%s_fields is undefined' % _mode)
+      if not fields and mode == 'detail':
+          raise Exception('cache_%s_fields is empty' % _mode)
 
-        cache_pieces = []
-        if prefix:
-            cache_pieces.append(prefix)
-        cache_pieces.append(cls._meta.base_model_name_plural)
-        cache_pieces.append(_mode)
+      cache = cls.get_cache()
+      prefix = cls.get_cache_prefix()
 
-        for key in sorted(fields):
-            # all associated fields must be present in kwargs
-            if not key in kwargs:
-                raise Exception('%s is undefined' % key)
-            cache_pieces.append('%s=%s' % (key, kwargs.pop(key)))
+      cache_pieces = []
+      if prefix:
+          cache_pieces.append(prefix)
+      cache_pieces.append(cls._meta.base_model_name_plural)
+      cache_pieces.append(_mode)
 
-        cache_key = ':'.join(cache_pieces)
+      for key in sorted(fields):
+          # all associated fields must be present in kwargs
+          if not key in kwargs:
+              raise Exception('%s is undefined' % key)
+          cache_pieces.append('%s=%s' % (key, kwargs.pop(key)))
 
-        if mode in ('detail', 'list_version'):
-            return cache_key
+      cache_key = ':'.join(cache_pieces)
 
-        # treat list keys as version keys, so we can invalidate
-        # multiple subsets (filters, pagination, etc) at once
-        version_key = cache_key
-        version = cache.get(version_key)
-        if version is None:
-            version = int(time.time())
-            cache.set(version_key, version)
-        cache_key = '%s_%s' % (version_key, version)
+      if mode in ('detail', 'list_version'):
+          return cache_key
 
-        if kwargs.get('offset', True) == 0:
-            kwargs.pop('offset')
+      # treat list keys as version keys, so we can invalidate
+      # multiple subsets (filters, pagination, etc) at once
+      version_key = cache_key
+      version = cache.get(version_key)
+      if version is None:
+          version = int(time.time())
+          cache.set(version_key, version)
+      cache_key = '%s_%s' % (version_key, version)
 
-        suffix_pieces = []
-        for key, value in sorted(kwargs.items()):
-            suffix_pieces.append('%s=%s' % (key, value))
-        suffix = ':'.join(suffix_pieces)
+      if kwargs.get('offset', True) == 0:
+          kwargs.pop('offset')
 
-        cache_key = ':'.join((cache_key, suffix))
-        return cache_key
+      suffix_pieces = []
+      for key, value in sorted(kwargs.items()):
+          suffix_pieces.append('%s=%s' % (key, value))
+      suffix = ':'.join(suffix_pieces)
+
+      cache_key = ':'.join((cache_key, suffix))
+      return cache_key
 
     @property
     def cache_key(self):
