@@ -35,7 +35,7 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
 
 class Options(object):
     def __init__(self, meta, app_label=None):
-        self.cache_alias = DEFAULT_CACHE_ALIAS
+        self.cache_alias = None #DEFAULT_CACHE_ALIAS
         self.cache_timeout = None
         self.cache_detail_fields = []
         self.cache_list_fields = None
@@ -162,7 +162,7 @@ class Options(object):
         if self.verbose_name_plural is None:
             self.verbose_name_plural = self.verbose_name + 's'
 
-        if self.cache_timeout is None:
+        if self.cache_alias and self.cache_timeout is None:
             self.cache_timeout = get_cache(self.cache_alias).default_timeout
 
         from baph.db import ORM

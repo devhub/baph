@@ -439,8 +439,11 @@ def get_declarative_base(**kwargs):
 @event.listens_for(mapper, 'after_update')
 @event.listens_for(mapper, 'after_delete')
 def kill_cache(mapper, connection, target):
-    if getattr(settings, 'CACHE_ENABLED', False):
-        target.kill_cache()
+  if not getattr(settings, 'CACHE_ENABLED', False):
+    return
+  if not target.get_cache():
+    return
+  target.kill_cache()
 
 @event.listens_for(Session, 'before_flush')
 def check_global_status(session, flush_context, instances):

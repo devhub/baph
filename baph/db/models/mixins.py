@@ -150,6 +150,8 @@ class CacheMixin(object):
         Returns the cache associated with this model, based on the value
         of meta.cache_alias
         """
+        if not cls._meta.cache_alias:
+          return None
         return get_cache(cls._meta.cache_alias)
 
     @classmethod
@@ -186,19 +188,14 @@ class CacheMixin(object):
       if mode is list or list_version, cache_list_fields must be in the cls meta
       the associated fields must all be present in kwargs
       """
-      '''
-      print 'build_cache_key:'
-      print '  cls:', cls
-      print '  mode:', mode
-      print '  kwargs:', kwargs
-      '''
+      
+
       valid_modes = ('detail', 'list', 'list_version', 'pointer')
       if mode not in valid_modes:
         raise Exception('Invalid mode "%s" for build_cache_key. '
           'Valid modes are %s' % ', '.join(valid_modes))
 
-      _mode = mode.split('_')[0]
-      if _mode == 'pointer':
+      if mode == 'pointer':
         if len(args) != 1:
           raise Exception('build_cache_key requires one positional arg'
                           'if mode=="pointer"')
@@ -209,6 +206,7 @@ class CacheMixin(object):
         raw_key, attrs, name = rows[0]
         return raw_key % kwargs
 
+      _mode = mode.split('_')[0]
       fields = getattr(cls._meta, 'cache_%s_fields' % _mode, None)
       if fields is None:
           raise Exception('cache_%s_fields is undefined' % _mode)
@@ -220,20 +218,20 @@ class CacheMixin(object):
 
       cache_pieces = []
       if prefix:
-          cache_pieces.append(prefix)
+        cache_pieces.append(prefix)
       cache_pieces.append(cls._meta.base_model_name_plural)
       cache_pieces.append(_mode)
 
       for key in sorted(fields):
-          # all associated fields must be present in kwargs
-          if not key in kwargs:
-              raise Exception('%s is undefined' % key)
-          cache_pieces.append('%s=%s' % (key, kwargs.pop(key)))
+        # all associated fields must be present in kwargs
+        if not key in kwargs:
+          raise Exception('%s is undefined' % key)
+        cache_pieces.append('%s=%s' % (key, kwargs.pop(key)))
 
       cache_key = ':'.join(cache_pieces)
 
       if mode in ('detail', 'list_version'):
-          return cache_key
+        return cache_key
 
       # treat list keys as version keys, so we can invalidate
       # multiple subsets (filters, pagination, etc) at once
@@ -242,7 +240,6 @@ class CacheMixin(object):
       if version is None:
           version = int(time.time())
           cache.set(version_key, version)
-      cache_key = '%s_%s' % (version_key, version)
 
       if kwargs.get('offset', True) == 0:
           kwargs.pop('offset')
@@ -253,7 +250,7 @@ class CacheMixin(object):
       suffix = ':'.join(suffix_pieces)
 
       cache_key = ':'.join((cache_key, suffix))
-      return cache_key
+      return '%s:%s' % (cache_key, version)
 
     @property
     def cache_key(self):
