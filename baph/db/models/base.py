@@ -198,9 +198,11 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
         return False
 
     def save(self, commit=False):
-        from baph.db.orm import ORM
-        orm = ORM.get()
-        session = orm.sessionmaker()
+        session = object_session(self)
+        if not session:
+            from baph.db.orm import ORM
+            orm = ORM.get()
+            session = orm.sessionmaker()
 
         if commit:
             if not self in session:
@@ -441,7 +443,7 @@ def get_declarative_base(**kwargs):
 def kill_cache(mapper, connection, target):
   if not getattr(settings, 'CACHE_ENABLED', False):
     return
-  if not target.get_cache():
+  if not target.is_cacheable:
     return
   target.kill_cache()
 

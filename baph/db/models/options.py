@@ -23,6 +23,7 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
                  'cache_alias', 'cache_timeout', 'cache_pointers',
                  'cache_detail_fields', 'cache_list_fields',
                  'cache_relations', 'cache_cascades', 
+                 'cache_partitions', 'cache_modes',
                  'filter_translations', 'last_modified',
                  'permissions', 'permission_scopes', 'form_class',
                  'permission_actions', 'permission_classes',
@@ -36,9 +37,10 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
 class Options(object):
     def __init__(self, meta, app_label=None):
         self.cache_alias = None #DEFAULT_CACHE_ALIAS
+        self.cache_modes = ()
         self.cache_timeout = None
-        self.cache_detail_fields = []
-        self.cache_list_fields = None
+        self.cache_detail_fields = None
+        self.cache_list_fields = ()
         # cache_pointers is a list of identity keys which contain no data
         # other than the primary key of the object being pointed at.
         # format: (cache_key_template, columns, name)
@@ -57,6 +59,8 @@ class Options(object):
         # invalidations. Use this when an object is cached as a subobject of
         # a larger cache, to signal the parent that it needs to recache
         self.cache_cascades = []
+        self.cache_partitions = []
+
         # global_column is the name of the boolean column which indicates
         # global status. This must be set in order to use globalization
         self.global_column = None
