@@ -280,6 +280,7 @@ class CacheMixin(object):
       if mode is list or list_version, cache_list_fields must be in the cls meta
       the associated fields must all be present in kwargs
       """
+      kwargs = {k: int(v) if isinstance(v, bool) else v for k,v in kwargs.items()}
       cache = cls.get_cache()
 
       def assemble_key(pieces):
