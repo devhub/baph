@@ -154,14 +154,6 @@ class Options(object):
                 elif hasattr(self.meta, attr_name):
                     setattr(self, attr_name, getattr(self.meta, attr_name))
 
-            # verbose_name_plural is a special case because it uses a 's'
-            # by default.
-            if self.verbose_name_plural is None:
-                self.verbose_name_plural = string_concat(self.verbose_name, 's')
-
-            if not self.cache_timeout:
-                self.cache_timeout = get_cache(self.cache_alias).default_timeout
-
             # Any leftover attributes must be invalid.
             if meta_attrs != {}:
                 raise TypeError("'class Meta' got invalid attribute(s): %s" 
