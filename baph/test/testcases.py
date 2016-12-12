@@ -349,8 +349,13 @@ class MemcacheMixin(object):
 
     def assertCacheKeyCreated(self, key, version=None):
         raw_key = self.cache.make_key(key, version=version)
-        self.assertNotIn(raw_key, self.initial_cache)
+        self.assertNotIn(raw_key, self.initial_cache.keys())
         self.assertIn(raw_key, self.cache.get_all_keys())
+
+    def assertCacheKeyNotCreated(self, key, version=None):
+        raw_key = self.cache.make_key(key, version=version)
+        self.assertNotIn(raw_key, self.initial_cache.keys())
+        self.assertNotIn(raw_key, self.cache.get_all_keys())
 
     def assertCacheKeyIncremented(self, key, version=None):
         raw_key = self.cache.make_key(key, version=version)
@@ -367,14 +372,27 @@ class MemcacheMixin(object):
     def assertCacheKeyInvalidated(self, key, version=None):
         raw_key = self.cache.make_key(key, version=version)
         current_value = self.cache.get(key, version=version)
-        self.assertIn(raw_key, self.initial_cache)
+        self.assertIn(raw_key, self.initial_cache.keys())
         self.assertEqual(current_value, None)
 
     def assertCacheKeyNotInvalidated(self, key, version=None):
         raw_key = self.cache.make_key(key, version=version)
         current_value = self.cache.get(key, version=version)
-        self.assertIn(raw_key, self.initial_cache)
+        self.assertIn(raw_key, self.initial_cache.keys())
         self.assertNotEqual(current_value, None)
+
+    def assertPointerKeyInvalidated(self, key, version=None):
+        raw_key = self.cache.make_key(key, version=version)
+        current_value = self.cache.get(key, version=version)
+        self.assertIn(raw_key, self.initial_cache.keys())
+        self.assertEqual(current_value, 0)
+
+    def assertPointerKeyNotInvalidated(self, key, version=None):
+        raw_key = self.cache.make_key(key, version=version)
+        current_value = self.cache.get(key, version=version)
+        self.assertIn(raw_key, self.initial_cache.keys())
+        self.assertNotEqual(current_value, 0)
+
 
 class TestCase(BaphFixtureMixin, test.TestCase):
     pass

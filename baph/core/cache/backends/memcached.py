@@ -7,6 +7,10 @@ class BaphMemcachedCache(MemcachedCache):
     """
     An extension of the django memcached Cache class
     """
+    def __init__(self, server, params):
+        super(BaphMemcachedCache, self).__init__(server, params)
+        self.version = params.get('VERSION', 0)
+
     def delete_many_raw(self, keys):
         """
         Deletes the specified keys (does not run them through make_key)
