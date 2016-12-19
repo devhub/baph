@@ -16,6 +16,10 @@ class Command(BaseCommand):
     parser.add_argument('--scalar', action='store_true',
       dest='scalar', default=False,
       help='returns only the value (no key) for a single setting')
+    parser.add_argument('--pprint', action='store_true',
+      dest='pprint', default=False,
+      help='format results with pprint (response will not be parseable with '
+           'javascript\'s JSON.parse')
 
   def generate_settings(self, keys):
     from django.conf import settings
@@ -39,6 +43,7 @@ class Command(BaseCommand):
 
   def handle(self, *keys, **options):
     scalar = options['scalar']
+    pretty = options['pprint']
     settings = self.generate_settings(keys)
 
     if scalar:
@@ -46,9 +51,12 @@ class Command(BaseCommand):
       if len(settings) != 1:
         raise CommandError('--scalar can only be used when requesting '
           'a single setting')
-      output = settings.values().pop()
+      output = json.dumps(settings.values().pop())
     else:
       # return a dict of key/value pairs
       output = json.dumps(settings, sort_keys=True)
 
-    pprint.pprint(output)
+    if pretty:
+      pprint.pprint(output)
+    else:
+      print output

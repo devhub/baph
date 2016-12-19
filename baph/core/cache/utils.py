@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 import time
 
-from django.core.cache import get_cache
+
 try:
   # django 1.7 - current
   from django.utils.module_loading import import_string
@@ -100,6 +100,7 @@ class CacheNamespace(object):
 
   @property
   def cache(self):
+    from django.core.cache import get_cache
     return get_cache(self.cache_alias)
 
   def get_default(self):
