@@ -1,5 +1,5 @@
 from cStringIO import StringIO
-import pyinotify
+#import pyinotify
 
 from django.contrib.staticfiles.management.commands import runserver
 
@@ -20,6 +20,7 @@ class Command(runserver.Command):
       self.stdout.write("%s error%s found\n" 
         % (num_errors, num_errors != 1 and 's' or ''))
 
+  '''
   def run(self, *args, **options):
     """
     Runs the server, using the autoreloader if needed
@@ -30,3 +31,4 @@ class Command(runserver.Command):
       autoreload.main(self.inner_run, args, options)
     else:
       self.inner_run(*args, **options)
+  '''
