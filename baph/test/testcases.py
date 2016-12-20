@@ -343,9 +343,6 @@ class MemcacheMixin(object):
             self.initial[alias] = {k: cache._cache.get(k)
                 for k in cache.get_all_keys()}
 
-        self.initial_cache = {k: self.cache._cache.get(k)
-            for k in self.cache.get_all_keys()}
-
     def assertCacheHit(self, rsp):
         self.assertEqual(rsp['x-from-cache'], 'True')
 
@@ -356,6 +353,13 @@ class MemcacheMixin(object):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         current_value = cache.get(key, version=version)
         self.assertEqual(current_value, value)
+
+    def assertCacheKeyUnchanged(self, key, version=None, cache_alias=None):
+        cache = get_cache(cache_alias) if cache_alias else self.cache
+        raw_key = cache.make_key(key, version=version)
+        initial_value = self.initial[cache_alias].get(raw_key, 0)
+        current_value = cache.get(key, version=version)
+        self.assertEqual(current_value, initial_value)
 
     def assertCacheKeyCreated(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
@@ -426,7 +430,7 @@ class MemcacheTestCase(MemcacheMixin, TestCase):
         self.cache.flush_all()
 
     def setUp(self, objs={}, counts={}):
-        self.initial_cache = {}
+        self.initial = {}
         super(MemcacheTestCase, self).setUp()
 
 class MemcacheLSTestCase(MemcacheMixin, LiveServerTestCase):
@@ -435,7 +439,7 @@ class MemcacheLSTestCase(MemcacheMixin, LiveServerTestCase):
         self.cache.flush_all()
 
     def setUp(self, objs={}, counts={}):
-        self.initial_cache = {}
+        self.initial = {}
         super(MemcacheLSTestCase, self).setUp()
 
 
