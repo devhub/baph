@@ -343,6 +343,19 @@ class MemcacheMixin(object):
             self.initial[alias] = {k: cache._cache.get(k)
                 for k in cache.get_all_keys()}
 
+    def _initial(self, cache_alias):
+        """
+        Return the initial contents of the cache with the specified alias
+        for the special case where cache_alias is None, an empty dict will
+        be returned if the 'None' key isn't present
+        This is to solve issues where test assertions are called but
+        populate_cache was never called (which implies the test has no
+        initial keys), so initial_cache[None] was never set up
+        """
+        if cache_alias is None:
+            return self.initial.get(cache_alias, {})
+        return self.initial[cache_alias]
+
     def assertCacheHit(self, rsp):
         self.assertEqual(rsp['x-from-cache'], 'True')
 
@@ -357,33 +370,33 @@ class MemcacheMixin(object):
     def assertCacheKeyUnchanged(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
-        initial_value = self.initial[cache_alias].get(raw_key, 0)
+        initial_value = self._initial(cache_alias).get(raw_key, 0)
         current_value = cache.get(key, version=version)
         self.assertEqual(current_value, initial_value)
 
     def assertCacheKeyCreated(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
-        self.assertNotIn(raw_key, self.initial[cache_alias].keys())
+        self.assertNotIn(raw_key, self._initial(cache_alias).keys())
         self.assertIn(raw_key, cache.get_all_keys())
 
     def assertCacheKeyNotCreated(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
-        self.assertNotIn(raw_key, self.initial[cache_alias].keys())
+        self.assertNotIn(raw_key, self._initial(cache_alias).keys())
         self.assertNotIn(raw_key, cache.get_all_keys())
 
     def assertCacheKeyIncremented(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
-        initial_value = self.initial[cache_alias].get(raw_key, 0)
+        initial_value = self._initial(cache_alias).get(raw_key, 0)
         current_value = cache.get(key, version=version)
         self.assertEqual(current_value, initial_value+1)
 
     def assertCacheKeyIncrementedMulti(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
-        initial_value = self.initial[cache_alias][raw_key]
+        initial_value = self._initial(cache_alias)[raw_key]
         current_value = cache.get(key, version=version)
         self.assertGreater(current_value, initial_value)
         
@@ -391,28 +404,28 @@ class MemcacheMixin(object):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
         current_value = cache.get(key, version=version)
-        self.assertIn(raw_key, self.initial[cache_alias].keys())
+        self.assertIn(raw_key, self._initial(cache_alias).keys())
         self.assertEqual(current_value, None)
 
     def assertCacheKeyNotInvalidated(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
         current_value = cache.get(key, version=version)
-        self.assertIn(raw_key, self.initial[cache_alias].keys())
+        self.assertIn(raw_key, self._initial(cache_alias).keys())
         self.assertNotEqual(current_value, None)
 
     def assertPointerKeyInvalidated(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
         current_value = cache.get(key, version=version)
-        self.assertIn(raw_key, self.initial[cache_alias].keys())
+        self.assertIn(raw_key, self._initial(cache_alias).keys())
         self.assertEqual(current_value, 0)
 
     def assertPointerKeyNotInvalidated(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
         current_value = cache.get(key, version=version)
-        self.assertIn(raw_key, self.initial[cache_alias].keys())
+        self.assertIn(raw_key, self._initial(cache_alias).keys())
         self.assertNotEqual(current_value, 0)
 
 
