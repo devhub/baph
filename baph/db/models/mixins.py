@@ -465,6 +465,17 @@ class CacheMixin(object):
                         "asset type '%s'" % asset_type)
       return get_cache(alias)
 
+    @classmethod
+    def build_cache_pointers(cls, data):
+      keys = {}
+      for raw_key, attrs, name in cls._meta.cache_pointers:
+        try:
+          keys[name] = raw_key % data
+        except:
+          pass
+      return keys
+
+
     def cache_pointers(self, data=None, columns=[]):
       if not hasattr(self._meta, 'cache_pointers'):
         return {}
