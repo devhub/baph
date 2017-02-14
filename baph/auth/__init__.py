@@ -2,6 +2,7 @@
 '''SQLAlchemy versions of :mod:`django.contrib.auth` utility functions.'''
 
 from datetime import datetime
+from django.conf import settings
 from django.contrib.auth import (SESSION_KEY, BACKEND_SESSION_KEY,
     load_backend, user_logged_in)
 from django.contrib.auth.models import AnonymousUser
@@ -57,6 +58,7 @@ def get_user(request):
     try:
         user_id = request.session[SESSION_KEY]
         backend_path = request.session[BACKEND_SESSION_KEY]
+        assert backend_path in settings.AUTHENTICATION_BACKENDS
         backend = load_backend(backend_path)
         user = backend.get_user(user_id) or AnonymousUser()
     except KeyError:
