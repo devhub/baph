@@ -132,6 +132,10 @@ class QueryLoggerMixin(object):
 
   def assertQuerysetMatches(self, queryset):
     results = self._querylogger.identities[:]
+    self.assertLessEqual(len(results), len(queryset),
+      'Expected a maximum of %d queries, but %d were executed:\n%s'
+      % (len(queryset), len(results), '\n'.join(str(q) for q in results))
+    )
     queryset = queryset[:]
     while queryset:
       query = queryset.pop(0)
