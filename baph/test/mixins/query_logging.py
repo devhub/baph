@@ -129,3 +129,21 @@ class QueryLoggerMixin(object):
     if not hasattr(self, '_querylogger'):
       self._querylogger = QueryLogger(emit=True)
     return self._querylogger
+
+  def assertQuerysetMatches(self, queryset):
+    results = self._querylogger.identities[:]
+    queryset = queryset[:]
+    while queryset:
+      query = queryset.pop(0)
+      if query[-1] == 'optional':
+        query = query[:-1]
+        optional = True
+      else:
+        optional = False
+      if results[0] == query:
+        results.pop(0)
+        continue
+      if optional:
+        continue
+      raise AssertionError('query identity %s not found in results'
+        % str(query))
