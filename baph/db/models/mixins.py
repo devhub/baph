@@ -31,12 +31,14 @@ IGNORABLE_KEYS = (
     )
 
 CACHE_KEY_MODES = (
-  'detail', 
+  'detail',
+  'detail_version',
   'list',
   'list_version',
   'list_partition',
   'list_partition_version',
   'pointer',
+  'asset',
 )
 
 class TimestampMixin(object):
@@ -204,13 +206,27 @@ class CacheMixin(object):
       return version_keys
 
     @classmethod
-    def get_cache_root(cls, base_mode, **kwargs):
-      pieces = []
-      attr = 'cache_%s_fields' % base_mode
-      fields = getattr(cls._meta, attr, None) or []
+    def get_required_cache_fields(cls, base_mode):
+      """
+      Returns a list of fields required for generating a key of the given type
+      """
+      if '_' in base_mode:
+        " This is a full mode, reduce to base_mode "
+        base_mode = base_mode.split('_')[0]
+      if base_mode == 'asset':
+        " asset keys require the same fields as the parent object "
+        base_mode = 'detail'
+      name = 'cache_%s_fields' % base_mode
+      fields = getattr(cls._meta, name, None) or []
       if base_mode == 'detail' and not fields:
         raise Exception('cache_detail_fields is required for building detail '
-                        'cache keys')
+                        'and asset cache keys')
+      return fields
+
+    @classmethod
+    def get_cache_root(cls, base_mode, **kwargs):
+      pieces = []
+      fields = cls.get_required_cache_fields(base_mode)
       for key in sorted(fields):
         # all associated fields must be present in kwargs
         if not key in kwargs:
@@ -258,13 +274,16 @@ class CacheMixin(object):
         raise ValueError('%s is not a valid cache mode. Valid modes are: %s'
                          % (mode, ', '.join(CACHE_KEY_MODES)))
       base_mode = mode.split('_')[0]
+      if base_mode == 'asset':
+        " validate asset keys as if they were detail keys "
+        base_mode = 'detail'
       if base_mode not in cls._meta.cache_modes:
         raise ValueError('%s is not a supported cache mode for this class. '
                          'Supported modes are: %s'
                          % (base_mode, ', '.join(cls._meta.cache_modes)))
       if mode == 'detail' and not cls._meta.cache_detail_fields:
         raise Exception('Meta.cache_detail_fields is required for '
-                        'generating cache detail keys')
+                        'generating cache detail and asset keys')
       if mode in ('list_partition', 'list_partition_version') \
           and not cls._meta.cache_partitions:
         raise Exception('Meta.cache_partitions is required for '
@@ -275,7 +294,7 @@ class CacheMixin(object):
     def build_cache_key(cls, mode, *args, **kwargs):
       """
       Generates a cache key for the provided mode and the given kwargs
-      mode is one of ['list', 'detail', 'list_version', or 'pointer']
+      mode is one of ['asset', 'list', 'detail', 'list_version', or 'pointer']
       if mode is detail, cache_detail_fields must be defined in the cls meta
       if mode is list or list_version, cache_list_fields must be in the cls meta
       the associated fields must all be present in kwargs
@@ -302,17 +321,28 @@ class CacheMixin(object):
 
       cls.validate_cache_mode(mode)
       base_mode = mode.split('_')[0]
+      if base_mode == 'asset':
+        base_mode = 'detail'
 
       if mode == 'pointer':
         if len(args) != 1:
           raise Exception('build_cache_key requires one positional arg'
-                          'if mode=="pointer"')
+                          '(the pointer name) if mode=="pointer"')
         rows = [x for x in cls._meta.cache_pointers if x[2] == args[0]]
         if len(rows) == 0:
           raise Exception('could not find a cache_pointer with name %r'
                           % args[0])
         raw_key, attrs, name = rows[0]
         return raw_key % kwargs
+      elif mode == 'asset':
+        if not args:
+          raise Exception('build_cache_key requires at least one positional '
+                          'arg (the subkey) if mode=="asset"')
+        subkey = args[0]
+        obj_type = None
+        if len(args) > 1:
+          " an object type was defined "
+          obj_type = args[1]
 
       pieces = []
       pieces.append(cls._meta.base_model_name_plural)
@@ -320,6 +350,10 @@ class CacheMixin(object):
 
       # add core identification fields to the key
       pieces.append(cls.get_cache_root(base_mode, **kwargs))
+
+      if mode in ('detail_version', 'asset'):
+        # add the version suffix to the base key
+        pieces.append('version')
 
       if mode in ('list', 'list_partition'):
         # add optional partition fields to the key
@@ -330,6 +364,17 @@ class CacheMixin(object):
         version_key = assemble_key(pieces)
         pieces.append(cls.get_cache_suffix(**kwargs))
         pieces.append(getset_version(version_key))
+
+      if mode == 'asset':
+        version_key = assemble_key(pieces)
+        # remove the 'version' piece from the asset key
+        pieces.pop()
+        pieces.append(getset_version(version_key))
+        pieces.append('asset')
+        if obj_type:
+          # add obj_type if provided
+          pieces.append(obj_type)
+        pieces.append(subkey)
 
       return assemble_key(pieces)
 
@@ -342,6 +387,15 @@ class CacheMixin(object):
       if not has_identity(self):
         raise Exception('This instance has no identity')
       return self.build_cache_key('detail', **self.cache_data)
+
+    @property
+    def cache_detail_version_key(self):
+      """
+      Instance property which returns the cache list version key
+      for a single object
+      """
+      self.validate_cache_mode('detail')
+      return self.build_cache_key('detail_version', **self.cache_data)
 
     @property
     def cache_list_version_key(self):
@@ -377,6 +431,50 @@ class CacheMixin(object):
       """
       self.validate_cache_mode('list_partition')
       return self.build_cache_key('list_partition', **self.cache_data)
+
+    def make_asset_key(self, key, asset_type=None):
+      """
+      Generates an asset key, which will be invalidated when the
+      parent object is invalidated
+      """
+      self.validate_cache_mode('asset')
+      if not has_identity(self):
+        raise Exception('This instance has no identity')
+      return self.build_cache_key('asset', key, asset_type,
+                                  **self.cache_data)      
+
+    def cache_asset(self, key, value, asset_type=None):
+      """
+      Writes an asset belonging to an instance into the cache
+      """
+      self.validate_cache_mode('asset')
+      asset_key = self.make_asset_key(key, asset_type)
+      cache = self.get_asset_cache(asset_type)
+      cache.set(asset_key, value)
+
+    def get_asset_cache(self, asset_type=None):
+      asset_aliases = self._meta.cache_asset_cache_aliases
+      if not asset_type:
+        asset_type = 'generic'
+        default = self._meta.cache_alias
+      else:
+        default = None
+      alias = asset_aliases.get(asset_type, default)
+      if not alias:
+        raise Exception("Unable to determine cache alias for "
+                        "asset type '%s'" % asset_type)
+      return get_cache(alias)
+
+    @classmethod
+    def build_cache_pointers(cls, data):
+      keys = {}
+      for raw_key, attrs, name in cls._meta.cache_pointers:
+        try:
+          keys[name] = raw_key % data
+        except:
+          pass
+      return keys
+
 
     def cache_pointers(self, data=None, columns=[]):
       if not hasattr(self._meta, 'cache_pointers'):
@@ -443,7 +541,8 @@ class CacheMixin(object):
           changes[field] = (old_value, new_value)
       return changes
 
-    def get_cache_keys(self, child_updated=False, force_expire_pointers=False):
+    def get_cache_keys(self, child_updated=False, force_expire_pointers=False,
+                       force=False):
       cache_alias = self._meta.cache_alias
       cache = self.get_cache()
       cache_keys = set()
@@ -459,7 +558,7 @@ class CacheMixin(object):
       changes = self.get_changes(ignore=IGNORABLE_KEYS)
       self_updated = bool(changes) or deleted
 
-      if not self_updated and not child_updated:
+      if not self_updated and not child_updated and not force:
         return (cache_keys, version_keys)
 
       changed_attrs = set(changes.keys())
@@ -492,6 +591,18 @@ class CacheMixin(object):
             # increment the version keys for the previous values
             for pversion_key in self.get_cache_partition_version_keys(**old_data):
               version_keys.add((cache_alias, pversion_key))
+
+      if 'asset' in self._meta.cache_modes:
+        # models with sub-assets need to increment the version key
+        # of the parent detail
+        if has_identity(self):
+          key = self.cache_detail_version_key
+          if deleted:
+            # delete the detail version key
+            cache_keys.add((cache_alias, key))
+          else:
+            # for updates, increment the version key
+            version_keys.add((cache_alias, key))
 
       # pointer records contain only the id of the parent resource
       # if changed, we set the old key to False, and set the new key

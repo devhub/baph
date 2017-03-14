@@ -24,6 +24,7 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
                  'cache_detail_fields', 'cache_list_fields',
                  'cache_relations', 'cache_cascades', 
                  'cache_partitions', 'cache_modes',
+                 'cache_asset_cache_aliases',
                  'filter_translations', 'last_modified',
                  'permissions', 'permission_scopes', 'form_class',
                  'permission_actions', 'permission_classes',
@@ -36,7 +37,13 @@ DEFAULT_NAMES = ('model_name', 'model_name_plural',
 
 class Options(object):
     def __init__(self, meta, app_label=None):
+        # cache_alias dictates which cache is used for cache operations
         self.cache_alias = None #DEFAULT_CACHE_ALIAS
+        # cache_asset_cache_aliases is a mapping of asset types to
+        # cache aliases. If no type is provided, the type will be
+        # 'default'. If the type is not found in this mapping, the
+        # default cache alias for the resource will be used
+        self.cache_asset_cache_aliases = {}
         self.cache_modes = ()
         self.cache_timeout = None
         self.cache_detail_fields = None
