@@ -1,88 +1,121 @@
-import os
-import sys
-
-from django.core.cache import get_cache
-from MySQLdb.converters import conversions, escape
-from sqlalchemy import inspect
-from sqlalchemy import *
-from sqlalchemy.exc import ResourceClosedError
-from sqlalchemy.orm import lazyload, contains_eager, class_mapper
-from sqlalchemy.orm.util import identity_key
-from sqlalchemy.sql import compiler
-
+from baph.core.cache.utils import CacheNamespace
 from baph.core.management.base import NoArgsCommand
-from baph.db.orm import ORM
 
 
-orm = ORM.get()
-Base = orm.Base
+def build_options_list(namespaces):
+  options = []
+  for ns in namespaces:
+    name = ns.name
+    attrs = [ns.attr]
+    options.append((ns, name, attrs, 'ns', ns.affected_models))
+    for model, _attrs in ns.partitions:
+      name = model.__name__
+      for attr in _attrs:
+        options.append((ns, name, attrs + [attr], 'partition', [model]))
+  return options
 
-def get_namespaced_models():
-    nsmap = {}
-    for k,v in Base._decl_class_registry.items():
-        if k.startswith('_'):
-            # skip internal SA attrs
-            continue
-        ns = v().get_cache_namespaces()
-        if not ns:
-            continue
-        for k2, v2 in ns:
-            # prefix with the cache name
-            k2 = '%s:%s' % (v._meta.cache_alias, k2)
-            if k2 not in nsmap:
-                nsmap[k2] = set()
-            nsmap[k2].add(k)
-    return nsmap
+def print_options(options):
+  print '\n%s  %s %s' % ('id', 'name'.ljust(16), 'attrs')
+  for i, (ns, name, attr, type, models) in enumerate(options):
+    names = sorted([model.__name__ for model in models])
+    print '%s   %s %s' % (i, name.ljust(16), attr)
+    print '    invalidates: %s' % names
 
-def print_ns_keys(ns_models):
-    """ prints available namespace keys to the terminal """
-    print '\nidx\tcache_alias:nskey'
-    for i, (key, models) in enumerate(ns_models.items()):
-        print '%d\t%s (triggers reloads on %s)' % (i, key, ', '.join(models))
+def get_value_for_attr(attr):
+  msg = 'Enter the value for %r (ENTER to cancel): ' % attr
+  while True:
+    value = raw_input(msg).strip()
+    if not value:
+      return None
+    return value
+
+def get_option(options):
+  name_map = {opt[1].lower(): i for i, opt in enumerate(options)}
+  msg = '\nIncrement which ns key? (ENTER to list, Q to quit): '
+  while True:
+    value = raw_input(msg).strip().lower()
+    if not value:
+      print_options(options)
+      continue
+
+    if value == 'q':
+      # quit
+      sys.exit()
+
+    if value.isdigit():
+      # integer index
+      index = int(value)
+    elif value in name_map:
+      # string reference
+      index = name_map[value]
+    else:
+      print 'Invalid option: %r' % value
+      continue
+
+    if index >= len(options):
+      print 'Invalid index: %r' % index
+      continue
+
+    return options[index]
+
+def increment_version_key(cache, key):
+  version = cache.get(key)
+  print '  current value of %s: %s' % (key, version)
+  version = version + 1 if version else 1
+  cache.set(key, version)
+  version = cache.get(key)
+  print '  new value of %s: %s' % (key, version)
 
 
 class Command(NoArgsCommand):
-    requires_model_validation = True
+  requires_model_validation = True
 
-    def handle_noargs(self, **options):
-        ns_models = get_namespaced_models()
-        print_ns_keys(ns_models)
-        while True:
-            cmd = raw_input('\nIncrement which ns key? (ENTER to list, Q to quit): ').strip()
-            if cmd in ('q', 'Q'):
-                # quit
-                break
+  def main(self):
+    print_options(self.options)
+    option = get_option(self.options)
 
-            if not cmd:
-                # list ns keys
-                print_ns_keys(ns_models)
-                continue            
+    ns, name, attrs, type, models = option
+    ns_attr = attrs[0]
+    partition_attrs = attrs[1:]
+    ns_value = get_value_for_attr(ns_attr)
+    if ns_value is None:
+      return None
 
-            if cmd.isdigit():
-                # numeric index
-                if int(cmd) >= len(ns_models):
-                    print 'Invalid index: %s' % cmd
-                    continue
-                cmd, models = ns_models.items()[int(cmd)]
-            elif not cmd in ns_models:
-                print 'Invalid ns key: %s' % cmd
-                continue
+    if not partition_attrs:
+      # this is a top-level namespace increment
+      version_key = ns.version_key(ns_value)
+      increment_version_key(ns.cache, version_key)
+      return 1
 
-            cache_alias, key = cmd.split(':', 1)
-            cache = get_cache(cache_alias)
+    # this is a partition increment
+    values = {}
+    for attr in partition_attrs:
+      value = get_value_for_attr(attr)
+      if value is None:
+        return 1
+      values[attr] = value
 
-            while True:
-                cmd = raw_input('Enter the value for "%s" (ENTER to cancel): ' % key).strip()
-                if not cmd:
-                    break
-               
-                version_key = '%s_%s' % (key, cmd)
-                version = cache.get(version_key)
-                print '\tcurrent value of %s: %s' % (version_key, version)
-                if version is None:
-                    version = 0
-                version += 1
-                cache.set(version_key, version)
-                version = cache.get(version_key)
-                print '\tnew value of %s: %s' % (version_key, version)
+    model = models[0]
+    cache = model.get_cache()
+    keys = model.get_cache_partition_version_keys(**values)
 
+    # we need to set an override on the cachenamespace instance
+    # so it returns the correct value when called by cache.set
+    with ns.override_value(ns_value):
+      for version_key in keys:
+        increment_version_key(cache, version_key)
+
+    return 1
+
+  def handle_noargs(self, **options):
+    self.namespaces = CacheNamespace.get_cache_namespaces()
+    self.options = build_options_list(self.namespaces)
+    
+    while True:
+      try:
+        result = self.main()
+      except KeyboardInterrupt:
+        print ''
+        break
+      if result is None:
+        break

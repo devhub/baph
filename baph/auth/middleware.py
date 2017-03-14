@@ -1,32 +1,21 @@
-# -*- coding: utf-8 -*-
-'''\
-==========================================================================
-:mod:`baph.auth.middleware` -- Django+SQLAlchemy Authentication Middleware
-==========================================================================
+from django.utils.functional import SimpleLazyObject
 
-.. moduleauthor:: Mark Lee <markl@evomediagroup.com>
-'''
+from . import get_user as _get_user
 
 
-class LazyUser(object):
-    '''Allows for the lazy retrieval of the :class:`baph.auth.models.User`
-    object.
-    '''
-    def __get__(self, request, obj_type=None):
-        if not hasattr(request, '_cached_user'):
-            from . import get_user
-            request._cached_user = get_user(request)
-        return request._cached_user
+def get_user(request):
+  if not hasattr(request, '_cached_user'):
+    request._cached_user = _get_user(request)
+  return request._cached_user
 
+def set_lazy_user(request):
+  request.user = SimpleLazyObject(lambda: get_user(request))
 
 class AuthenticationMiddleware(object):
-    '''See :class:`django.contrib.auth.middleware.AuthenticationMiddleware`.
-    '''
-
-    def process_request(self, request):
-        assert hasattr(request, 'session'), '''\
+  def process_request(self, request):
+    assert hasattr(request, 'session'), '''\
 The Django authentication middleware requires session middleware to be
 installed. Edit your MIDDLEWARE_CLASSES setting to insert
 "django.contrib.sessions.middleware.SessionMiddleware".'''
-        request.__class__.user = LazyUser()
-        return None
+    set_lazy_user(request)
+
