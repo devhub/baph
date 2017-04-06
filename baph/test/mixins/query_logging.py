@@ -39,6 +39,12 @@ class FrameProcessor(object):
   def __call__(self, frame, context):
     raise NotImplemented()
 
+def resolve_entity(entity):
+  if hasattr(entity, 'class_'):
+    # this is a mapper
+    entity = entity.class_
+  return entity.__name__
+
 class SQLAlchemyFrameProcessor(FrameProcessor):
   apps = ['sqlalchemy']
   args = ['op', 'entity']
@@ -52,16 +58,23 @@ class SQLAlchemyFrameProcessor(FrameProcessor):
       entity = str(args['self'])
     elif func_name == '_emit_insert_statements':
       op = 'insert'
-      entity = args['mapper'].class_.__name__
+      entity = resolve_entity(args['mapper'])
     elif func_name == 'scalar':
       op = 'load scalar'
-      entity = str(args['self']._entity_zero())
+      col_entity = args['self']._entity_zero()
+      entity = str(col_entity)
+      if str(entity).startswith('count('):
+        op = 'count'
+        entity = resolve_entity(col_entity.entity_zero)
     elif func_name == '_load_expired':
       op = 'load expired'
-      entity = type(args['state'].object).__name__
+      entity = resolve_entity(type(args['state'].object))
     elif func_name in ('first', 'one'):
       op = 'load'
-      entity = args['self']._mapper_zero().class_.__name__
+      entity = resolve_entity(args['self']._mapper_zero())
+    elif func_name == '__getitem__':
+      op = 'load multi'
+      entity = resolve_entity(args['self']._mapper_zero())
     else:
       return
     context['op'] = op
