@@ -16,7 +16,7 @@ PROVINCES = [
   ('O', _('El Oro')),
   ('E', _('Esmeraldas')),
   ('W', _('Galápagos')),
-  ('G', _('Guayas')),
+  ('G', _('Guayaquil')),
   ('I', _('Imbabura')),
   ('L', _('Loja')),
   ('R', _('Los Ríos')),
