@@ -73,7 +73,7 @@ class MultiObjectField(forms.Field):
     def to_python(self, value):
         from baph.db.orm import Base
         if value in validators.EMPTY_VALUES:
-            return None
+            return self.collection_class[0]()
         self.validate_collection(value)
         return value        
 
