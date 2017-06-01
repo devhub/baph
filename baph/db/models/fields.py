@@ -14,6 +14,7 @@ from sqlalchemy.ext.orderinglist import OrderingList
 from sqlalchemy.orm.collections import MappedCollection
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 
+from baph.core.validators import MaxLengthValidator
 from baph.db import types
 from baph.forms import fields
 from baph.utils.collections import duck_type_collection
@@ -108,6 +109,13 @@ class Field(object):
             return force_text(self.default, strings_only=True)
         return None
 
+    def modify_validator(self, validator):
+      if isinstance(validator, validators.MaxLengthValidator):
+        max_length = validator.limit_value
+        return MaxLengthValidator(max_length)
+      else:
+        return validator
+
     def formfield(self, form_class=None, **kwargs):
         defaults = {'required': self.required,
                     'label': capfirst(self.verbose_name),
@@ -144,8 +152,10 @@ class Field(object):
         '''
         defaults.update(kwargs)
         if form_class is None:
-            form_class = fields.NullCharField
-        return form_class(**defaults)
+          form_class = fields.NullCharField
+        field = form_class(**defaults)
+        field.validators = map(self.modify_validator, field.validators)
+        return field
 
     def clean(self, value):
         return self.as_form_field().clean(value)
