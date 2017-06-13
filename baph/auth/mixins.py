@@ -219,133 +219,154 @@ class UserPermissionMixin(object):
         return self.has_obj_perm(resource, action, obj)
 
     def has_obj_perm(self, resource, action, obj):
-        logger.debug('\nhas_obj_perm "%s %s" called for user %s'
-            % (action, resource, self.id))
-        logger.debug('  obj: %s' % obj)
-        # TODO: auto-generate resource by checking base_mapper of polymorphics
-        if type(obj)._meta.permission_handler:
-            # permissions for this object are based off parent object
-            parent_obj = obj.get_parent(type(obj)._meta.permission_handler)
-            if not parent_obj:
-                # nothing to check perms against, assume True
-                return True
-            parent_res = type(parent_obj).resource_name
-            if action != 'view':
-                action = 'edit'
+      logger.debug('\nhas_obj_perm "%s %s" called for user %s'
+          % (action, resource, self.id))
+      logger.debug('  obj: %s' % obj)
+      # TODO: auto-generate resource by checking base_mapper of polymorphics
 
-            return self.has_obj_perm(parent_res, action, parent_obj)
+      if type(obj)._meta.permission_handler:
+        # permissions for this object are based off parent object
+        parent_obj = obj.get_parent(type(obj)._meta.permission_handler)
+        if not parent_obj:
+          # nothing to check perms against, assume True
+          return True
+        parent_res = type(parent_obj).resource_name
+        if action != 'view':
+          action = 'edit'
+        return self.has_obj_perm(parent_res, action, parent_obj)
 
-        ctx = self.get_context()
-        logger.debug('perm context: %s' % ctx)
+      ctx = self.get_context()
+      logger.debug('perm context: %s' % ctx)
 
-        perms = self.get_resource_permissions(resource, action)
-        if not perms:
-            # user has no valid permissions for this resource/action pair
-            logger.debug('user has no valid permissions')
+      perms = self.get_resource_permissions(resource, action)
+      if not perms:
+        # user has no valid permissions for this resource/action pair
+        logger.debug('[INVALID] user has no valid permissions')
+        return False
+
+      perm_map = {}
+      explicit = []
+
+      matches = {
+        'explicit_allow': [],
+        'explicit_deny': [],
+        'general_allow': [],
+        'general_deny': [],
+      }
+      errors = {
+        'explicit_allow': [],
+        'explicit_deny': [],
+        'general_allow': [],
+        'general_deny': [],
+      }
+
+      for p in perms:
+        logger.debug('matched perm: %s' % p.codename)
+        logger.debug('  explicit: %s' % p._explicit)
+        logger.debug('  deny: %s' % p._deny)
+        logger.debug('  opcode: %s' % p.opcode)
+        logger.debug('  key: %r' % p.key)
+
+        mode1 = 'explicit' if p._explicit else 'general'
+        mode2 = 'deny' if p._deny else 'allow'
+        mode = '%s_%s' % (mode1, mode2)
+
+        if not p.key:
+          # this is a boolean permission (not a key/value filter)
+          if p._deny:
             return False
+          matches[mode].append(p.key)
+          continue
 
-        for p in perms:
-            logger.debug('  perm: %s' % p.codename)
+        if p._explicit:
+          explicit.append(p.key)
+        if not (p.key, p._deny) in perm_map:
+          perm_map[(p.key, p._deny)] = set()
 
-        perm_map = {}
-        explicit = []
-        matches = []
-        for p in perms:
-            if not p.key:
-                # this is a boolean permission (not a key/value filter)
-                if p._deny:
-                    return False
-                matches.append(p)
-                continue
-            if p._explicit:
-                explicit.append(p.key)
-            if not (p.key, p._deny) in perm_map:
-                perm_map[(p.key, p._deny)] = set()
-
-            if p.opcode == 'in':
-                # this is a json-encoded list of values
-                values = json.loads(p.value)
-            else:
-                # this is a single value
-                values = [p.value]
-            # replace context variables
-            values = [str(value) % ctx for value in values]
-            perm_map[(p.key, p._deny)].update(values)
-
-        if action == 'add':
-            for p in type(obj)._meta.permission_parents:
-                attr = getattr(type(obj), p)
-                prop = attr.property
-                col = prop.local_remote_pairs[0][0]
-                col_attr = column_to_attr(type(obj), col)
-                if not col_attr.key in perm_map:
-                    perm_map[(col_attr.key, False)] = set([None])
-
-        add_errors = []
-        for (k, deny), v in perm_map.items():
-            logger.debug('testing perm: %s=%s' % (k,v))
-            keys = k.split(',')
-            key_pieces = [key_to_value(obj, key) for key in keys]
-
-            if key_pieces == [None]:
-                value = None
-            elif None in key_pieces:
-                # this object lacks the values required to form a key
-                # so this permission is irrelevant to the current obj
-                logger.debug('  object lacks all necessary keys, ignoring perm')
-                continue
-            else:
-                value = ','.join(key_pieces)
-
-            if not value:
-                # no value to check
-                logger.debug('  object has no value to check')
-                continue
-
-            if v == set([None]):
-                # no restriction on allowed values
-                logger.debug('  object has no restrictions on values')
-                continue
-
-            if str(value) in v:
-                if action == 'add':
-                    if k in explicit:
-                        # this perm indicates it can grant access and override
-                        # restrictions set by broader permissions. If the key/value
-                        # is set on the UserGroup (rather than the permission), the
-                        # permission will be 'explicit'
-                        logger.debug('match on explicit add permission. deny=%s' % deny)
-                        if deny:
-                            return False
-                        matches.append(v)
-                else:
-                    # for non-add permissions, a single matching filter will grant
-                    # access to the resource
-                    logger.debug('match on non-add permission. deny=%s' % deny)
-                    if deny:
-                        return False
-                    matches.append(v)
-            else:
-                if action == 'add':
-                    add_errors.append( (k, value, v) )
-                    continue
-        if add_errors:
-            logger.debug('[INVALID] negative hit on add permission')
-            return False
-
-        if action == 'add':
-            logger.debug('match on add permission with no disqualifying '
-                'criteria. deny=%s' % deny)
-            if deny:
-                return False
-            matches.append(v)
-
-        if matches:
-            logger.debug('[VALID] applicable permissions were found')
-            return matches
+        if p.opcode == 'in':
+          # this is a json-encoded list of values
+          values = json.loads(p.value)
         else:
-            logger.debug('[INVALID] %s permission with no qualifying criteria')
-            return False
+          # this is a single value
+          values = [p.value]
+
+        # replace context variables
+        logger.debug('  values: %r' % (values,))
+        values = [str(value) % ctx for value in values]
+        logger.debug('  values: %r' % (values,))
+        perm_map[(p.key, p._deny)].update(values)
+
+      if action == 'add':
+        # add defaults for backref columns on parent objects
+        for p in type(obj)._meta.permission_parents:
+          logger.debug('checking permission parent: %r' % p)
+          attr = getattr(type(obj), p)
+          prop = attr.property
+          col = prop.local_remote_pairs[0][0]
+          col_attr = column_to_attr(type(obj), col)
+          logger.debug('  attr: %r' % col_attr.key)
+          if not (col_attr.key, False) in perm_map:
+            perm_map[(col_attr.key, False)] = set([None])
+      
+      for (k, deny), allowed_values in perm_map.items():
+        logger.debug('testing perm key: %r' % k)
+        logger.debug('  allowed values: %r' % allowed_values)
+        status = 'INVALID' if deny else 'VALID'
+
+        mode1 = 'explicit' if k in explicit else 'general'
+        mode2 = 'deny' if deny else 'allow'
+        mode = '%s_%s' % (mode1, mode2)
+
+        if allowed_values == set([None]):
+          # no restriction on allowed values
+          logger.debug('  permission has no restrictions on values, ignoring')
+          continue
+
+        keys = k.split(',')
+        key_pieces = [key_to_value(obj, key) for key in keys]
+
+        if None in key_pieces:
+          # this object lacks the values required to form a key
+          # so this permission is irrelevant to the current obj
+          logger.debug('  object lacks all necessary keys, ignoring')
+          continue
+
+        value = ','.join(key_pieces)
+        if not value:
+          # no value to check
+          logger.debug('  object has no value to check, ignoring')
+          continue
+        logger.debug('  supplied value: %r' % value)
+
+        if str(value) in allowed_values:
+          # the provided value is one of the allowed values
+          matches[mode].append(k)
+        else:
+          # the provided value was not found in the allowed values
+          errors[mode].append(k)
+
+      if matches['explicit_deny']:
+        logger.debug('[DENY] explicit "deny" permission found')
+        return False
+      elif matches['explicit_allow']:
+        logger.debug('[ALLOW] explicit "allow" permission found')
+        return True
+      elif matches['general_deny']:
+        logger.debug('[DENY] "deny" permission found with no explicit override')
+        return False
+      elif not matches['general_allow']:
+        logger.debug('[DENY] no general "allow" permissions found')
+        return False
+      elif action != 'add':
+        logger.debug('[ALLOW] found general "allow" permission on non-add action')
+        return True
+      elif errors['general_allow']:
+        logger.debug('[DENY] add permission with negative match on "allow" permission')
+        return False
+      else:
+        logger.debug('[ALLOW] add permission with general "allow" and no negative matches')
+        return True
+
 
     def get_resource_filters(self, resource, action='view'):
         """
