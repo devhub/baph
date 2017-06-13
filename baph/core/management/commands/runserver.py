@@ -2,10 +2,22 @@ from cStringIO import StringIO
 #import pyinotify
 
 from django.contrib.staticfiles.management.commands import runserver
+from django.core.servers.basehttp import WSGIRequestHandler
 
 from baph.core.management.validation import get_validation_errors
 from baph.utils import autoreload
 
+
+def get_environ(self):
+  for k, v in self.headers.items():
+    if '_' in k:
+      del self.headers[k]
+
+  environ = super(WSGIRequestHandler, self).get_environ()
+  environ['RAW_URI'] = self.path
+  return environ
+
+WSGIRequestHandler.get_environ = get_environ
 
 class Command(runserver.Command):
 
