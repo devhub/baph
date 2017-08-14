@@ -1,12 +1,24 @@
+import inspect
 import os
 import sys
 from argparse import ArgumentParser
+from operator import attrgetter
 
 from django.core.management import base
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management.base import handle_default_options
 from django.utils.six import StringIO
 
+from baph.conf.preconfigure import Preconfigurator
+from .base import CommandError
+
+
+LEGACY_OPT_KWARGS = ('nargs', 'help', 'action', 'dest', 'default',
+                     'metavar', 'type', 'choices', 'const')
+LEGACY_OPT_TYPES = {
+  'string': str,
+  'choice': None,
+}
 
 class CommandParser(ArgumentParser):
   """
@@ -33,6 +45,109 @@ class CommandParser(ArgumentParser):
 
 class BaseCommand(base.BaseCommand):
   is_subcommand = False
+  required_args = []
+  optional_args = []
+
+  def __init__(self, *args, **kwargs):
+    super(BaseCommand, self).__init__(*args, **kwargs)
+    self.preconf = Preconfigurator()
+
+  @property
+  def ignored_args(self):
+    " returns a list of preconfiguration args which are used for loading "
+    " settings, but should not be passed on to the actual command "
+    return (set(self.preconf.core_settings)
+            .difference(self.required_args)
+            .difference(self.optional_args)
+          )
+
+  def add_preconf_argument(self, parser, name, required=False):
+    option = self.preconf.arg_map[name]
+    args, kwargs = option.arg_params
+    kwargs = dict(kwargs, required=required)
+    parser.add_argument(*args, **kwargs)
+
+  def add_preconf_arguments(self, parser):
+    for name in self.required_args:
+      self.add_preconf_argument(parser, name, required=True)
+    for name in self.optional_args:
+      self.add_preconf_argument(parser, name, required=False)
+    for name in self.ignored_args:
+      self.add_preconf_argument(parser, name, required=False)
+
+  def get_legacy_args(self):
+    handle = super(BaseCommand, self).handle
+    spec = inspect.getargspec(handle)
+    defaults = list(spec.defaults) if spec.defaults else None
+
+    argstring = self.args.strip()
+    helps = []
+    while argstring:
+      if argstring.startswith('['):
+        head, _, tail = argstring[1:].partition(']')
+        head = head.rstrip('.').strip()
+        helps.append((head, True))
+        argstring = tail.strip()
+      else:
+        head, _, tail = argstring.partition(' ')
+        helps.append((head, False))
+        argstring = tail.strip()
+
+    rsp = []
+    for name in spec.args[1:]: # ignore 'self'
+      help, optional = helps.pop(0)
+      kw = {
+        'nargs': '?' if optional else 1,
+        'help': help,
+      }
+      if defaults:
+        kw['default'] = defaults.pop(0)
+      rsp.append(([name], kw))
+
+    if spec.varargs and helps:
+      name = 'args'
+      help, optional = helps.pop(0)
+      if helps and not optional and helps[0] == (help, True):
+        nargs = '+'
+      else:
+        nargs = '*'
+      kw = {
+        'nargs': nargs,
+        'help': spec.varargs.replace('_', ' '),
+        'metavar': help,
+      }
+      rsp.append(([name], kw))
+    return rsp
+
+  def get_legacy_kwargs(self):
+    rsp = []
+    for option in self.option_list:
+      args = option._long_opts + option._short_opts
+      getter = attrgetter(*LEGACY_OPT_KWARGS)
+      kwargs = dict(zip(LEGACY_OPT_KWARGS, getter(option)))
+      if kwargs.get('type', None):
+        kwargs['type'] = LEGACY_OPT_TYPES[kwargs['type']]
+      kwargs = {k: v for k, v in kwargs.items() if v is not None}
+      rsp.append((args, kwargs))
+    return rsp
+
+  def add_legacy_arguments(self, parser):
+    " adds old-style (optparse) arguments to new style (argparse) parsers "
+    " this can be used to subclass django 1.6 commands while maintaining "
+    " the newer backported base command class interface "
+    parser_opts = set(parser._option_string_actions.keys())
+
+    for (args, kwargs) in self.get_legacy_args():
+      if parser_opts.intersection(args):
+        # already present on parser
+        continue
+      parser.add_argument(*args, **kwargs)
+
+    for (args, kwargs) in self.get_legacy_kwargs():
+      if parser_opts.intersection(args):
+        # already present on parser
+        continue
+      parser.add_argument(*args, **kwargs)
 
   def create_parser(self, prog_name, subcommand):
     """
@@ -74,6 +189,8 @@ class BaseCommand(base.BaseCommand):
       '--no-color', action='store_true', dest='no_color', default=False,
       help="Don't colorize the command output.",
     )
+    self.add_preconf_arguments(parser)
+    self.add_legacy_arguments(parser)
     self.add_arguments(parser)
     return parser
 
@@ -105,6 +222,11 @@ class BaseCommand(base.BaseCommand):
       # Move positional args out of options to mimic legacy optparse
       args = cmd_options.pop('args', ())
     base.handle_default_options(options)
+
+    # strip ignored args before passing them on to the command
+    for key in self.ignored_args.intersection(cmd_options.keys()):
+      del cmd_options[key]
+
     try:
       self.execute(*args, **cmd_options)
     except Exception as e:

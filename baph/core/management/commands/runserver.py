@@ -5,6 +5,7 @@ import mimetools
 from django.contrib.staticfiles.management.commands import runserver
 from django.core.servers.basehttp import WSGIRequestHandler
 
+from baph.core.management.new_base import BaseCommand
 from baph.core.management.validation import get_validation_errors
 from baph.utils import autoreload
 
@@ -35,18 +36,9 @@ def get_environ(self):
 WSGIRequestHandler.get_environ = get_environ
 WSGIRequestHandler.MessageClass = Message
 
-class Command(runserver.Command):
 
-  def validate(self, app=None, display_num_errors=False):
-    s = StringIO()
-    num_errors = get_validation_errors(s, app)
-    if num_errors:
-      s.seek(0)
-      error_text = s.read()
-      raise CommandError("One or more models did not validate:\n%s" % error_text)
-    if display_num_errors:
-      self.stdout.write("%s error%s found\n" 
-        % (num_errors, num_errors != 1 and 's' or ''))
+class Command(BaseCommand, runserver.Command):
+  pass
 
   '''
   def run(self, *args, **options):
