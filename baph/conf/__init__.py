@@ -9,7 +9,7 @@ import warnings
 
 from baph.conf import global_settings
 from baph.conf.preconfigure import Preconfigurator
-from baph.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.functional import LazyObject, empty, cached_property
 from baph.utils.termcolors import make_style
 
