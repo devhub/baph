@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
-'''SQLAlchemy versions of :mod:`django.contrib.auth` utility functions.'''
-
 from datetime import datetime
+
 from django.conf import settings
+from baph.utils.module_loading import import_string
 from django.contrib.auth import (SESSION_KEY, BACKEND_SESSION_KEY,
     load_backend, user_logged_in)
-from django.contrib.auth.models import AnonymousUser
+#from django.contrib.auth.models import AnonymousUser
 
 
 def login(request, user):
