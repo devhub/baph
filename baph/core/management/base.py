@@ -3,10 +3,10 @@ Base classes for writing management commands (named commands which can
 be executed through ``django-admin.py`` or ``manage.py``).
 
 """
+from cStringIO import StringIO
+from optparse import make_option, OptionParser
 import os
 import sys
-
-from optparse import make_option, OptionParser
 import traceback
 
 import django
@@ -14,9 +14,8 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.management.color import color_style
 #from django.utils.encoding import force_str
 #from django.utils.six import StringIO
-from cStringIO import StringIO
 
-from baph.db.orm import ORM
+from baph.core.preconfig.loader import PreconfigLoader
 
 
 class CommandError(Exception):
@@ -36,17 +35,19 @@ class CommandError(Exception):
 
 
 def handle_default_options(options):
-    """
-    Include any default options that all commands should accept here
-    so that ManagementUtility can handle them before searching for
-    user commands.
+  """
+  Include any default options that all commands should accept here
+  so that ManagementUtility can handle them before searching for
+  user commands.
 
-    """
-    if options.settings:
-        os.environ['DJANGO_SETTINGS_MODULE'] = options.settings
-    if options.pythonpath:
-        sys.path.insert(0, options.pythonpath)
-
+  """
+  if options.settings:
+    os.environ['DJANGO_SETTINGS_MODULE'] = options.settings
+  if options.pythonpath:
+    sys.path.insert(0, options.pythonpath)
+  preconfig = PreconfigLoader.load()
+  print 'preconf2:', preconfig
+  print vars(options)
 
 class OutputWrapper(object):
     """
@@ -251,6 +252,7 @@ class BaseCommand(object):
                 stderr.write('%s: %s' % (e.__class__.__name__, e))
             sys.exit(1)
         finally:
+            from baph.db.orm import ORM
             orm = ORM.get()
             try:
                 session = orm.sessionmaker()

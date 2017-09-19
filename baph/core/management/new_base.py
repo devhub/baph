@@ -9,7 +9,8 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.management.base import handle_default_options
 from django.utils.six import StringIO
 
-from baph.conf.preconfigure import Preconfigurator
+#from baph.conf.preconfigure import Preconfigurator
+from baph.core.preconfig.loader import PreconfigLoader
 from .base import CommandError
 
 
@@ -50,19 +51,20 @@ class BaseCommand(base.BaseCommand):
 
   def __init__(self, *args, **kwargs):
     super(BaseCommand, self).__init__(*args, **kwargs)
-    self.preconf = Preconfigurator()
+    self.preconfig = PreconfigLoader.load()
+    #self.preconf = Preconfigurator()
 
   @property
   def ignored_args(self):
     " returns a list of preconfiguration args which are used for loading "
     " settings, but should not be passed on to the actual command "
-    return (set(self.preconf.core_settings)
+    return (set(self.preconfig.core_settings)
             .difference(self.required_args)
             .difference(self.optional_args)
           )
 
   def add_preconf_argument(self, parser, name, required=False):
-    option = self.preconf.arg_map[name]
+    option = self.preconfig.arg_map[name]
     args, kwargs = option.arg_params
     kwargs = dict(kwargs, required=required)
     parser.add_argument(*args, **kwargs)
@@ -189,7 +191,8 @@ class BaseCommand(base.BaseCommand):
       '--no-color', action='store_true', dest='no_color', default=False,
       help="Don't colorize the command output.",
     )
-    self.add_preconf_arguments(parser)
+    if self.preconfig:
+      self.add_preconf_arguments(parser)
     self.add_legacy_arguments(parser)
     self.add_arguments(parser)
     return parser
@@ -224,8 +227,9 @@ class BaseCommand(base.BaseCommand):
     base.handle_default_options(options)
 
     # strip ignored args before passing them on to the command
-    for key in self.ignored_args.intersection(cmd_options.keys()):
-      del cmd_options[key]
+    if self.preconfig:
+      for key in self.ignored_args.intersection(cmd_options.keys()):
+        del cmd_options[key]
 
     try:
       self.execute(*args, **cmd_options)

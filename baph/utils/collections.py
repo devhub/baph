@@ -4,6 +4,7 @@
 ============================================================
 
 .. moduleauthor:: Mark Lee <markl@evomediagroup.com>
+.. moduleauthor:: Gerald Thibault <jt@devhub.com>
 
 .. note:: This module requires either Python >= 2.7 or the `ordereddict`_
           package installed.
@@ -15,8 +16,7 @@ from __future__ import absolute_import
 
 from collections import defaultdict, OrderedDict
 
-from sqlalchemy.ext.associationproxy import (
-    _AssociationList, _AssociationDict, _AssociationSet)
+from sqlalchemy.ext.associationproxy import _AssociationDict
 from sqlalchemy.util import duck_type_collection as sqla_duck_type_collection
 
 
@@ -30,6 +30,22 @@ def duck_type_collection(specimen, default=None):
     if isa(specimen, _AssociationDict):
         return dict
     return default
+
+def flatten(l):
+  " flattens nested iterable into a single iterable "
+  ltype = type(l)
+  l = list(l)
+  i = 0
+  while i < len(l):
+    while isinstance(l[i], (list, tuple)):
+      if not l[i]:
+        l.pop(i)
+        i -= 1
+        break
+      else:
+        l[i:i+1] = l[i]
+    i += 1
+  return ltype(l)
 
 class OrderedDefaultDict(defaultdict, OrderedDict):
     '''A :class:`dict` subclass with the characteristics of both
@@ -64,12 +80,3 @@ class LazyDict(dict):
         if not self.initialized:
             self.populate()
         return dict.get(self, key, default)
-
-if __name__ == '__main__':
-    items = [
-        _AssociationList,
-        _AssociationDict,
-        _AssociationSet,
-    ]
-    for item in items:
-        print (sqla_duck_type_collection(item), duck_type_collection(item))

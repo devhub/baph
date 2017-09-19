@@ -1,56 +1,38 @@
+import ast
 import imp
 import importlib
-import itertools
+import logging
 import os
 import pkgutil
 import sys
-import time
-import warnings
 
-from baph.conf import global_settings
-from baph.conf.preconfigure import Preconfigurator
-from django.core.exceptions import ImproperlyConfigured
-from django.utils.functional import LazyObject, empty, cached_property
-from baph.utils.termcolors import make_style
+from chainmap import ChainMap
+from django.conf import global_settings
+from django.utils.functional import LazyObject, empty
+
+from baph.core.preconfig.loader import PreconfigLoader
 
 
-GLOBAL_SETTINGS = 'baph.conf.global_settings'
 ENVIRONMENT_VARIABLE = "DJANGO_SETTINGS_MODULE"
-APPEND_SETTINGS = (
-  'TEMPLATE_CONTEXT_PROCESSORS',
-  'MIDDLEWARE_CLASSES',
-  'JINJA2_FILTERS',
-)
-PREPEND_SETTINGS = (
-  'INSTALLED_APPS',
-  'TEMPLATE_DIRS',
-)
+NOT_SET = object()
+DEFAULT_ACTIONS = {'*': 'set'}
 TUPLE_SETTINGS = (
   "INSTALLED_APPS",
   "TEMPLATE_DIRS",
   "LOCALE_PATHS",
 )
 
-success_msg = make_style(fg='green')
-notice_msg = make_style(fg='yellow')
-error_msg = make_style(fg='red')
-info_msg = make_style(fg='blue')
+#formatter = logging.Formatter(fmt='%(message)s')
+#handler = logging.StreamHandler()
+#handler.setFormatter(formatter)
+logger = logging.getLogger(__name__)
+#logger.setLevel(logging.INFO)
+#logger.addHandler(handler)
 
 class LazySettings(LazyObject):
-  """
-  A lazy proxy for either global Django settings or a custom settings object.
-  The user can manually configure settings prior to using them. Otherwise,
-  Django uses the settings module pointed to by DJANGO_SETTINGS_MODULE.
-  """
+  
   def _setup(self, name=None):
-    """
-    Load the settings module pointed to by the environment variable. This
-    is used the first time we need any settings at all, if the user has not
-    previously configured the settings manually.
-    """
-    print 'yay'
     settings_module = os.environ.get(ENVIRONMENT_VARIABLE)
-    print 'settings_module:', settings_module
     if not settings_module:
       desc = ("setting %s" % name) if name else "settings"
       raise ImproperlyConfigured(
@@ -58,7 +40,6 @@ class LazySettings(LazyObject):
         "You must either define the environment variable %s "
         "or call settings.configure() before accessing settings."
         % (desc, ENVIRONMENT_VARIABLE))
-
     self._wrapped = Settings(settings_module)
 
   def __repr__(self):
@@ -70,9 +51,28 @@ class LazySettings(LazyObject):
     }
 
   def __getattr__(self, name):
+    """Return the value of a setting and cache it in self.__dict__."""
     if self._wrapped is empty:
-      self._setup(name)
-    return getattr(self._wrapped, name)
+        self._setup(name)
+    val = getattr(self._wrapped, name)
+    self.__dict__[name] = val
+    return val
+
+  def __setattr__(self, name, value):
+    """
+    Set the value of setting. Clear all cached values if _wrapped changes
+    (@override_settings does this) or clear single values when set.
+    """
+    if name == '_wrapped':
+      self.__dict__.clear()
+    else:
+      self.__dict__.pop(name, None)
+    super(LazySettings, self).__setattr__(name, value)
+
+  def __delattr__(self, name):
+    """Delete a setting and clear it from cache if needed."""
+    super(LazySettings, self).__delattr__(name)
+    self.__dict__.pop(name, None)
 
   def configure(self, default_settings=global_settings, **options):
     """
@@ -94,52 +94,227 @@ class LazySettings(LazyObject):
     """
     return self._wrapped is not empty
 
-class BaseSettings(object):
-  """
-  Common logic for settings whether set by a module or by the user.
-  """
-  def __setattr__(self, name, value):
-    if name in ("MEDIA_URL", "STATIC_URL") and value \
-            and not value.endswith('/'):
-      raise ImproperlyConfigured("If set, %s must end with a slash"
-            % name)
-    object.__setattr__(self, name, value)
+class Settings:
+  actions = ('SET', 'APPEND', 'PREPEND', 'UPDATE', 'REPLACE')
 
-class Settings(BaseSettings):
+  def set(self, key, value):
+    " sets a value for a setting. raises an exception if already present "
+    if key in self._explicit_settings:
+      raise Exception('Setting %r is already set' % key)
+    setattr(self, key, value)
+
+  def prepend(self, key, value):
+    " prepends the given values to the existing values "
+    current = getattr(self, key, NOT_SET)
+    if current is not NOT_SET:
+      value = value + current
+    setattr(self, key, value)
+
+  def append(self, key, value):
+    " appends the given values to the existing values "
+    current = getattr(self, key, NOT_SET)
+    if current is not NOT_SET:
+      value = current + value
+    setattr(self, key, value)
+
+  def update(self, key, value):
+    " updates a mapping with new values "
+    current = getattr(self, key, NOT_SET)
+    if current is not NOT_SET:
+      current.update(value)
+      value = current
+    setattr(self, key, value)
+
+  def replace(self, key, value):
+    " replaces an existing value. if not present, sets the value "
+    setattr(self, key, value)
+
+  def get_action(self, key):
+    " returns the appropriate action to use when processing the setting "
+    if key in self.actions:
+      return self.actions[key]
+    else:
+      return self.actions['*']
+
+
+  def load_settings_module(self, module, explicit=True):
+    msg = '  %s' % module.__name__
+    actions = getattr(module, 'actions', {})
+    self.actions = self.actions.new_child(actions)
+    for setting in dir(module):
+      if setting.isupper():
+        setting_value = getattr(module, setting)
+        self.apply_setting(setting, setting_value, explicit)
+    self.actions = self.actions.parents
+    logger.info(msg.ljust(64) + 'SUCCESS')
+
+  def set_core_settings(self, **settings):
+    logger.info('Setting core settings from preconfiguration')
+    for k, v in settings.items():
+      logger.info('  %s %s' % (k.ljust(32), v))
+      self.apply_setting(k, v)
+      self.locked.add(k)
+
+  def apply_setting(self, key, value, explicit=True):
+    pieces = key.rsplit('__', 1)
+    if len(pieces) == 2 and pieces[-1] in self.actions:
+      key, action = pieces
+    else:
+      action = self.get_action(key)
+
+    if key in self.locked:
+      return
+      #raise Exception('Setting %r is locked' % key)
+    if (key in TUPLE_SETTINGS and not isinstance(value, (list, tuple))):
+      raise ImproperlyConfigured(
+        "The %s setting must be a list or a tuple. " % key)
+
+    func = getattr(self, action.lower())
+    func(key, value)
+
+    if explicit:
+      self._explicit_settings.add(key)
+
+  def get_package_path(self, package):
+    if package not in self.package_paths:
+      loader = pkgutil.find_loader(package)
+      if not loader:
+        return None
+      if not loader.is_package(package):
+        raise ValueError('%r is not a package' % package)
+      self.package_paths[package] = loader.filename
+    return self.package_paths[package]
+
+  @staticmethod
+  def create_module(fullname, **kwargs):
+    """
+    create a new module and install it into sys.modules, then return it
+    """
+    module = imp.new_module(fullname)
+    for k, v in kwargs.items():
+      setattr(module, k, v)
+    sys.modules[fullname] = module
+    return module
+
+  @staticmethod
+  def compile_module(module):
+    path = module.__file__
+    with open(path, 'rb') as fp:
+      content = fp.read()
+    node = ast.parse(content, path)
+    code = compile(node, path, 'exec')
+    exec code in module.__dict__
+
+  def load_module_settings(self, module_name):
+    msg = '  %s' % module_name
+    package, mod = module_name.rsplit('.', 1)
+    path = self.get_package_path(package)
+    module_path = '%s/%s.py' % (path, mod)
+    if not os.path.exists(module_path):
+      logger.debug(msg.ljust(64) + 'NOT FOUND')
+      return
+    
+    if module_name not in sys.modules:
+      kwargs = {
+        '__file__': module_path,
+      }
+      module = self.create_module(module_name, **kwargs)
+      try:
+        self.compile_module(module)
+      except Exception as e:
+        logger.error(msg.ljust(64) + 'ERROR')
+        raise
+    else:
+      module = sys.modules[module_name]
+
+    self.load_settings_module(module)
+
+  def load_package_settings(self, package):
+    msg = 'loading settings from package: %s' % package
+    path = self.get_package_path(package)
+    if not path:
+      status = 'NOT FOUND'
+    else:
+      status = 'FOUND'
+    logger.info(msg.ljust(64) + status)
+    if not path:
+      return
+
+    if self.preconfig.no_init_settings:
+      # to prevent running the code in __init__.py, we create a module
+      # and install it in the required location
+      kwargs = {
+        '__file__': '%s/__init__.py' % path,
+        '__path__': [path],
+      }
+      module = self.create_module(package, **kwargs)
+
+    for mod in self.preconfig.modules:
+      module = '%s.%s' % (package, mod)
+      self.load_module_settings(module)
+
+  def load_dynamic_settings(self):
+    " loads settings from modules with name permutations generated using "
+    " a preconfiguration file "
+    for pkg in self.preconfig.packages:
+      self.load_package_settings(pkg)
+
+  def load_static_settings(self):
+    " loads settings from the module provided by the --settings CLI arg "
+    mod = importlib.import_module(self.SETTINGS_MODULE)
+    self.load_settings_module(mod)
+
+  def load_global_settings(self):
+    " loads global settings "
+    logger.info('Loading global settings')
+    self.load_settings_module(global_settings, explicit=False)
 
   def __init__(self, settings_module):
-    print 'Settings.__init__:', settings_module
+    mode = 'dynamic' if settings_module == '__dynamic__' else 'static'
+    logger.info('\n*** Initializing Settings (%s mode) ***' % mode)
+
     # store the settings module in case someone later cares
     self.SETTINGS_MODULE = settings_module
-    self.preconfig = Preconfigurator()
-    self._explicit_settings = set()
-    self.sources = {}
-    self.messages = []
-    self.process_environment_vars()
 
-    self.load_settings(GLOBAL_SETTINGS)
-    self.load_settings(settings_module, expand=True)
-    for opt in self.preconfig.packages:
-      setting = opt.name
-      value = getattr(self, setting, None)
-      if value:
-        self.load_package_settings(value, base=opt.base, prefix=opt.prefix)
+    self.messages = []
+    self.locked = set()
+    self._explicit_settings = set()
+    self.package_paths = {}
+
+    if mode == 'dynamic':
+      self.preconfig = PreconfigLoader.load()
+      if not self.preconfig:
+        raise Exception('Dynamic settings require a preconfig file')
+      self.actions = ChainMap(self.preconfig.settings_actions, DEFAULT_ACTIONS)
+      self.set_core_settings(**self.preconfig.context)
+    else:
+      self.actions = ChainMap(DEFAULT_ACTIONS)
+
+    self.load_global_settings()
+    if mode == 'dynamic':
+      self.load_dynamic_settings()
+    else:
+      self.load_static_settings()
 
     if not self.SECRET_KEY:
       raise ImproperlyConfigured("The SECRET_KEY setting must not be empty.")
 
+    '''
     if hasattr(time, 'tzset') and self.TIME_ZONE:
       # When we can, attempt to validate the timezone. If we can't find
       # this file, no check happens and it's harmless.
       zoneinfo_root = '/usr/share/zoneinfo'
       if (os.path.exists(zoneinfo_root) and not
-          os.path.exists(os.path.join(zoneinfo_root,
-            *(self.TIME_ZONE.split('/'))))):
+          os.path.exists(os.path.join(zoneinfo_root, *(self.TIME_ZONE.split('/'))))):
         raise ValueError("Incorrect timezone setting: %s" % self.TIME_ZONE)
       # Move the time zone info into os.environ. See ticket #2315 for why
       # we don't do this unconditionally (breaks Windows).
       os.environ['TZ'] = self.TIME_ZONE
       time.tzset()
+    '''
+
+  def is_overridden(self, setting):
+    return setting in self._explicit_settings
 
   def __repr__(self):
     return '<%(cls)s "%(settings_module)s">' % {
@@ -147,175 +322,8 @@ class Settings(BaseSettings):
       'settings_module': self.SETTINGS_MODULE,
     }
 
-  def load_settings(self, module, expand=False):
-    loader = pkgutil.get_loader(module)
-    if loader and loader.is_package(module):
-      # import all defined settings files in a package
-      self.load_package_settings(module)
-    elif expand:
-      # import all defined settings files based off a main file
-      self.load_expanded_module_settings(module)
-    else:
-      # import a single settings file
-      self.load_single_module_settings(module)
-
-  def load_package_settings(self, package, base='settings', prefix=None):
-    """
-    Attempts to load each module from SETTINGS_MODULES from the given package
-    """
-    print info_msg('\n*** Loading settings from %s ***' % package)
-    modules = self.settings_files(base, prefix=prefix, suffixes=['_local'])
-    modules = map('.'.join, itertools.product([package], modules))
-    for mod in modules:
-      self.load_module_settings(mod)
-
-  def load_expanded_module_settings(self, module):
-    """
-    Loads settings files based off permutations of a base filename
-    """
-    print info_msg('\n*** Loading settings from %s ***' % module)
-    modules = self.settings_files(module, prefix=module, suffixes=['_local'])
-    for mod in modules:
-      self.load_module_settings(mod)
-
-  def load_single_module_settings(self, module):
-    """
-    Loads settings from a single module
-    """
-    print info_msg('\n*** Loading settings from %s ***' % module)
-    self.load_module_settings(module)
-
-  def load_module_settings(self, module):
-    """
-    Loads settings from a module
-    """
-    msg = ('loading %s' % module).ljust(64)
-    e = None
-
-    try:
-      if module in sys.modules:
-        mod = sys.modules[module]
-      else:
-        mod = importlib.import_module(module)
-      self.merge_settings(mod)
-      msg += success_msg('LOADED')
-    except ImportError:
-      msg += notice_msg('NOT FOUND')
-    except Exception as e:
-      msg += error_msg('FAILED')
-    print msg
-    self.flush_messages()
-    if e:
-      raise e
-
-  def is_overridden(self, setting):
-    return setting in self._explicit_settings
-
-  def settings_files(self, base, prefix=None, suffixes=None):
-    keys = [key for key in self.preconfig.module_settings
-            if getattr(self, key, None)]
-    ctx = {key: getattr(self, key) for key in keys}
-
-    filenames = [base]
-    for filename in self.preconfig.get_settings_variants(keys):
-      if prefix:
-        filename = '_'.join([prefix, filename])
-      filenames.append(filename)
-
-    filenames = [filename.format(**ctx) for filename in filenames]
-    if suffixes is not None:
-      filenames = itertools.product(filenames, [''] + list(suffixes))
-      filenames = map(''.join, filenames)
-    return filenames
-
-  def add_message(self, msg):
-    """
-    Pushes a message onto the stack.
-    """
-    self.messages.append(msg)
-
-  def flush_messages(self):
-    """
-    Flushes accumulated messages to the screen
-    """
-    while self.messages:
-      print(self.messages.pop(0))
-
-  def set_setting(self, setting, value, source):
-    """
-    Handles the setting and overriding of settings
-    """
-    if setting in self.preconfig.core_settings:
-      # special handling for core vars
-      if hasattr(self, setting):
-        # warn on overriding of existing values
-        previous = getattr(self, setting)
-        #if previous:
-        #  warnings.warn('Overwriting value for %s (previous value of %r '
-        #    'declared in %s. New value is %r' 
-        #    % (setting, previous, self.sources[setting], value))
-      # track where this came from so we can display the source
-      self.sources[setting] = source
-      self.add_message('    %s set to %s' % (setting, value))
-
-    if (setting in TUPLE_SETTINGS and
-            not isinstance(value, (list, tuple))):
-      raise ImproperlyConfigured(
-        "The %s setting must be a list or a tuple. " % setting)
-
-    if not hasattr(self, setting):
-      # first occurence - set the current value as-is
-      pass
-    elif setting in APPEND_SETTINGS:
-      # append the value to the existing value
-      value = getattr(self, setting) + value
-    elif setting in PREPEND_SETTINGS:
-      # prepent the value to the existing value
-      value = value + getattr(self, setting)
-    else:
-      # override the existing value
-      pass
-
-    setattr(self, setting, value)
-    if source != GLOBAL_SETTINGS:
-      self._explicit_settings.add(setting)
-
-  def process_environment_vars(self):
-    print info_msg('\n*** Initializing settings environment ***')
-    for setting in self.preconfig.core_settings:
-      if os.environ.get(setting, None):
-        # found a valid value in the environment, save to settings
-        setting_value = os.environ[setting]
-        self.set_setting(setting, setting_value, 'os.environ')
-    
-    # ensure required params were set in manage.py/wsgi.py
-    '''
-    for setting in self.preconfig.module_settings:
-      if not getattr(self, setting, None):
-        sys.tracebacklimit = 0 # no traceback needed for this error
-        raise ImproperlyConfigured(
-          'setting "%s" not found in environment' % setting)
-    '''
-
-    self.flush_messages()
-
-  def merge_settings(self, mod):
-    """
-    Merges specified module's settings into current settings
-    """
-    for setting in dir(mod):
-      if setting != setting.upper():
-        # ignore anything that isn't uppercase
-        continue
-      setting_value = getattr(mod, setting)
-      self.set_setting(setting, setting_value, mod.__name__)
-
-
-
-class UserSettingsHolder(BaseSettings):
-  """
-  Holder for user configured settings.
-  """
+class UserSettingsHolder:
+  """Holder for user configured settings."""
   # SETTINGS_MODULE doesn't make much sense in the manually configured
   # (standalone) case.
   SETTINGS_MODULE = None
@@ -335,21 +343,28 @@ class UserSettingsHolder(BaseSettings):
 
   def __setattr__(self, name, value):
     self._deleted.discard(name)
-    super(UserSettingsHolder, self).__setattr__(name, value)
+    '''
+    if name == 'DEFAULT_CONTENT_TYPE':
+      warnings.warn('The DEFAULT_CONTENT_TYPE setting is deprecated.', RemovedInDjango30Warning)
+    '''
+    super().__setattr__(name, value)
 
   def __delattr__(self, name):
     self._deleted.add(name)
     if hasattr(self, name):
-      super(UserSettingsHolder, self).__delattr__(name)
+      super().__delattr__(name)
 
   def __dir__(self):
-    return list(self.__dict__) + dir(self.default_settings)
+    return sorted(
+      s for s in list(self.__dict__) + dir(self.default_settings)
+      if s not in self._deleted
+    )
 
   def is_overridden(self, setting):
     deleted = (setting in self._deleted)
     set_locally = (setting in self.__dict__)
     set_on_default = getattr(self.default_settings, 'is_overridden', lambda s: False)(setting)
-    return (deleted or set_locally or set_on_default)
+    return deleted or set_locally or set_on_default
 
   def __repr__(self):
     return '<%(cls)s>' % {

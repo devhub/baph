@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+import os
 import sys
 
 import django
@@ -7,7 +8,8 @@ from django.core import management
 from django.core.exceptions import ImproperlyConfigured
 
 import baph
-from baph.conf.preconfigure import Preconfigurator
+from baph.core.management.base import handle_default_options, CommandError
+from baph.core.preconfig.loader import PreconfigLoader
 
 
 class ManagementUtility(management.ManagementUtility):
@@ -22,6 +24,12 @@ class ManagementUtility(management.ManagementUtility):
     Given the command-line arguments, this figures out which subcommand is
     being run, creates a parser appropriate to that command, and runs it.
     """
+    print 'execute:', self.argv
+    try:
+      subcommand = self.argv[1]
+    except IndexError:
+      subcommand = 'help'  # Display help if no arguments were given.
+
     # Preprocess options to extract --settings and --pythonpath.
     # These options could affect the commands that are available, so they
     # must be processed early.
@@ -30,26 +38,16 @@ class ManagementUtility(management.ManagementUtility):
     parser.add_argument('--settings')
     parser.add_argument('--pythonpath')
     parser.add_argument('args', nargs='*')  # catch-all
-
-    # load user-defined pre-processing parameters
-    preconfig = Preconfigurator()
-    #preconfig.add_arguments(parser)
-    args = preconfig.process_cmd_args(self.argv)
-    
     try:
-      options, args = parser.parse_known_args(args[1:])
+      options, args = parser.parse_known_args(self.argv[1:])
       handle_default_options(options)
-    except Exception as e:
+    except CommandError:
       pass  # Ignore any option errors at this point.
 
     args = options.args
     print 'options:', options
     print 'args:', args
 
-    try:
-      subcommand = args[0]
-    except IndexError:
-      subcommand = 'help'  # Display help if no arguments were given.
 
 
     try:
@@ -101,14 +99,11 @@ class ManagementUtility(management.ManagementUtility):
       self.fetch_command(subcommand).run_from_argv(self.argv)
       #cli.main(args=[subcommand] + args, prog_name='test')
 
-      #self.fetch_command(subcommand).run_from_argv(self.argv)
 
 def execute_from_command_line(argv=None):
   """
   A simple method that runs a ManagementUtility.
   """
-  
-
   print 'execute from command line:'
   print '  argv:', argv
   utility = ManagementUtility(argv)
