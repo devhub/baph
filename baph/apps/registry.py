@@ -82,7 +82,7 @@ class Apps(object):
     self.check_apps_ready()
     return self.app_configs.values()
 
-  @lru_cache.lru_cache(maxsize=None)
+  @lru_cache(maxsize=None)
   def get_models(self, include_auto_created=False,
                  include_deferred=False, include_swapped=False):
     """
