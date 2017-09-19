@@ -1,7 +1,7 @@
 import threading
 from collections import Counter, OrderedDict, defaultdict
 
-from baph.utils import lru_cache
+from functools32 import lru_cache
 
 from .config import AppConfig
 

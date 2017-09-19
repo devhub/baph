@@ -11,6 +11,7 @@ setup(name='baph',
           'Django >= 1.5',
           'SQLAlchemy >= 0.9.0',
           'python-dotenv == 0.7.1',
+          'functools32 == 3.2.3.post2',
       ],
       include_package_data=True,
       package_data={
