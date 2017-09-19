@@ -10,7 +10,7 @@ setup(name='baph',
           'Coffin',
           'Django >= 1.5',
           'SQLAlchemy >= 0.9.0',
-          'dotenv == 0.0.5',
+          'python-dotenv == 0.7.1',
       ],
       include_package_data=True,
       package_data={
