@@ -1,7 +1,6 @@
 import os
 from importlib import import_module
 
-from baph.utils._os import upath
 #from baph.utils.module_loading import module_has_submodule
 from django.utils.module_loading import module_has_submodule
 
@@ -77,26 +76,22 @@ class AppConfig(object):
         "The app module %r has no filesystem location, "
         "you must configure this app with an AppConfig subclass "
         "with a 'path' class attribute." % (module,))
-    return upath(paths[0])
+    return paths[0]
 
   @classmethod
   def create(cls, entry):
     """
     Factory that creates an app config from an entry in INSTALLED_APPS.
     """
-    print 'create: ', entry
     try:
       # If import_module succeeds, entry is a path to an app module,
       # which may specify an app config class with default_app_config.
       # Otherwise, entry is a path to an app config class or an error.
       module = import_module(entry)
-      print 'success'
-
     except ImportError:
       # Track that importing as an app module failed. If importing as an
       # app config class fails too, we'll trigger the ImportError again.
       module = None
-
       mod_path, _, cls_name = entry.rpartition('.')
 
       # Raise the original exception when entry cannot be a path to an
