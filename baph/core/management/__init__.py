@@ -24,7 +24,6 @@ class ManagementUtility(management.ManagementUtility):
     Given the command-line arguments, this figures out which subcommand is
     being run, creates a parser appropriate to that command, and runs it.
     """
-    print 'execute:', self.argv
     try:
       subcommand = self.argv[1]
     except IndexError:
@@ -45,10 +44,6 @@ class ManagementUtility(management.ManagementUtility):
       pass  # Ignore any option errors at this point.
 
     args = options.args
-    print 'options:', options
-    print 'args:', args
-
-
 
     try:
       settings.INSTALLED_APPS
@@ -70,16 +65,13 @@ class ManagementUtility(management.ManagementUtility):
           apps.app_configs = OrderedDict()
           apps.apps_ready = apps.models_ready = apps.ready = True
 
-      # In all other cases, django.setup() is required to succeed.
+      # In all other cases, baph.setup() is required to succeed.
       else:
         baph.setup()
 
     self.autocomplete()
 
     if subcommand == 'help':
-      print 'help subcommand'
-      print '  args:', args
-      print '  options:', options
       if '--commands' in options.args:
         sys.stdout.write(self.main_help_text(commands_only=True) + '\n')
       elif len(options.args) < 2:
@@ -94,8 +86,6 @@ class ManagementUtility(management.ManagementUtility):
     elif self.argv[1:] in (['--help'], ['-h']):
         sys.stdout.write(self.main_help_text() + '\n')
     else:
-      print 'running subcommand'
-      print '  args:', args
       self.fetch_command(subcommand).run_from_argv(self.argv)
       #cli.main(args=[subcommand] + args, prog_name='test')
 
@@ -104,7 +94,5 @@ def execute_from_command_line(argv=None):
   """
   A simple method that runs a ManagementUtility.
   """
-  print 'execute from command line:'
-  print '  argv:', argv
   utility = ManagementUtility(argv)
   utility.execute()

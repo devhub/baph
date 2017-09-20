@@ -11,15 +11,6 @@ from .options import PackageOption, ModuleOption
 from .utils import with_empty
 
 
-'''
-def format_pieces(pieces, delim, reverse=False):
-  #print 'format pieces:', pieces
-  pieces = list(filter(lambda x: x, pieces))
-  if reverse:
-    pieces.reverse()
-  return delim.join(pieces)
-'''
-
 def templatize(key):
   return '{%s}' % key.upper()
 
@@ -62,7 +53,6 @@ class Preconfiguration(object):
     self.load_options(data['PRECONFIG_ARGS'])
     self.settings_actions = data.get('PRECONFIG_ACTIONS', {})
     self.no_init_settings = data.get('PRECONFIG_NO_INIT', False)
-    #self.values = self.load_values()
 
   def get_parser(self):
     parser = argparse.ArgumentParser()
@@ -152,23 +142,6 @@ class Preconfiguration(object):
     context = self.context
     return [tpl.format(**context) for tpl in self.module_tpls]
 
-  '''
-  @property
-  def settings_tpls(self):
-    " packages and modules "
-    combos = itertools.product(self.package_tpls, self.module_tpls)
-    return [format_pieces(combo, '.') for combo in combos]
-
-  @property
-  def settings_modules(self):
-    ctx = self.context
-    for tpl in self.settings_tpls:
-      try:
-        yield tpl.format(**ctx)
-      except:
-        continue
-  '''
-
   def load_values(self):
     """ get values for preconfig arguments """
     """ priorities are as follows, from highest to lowest:
@@ -192,7 +165,10 @@ class Preconfiguration(object):
     return values
 
   def load_values_from_dotenv(self):
+    " loads config values from a .env file, if present "
     path = os.path.join(self.root, '.env')
+    if not os.path.exists(path):
+      return {}
     values = dotenv_values(path)
     return values
 
