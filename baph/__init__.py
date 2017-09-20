@@ -1,6 +1,9 @@
 def setup():
   from baph.apps import apps
   from baph.conf import settings
+  from baph.utils.log import configure_logging
+
+  configure_logging(settings.LOGGING_CONFIG, settings.LOGGING)
 
   #apps.populate(settings.INSTALLED_APPS)
 
