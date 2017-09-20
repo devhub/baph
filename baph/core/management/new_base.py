@@ -9,8 +9,6 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.management.base import handle_default_options
 from django.utils.six import StringIO
 
-#from baph.conf.preconfigure import Preconfigurator
-from baph.core.preconfig.loader import PreconfigLoader
 from .base import CommandError
 
 
@@ -45,37 +43,10 @@ class CommandParser(ArgumentParser):
       raise base.CommandError("Error: %s" % message)
 
 class BaseCommand(base.BaseCommand):
-  is_subcommand = False
-  required_args = []
-  optional_args = []
+  allow_unknown_args = False
 
   def __init__(self, *args, **kwargs):
     super(BaseCommand, self).__init__(*args, **kwargs)
-    self.preconfig = PreconfigLoader.load()
-    #self.preconf = Preconfigurator()
-
-  @property
-  def ignored_args(self):
-    " returns a list of preconfiguration args which are used for loading "
-    " settings, but should not be passed on to the actual command "
-    return (set(self.preconfig.core_settings)
-            .difference(self.required_args)
-            .difference(self.optional_args)
-          )
-
-  def add_preconf_argument(self, parser, name, required=False):
-    option = self.preconfig.arg_map[name]
-    args, kwargs = option.arg_params
-    kwargs = dict(kwargs, required=required)
-    parser.add_argument(*args, **kwargs)
-
-  def add_preconf_arguments(self, parser):
-    for name in self.required_args:
-      self.add_preconf_argument(parser, name, required=True)
-    for name in self.optional_args:
-      self.add_preconf_argument(parser, name, required=False)
-    for name in self.ignored_args:
-      self.add_preconf_argument(parser, name, required=False)
 
   def get_legacy_args(self):
     handle = super(BaseCommand, self).handle
@@ -191,8 +162,6 @@ class BaseCommand(base.BaseCommand):
       '--no-color', action='store_true', dest='no_color', default=False,
       help="Don't colorize the command output.",
     )
-    if self.preconfig:
-      self.add_preconf_arguments(parser)
     self.add_legacy_arguments(parser)
     self.add_arguments(parser)
     return parser
@@ -214,7 +183,7 @@ class BaseCommand(base.BaseCommand):
     self._called_from_command_line = True
     parser = self.create_parser(argv[0], argv[1])
 
-    if self.is_subcommand:
+    if self.allow_unknown_args:
       options, args = parser.parse_known_args(argv[2:])
       cmd_options = vars(options)
       # pass unknown args to the subcommand
@@ -224,12 +193,8 @@ class BaseCommand(base.BaseCommand):
       cmd_options = vars(options)
       # Move positional args out of options to mimic legacy optparse
       args = cmd_options.pop('args', ())
+    
     base.handle_default_options(options)
-
-    # strip ignored args before passing them on to the command
-    if self.preconfig:
-      for key in self.ignored_args.intersection(cmd_options.keys()):
-        del cmd_options[key]
 
     try:
       self.execute(*args, **cmd_options)
@@ -239,6 +204,62 @@ class BaseCommand(base.BaseCommand):
 
       self.stderr.write('%s: %s' % (e.__class__.__name__, e))
       sys.exit(1)
+
+  def execute(self, *args, **options):
+    """
+    Try to execute this command, performing system checks if needed (as
+    controlled by the ``requires_system_checks`` attribute, except if
+    force-skipped).
+    """
+    if options['no_color']:
+      self.style = no_style()
+      self.stderr.style_func = None
+    if options.get('stdout'):
+      self.stdout = OutputWrapper(options['stdout'])
+    if options.get('stderr'):
+      self.stderr = OutputWrapper(options['stderr'], self.stderr.style_func)
+
+    saved_locale = None
+    if not self.leave_locale_alone:
+      # Deactivate translations, because django-admin creates database
+      # content like permissions, and those shouldn't contain any
+      # translations.
+      from django.utils import translation
+      saved_locale = translation.get_language()
+      translation.deactivate_all()
+
+    try:
+      all_output = ''
+      funcs = (self.pre_handle, self.handle, self.post_handle)
+      for func in funcs:
+        output = func(*args, **options)
+        if output:
+          self.stdout.write(output)
+          all_output += output
+    finally:
+      if saved_locale is not None:
+        translation.activate(saved_locale)
+    return all_output
+
+  def pre_handle(self, *args, **options):
+    """
+    Optional hook to be run just before self.handle is executed
+    """
+    pass
+
+  def handle(self, *args, **options):
+    """
+    The actual logic of the command. Subclasses must implement
+    this method.
+    """
+    raise NotImplementedError('subclasses of BaseCommand must provide a '
+                              'handle() method')
+
+  def post_handle(self, *args, **options):
+    """
+    Optional hook to be run just after self.handle is executed
+    """
+    pass
 
   def validate(self, app=None, display_num_errors=False):
     """

@@ -10,6 +10,7 @@ from django.core.exceptions import ImproperlyConfigured
 import baph
 from baph.core.management.base import handle_default_options, CommandError
 from baph.core.preconfig.loader import PreconfigLoader
+from .utils import get_command_options, get_parser_options
 
 
 class ManagementUtility(management.ManagementUtility):
@@ -82,13 +83,28 @@ class ManagementUtility(management.ManagementUtility):
     # Special-cases: We want 'django-admin --version' and
     # 'django-admin --help' to work, for backwards compatibility.
     elif subcommand == 'version' or self.argv[1:] == ['--version']:
-        sys.stdout.write(django.get_version() + '\n')
+      sys.stdout.write(django.get_version() + '\n')
     elif self.argv[1:] in (['--help'], ['-h']):
-        sys.stdout.write(self.main_help_text() + '\n')
+      sys.stdout.write(self.main_help_text() + '\n')
     else:
-      self.fetch_command(subcommand).run_from_argv(self.argv)
-      #cli.main(args=[subcommand] + args, prog_name='test')
+      command = self.fetch_command(subcommand)
 
+      if getattr(command, 'allow_unknown_args', False):
+        argv = self.argv
+      else:
+        preconfig = PreconfigLoader.load()
+        parser = preconfig.get_parser()
+        preconf_opts = get_parser_options(parser)
+        supported_opts = get_command_options(command)
+        ignorable = preconf_opts - supported_opts
+        argv = []
+        for item in self.argv:
+          if item.startswith('-'):
+            key = item.split('=')[0]
+            if key in ignorable:
+              continue
+          argv.append(item)
+      command.run_from_argv(argv)
 
 def execute_from_command_line(argv=None):
   """
