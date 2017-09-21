@@ -12,6 +12,7 @@ setup(name='baph',
           'SQLAlchemy >= 0.9.0',
           'python-dotenv == 0.7.1',
           'functools32 == 3.2.3.post2',
+          'chainmap == 1.0.2',
       ],
       include_package_data=True,
       package_data={
