@@ -46,8 +46,6 @@ def handle_default_options(options):
   if options.pythonpath:
     sys.path.insert(0, options.pythonpath)
   preconfig = PreconfigLoader.load()
-  print 'preconf2:', preconfig
-  print vars(options)
 
 class OutputWrapper(object):
     """
