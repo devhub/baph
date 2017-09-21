@@ -19,7 +19,7 @@ class PreconfigLoader(object):
   @classmethod
   def load(cls, root=None):
     if root is None:
-      path = os.path.abspath(sys.argv[0])
+      path = os.path.realpath(sys.argv[0])
       root = os.path.dirname(path)
     if root not in cls.cache:
       profile = load_preconfig_profile(root)
