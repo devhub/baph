@@ -2,11 +2,13 @@ import inspect
 import os
 import sys
 from argparse import ArgumentParser
+from io import TextIOBase
 from operator import attrgetter
 
 from django.core.management import base
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management.base import handle_default_options
+from django.core.management.color import color_style, no_style
 from django.utils.six import StringIO
 
 from .base import CommandError
@@ -42,10 +44,50 @@ class CommandParser(ArgumentParser):
     else:
       raise base.CommandError("Error: %s" % message)
 
+class OutputWrapper(TextIOBase):
+  """
+  Wrapper around stdout/stderr
+  """
+  @property
+  def style_func(self):
+    return self._style_func
+
+  @style_func.setter
+  def style_func(self, style_func):
+    if style_func and self.isatty():
+      self._style_func = style_func
+    else:
+      self._style_func = lambda x: x
+
+  def __init__(self, out, style_func=None, ending='\n'):
+    self._out = out
+    self.style_func = None
+    self.ending = ending
+
+  def __getattr__(self, name):
+    return getattr(self._out, name)
+
+  def isatty(self):
+    return hasattr(self._out, 'isatty') and self._out.isatty()
+
+  def write(self, msg, style_func=None, ending=None):
+    ending = self.ending if ending is None else ending
+    if ending and not msg.endswith(ending):
+      msg += ending
+    style_func = style_func or self.style_func
+    self._out.write(style_func(msg))
+
 class BaseCommand(base.BaseCommand):
   allow_unknown_args = False
 
-  def __init__(self, *args, **kwargs):
+  def __init__(self, stdout=None, stderr=None, no_color=False, *args, **kwargs):
+    self.stdout = OutputWrapper(stdout or sys.stdout)
+    self.stderr = OutputWrapper(stderr or sys.stderr)
+    if no_color:
+      self.style = no_style()
+    else:
+      self.style = color_style()
+      self.stderr.style_func = self.style.ERROR
     super(BaseCommand, self).__init__(*args, **kwargs)
 
   def get_legacy_args(self):
@@ -252,6 +294,9 @@ class BaseCommand(base.BaseCommand):
     The actual logic of the command. Subclasses must implement
     this method.
     """
+    super_func = super(BaseCommand, self).handle
+    if super_func:
+      return super_func(*args, **options)
     raise NotImplementedError('subclasses of BaseCommand must provide a '
                               'handle() method')
 
