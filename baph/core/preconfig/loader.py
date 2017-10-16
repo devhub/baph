@@ -1,6 +1,7 @@
 import imp
 import inspect
 import os
+from pkg_resources import get_distribution
 import sys
 
 from .config import Preconfiguration
@@ -18,9 +19,21 @@ class PreconfigLoader(object):
 
   @classmethod
   def load(cls, root=None):
+    if root is None and 'BAPH_APP' in os.environ:
+      app = os.environ['BAPH_APP']
+      dist = get_distribution(app)
+      root = os.path.join(dist.location, app)
+      '''
+      try:
+        _, root, _ = imp.find_module(app, sys.path)
+      except:
+        pass
+      '''
+
     if root is None:
       path = os.path.realpath(sys.argv[0])
       root = os.path.dirname(path)
+
     if root not in cls.cache:
       profile = load_preconfig_profile(root)
       if not profile:

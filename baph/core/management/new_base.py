@@ -11,6 +11,8 @@ from django.core.management.base import handle_default_options
 from django.core.management.color import color_style, no_style
 from django.utils.six import StringIO
 
+from baph.core.preconfig.loader import PreconfigLoader
+from baph.core.management.utils import get_command_options, get_parser_options
 from .base import CommandError
 
 
@@ -81,6 +83,7 @@ class BaseCommand(base.BaseCommand):
   allow_unknown_args = False
 
   def __init__(self, stdout=None, stderr=None, no_color=False, *args, **kwargs):
+    self.preconfig = PreconfigLoader.load()
     self.stdout = OutputWrapper(stdout or sys.stdout)
     self.stderr = OutputWrapper(stderr or sys.stderr)
     if no_color:
@@ -214,6 +217,23 @@ class BaseCommand(base.BaseCommand):
     """
     pass
 
+  def normalize_argv(self, argv):
+    " ensure the subcommand is always at arg[1] or django dies "
+    subcommand = type(self).__module__.rsplit('.')[-1]
+    pos = argv.index(subcommand)
+    return [argv[0], subcommand] + argv[1:pos] + argv[pos+1:]
+
+  @staticmethod
+  def strip_ignorable_args(args, ignorable):
+    _args = []
+    for arg in args:
+      if arg[0] == '-':
+        name = arg.split('=', 1)[0]
+        if name in ignorable:
+          continue
+      _args.append(arg)
+    return _args
+
   def run_from_argv(self, argv):
     """
     Set up any environment changes requested (e.g., Python path
@@ -222,17 +242,26 @@ class BaseCommand(base.BaseCommand):
     to stderr. If the ``--traceback`` option is present or the raised
     ``Exception`` is not ``CommandError``, raise it.
     """
+    #print 'run from argv:', argv
+    argv = self.normalize_argv(argv)
+    
     self._called_from_command_line = True
     parser = self.create_parser(argv[0], argv[1])
+    options, args = parser.parse_known_args(argv[2:])
+
+    cmd_options = vars(options)
+    supported_opts = get_parser_options(parser)
+    preconfig_opts = self.preconfig.all_flags
+    ignorable_opts = preconfig_opts - supported_opts
+    args = self.strip_ignorable_args(args, ignorable_opts)
 
     if self.allow_unknown_args:
-      options, args = parser.parse_known_args(argv[2:])
-      cmd_options = vars(options)
       # pass unknown args to the subcommand
       args = list(args)
-    else:
+    elif args:
+      # unknown args - reparse normally so it fails
       options = parser.parse_args(argv[2:])
-      cmd_options = vars(options)
+    else:
       # Move positional args out of options to mimic legacy optparse
       args = cmd_options.pop('args', ())
     

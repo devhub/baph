@@ -14,6 +14,16 @@ from .utils import with_empty
 def templatize(key):
   return '{%s}' % key.upper()
 
+def render_tpls(tpls, context):
+  rendered = []
+  for tpl in tpls:
+    try:
+      rendered.append(tpl.format(**context))
+    except:
+      # necessary params not present in context
+      pass
+  return rendered
+
 
 class ModuleGenerator(object):
   def __init__(self, bases):
@@ -77,6 +87,13 @@ class Preconfiguration(object):
             if os.environ.get(k)}
 
   @property
+  def all_flags(self):
+    flags = set()
+    for option in self.options:
+      flags.update(option.args)
+    return flags
+
+  @property
   def prefix_strings(self):
     return with_empty(self.prefixes)
 
@@ -105,7 +122,7 @@ class Preconfiguration(object):
   def packages(self):
     " returns the package names "
     context = self.context
-    return [tpl.format(**context) for tpl in self.package_tpls]
+    return render_tpls(self.package_tpls, context)
 
 
   @property
@@ -140,7 +157,8 @@ class Preconfiguration(object):
   def modules(self):
     " returns the module names "
     context = self.context
-    return [tpl.format(**context) for tpl in self.module_tpls]
+    return render_tpls(self.module_tpls, context)
+
 
   def load_values(self):
     """ get values for preconfig arguments """
@@ -208,6 +226,8 @@ class Preconfiguration(object):
     self.package_options = packages
 
   def add_to_parser(self, parser):
+    from baph.core.management.utils import get_parser_options
+    opts = get_parser_options(parser)
     for opt in self.options:
       opt.add_to_parser(parser)
 

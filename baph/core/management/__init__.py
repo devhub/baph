@@ -13,6 +13,13 @@ from baph.core.preconfig.loader import PreconfigLoader
 from .utils import get_command_options, get_parser_options
 
 
+def get_subcommand(args):
+  " returns the first item in args which doesn't begin with a hyphen "
+  for arg in args:
+    if arg and arg[0] != '-':
+      return arg
+  return 'help'
+
 class ManagementUtility(management.ManagementUtility):
   """
   Encapsulates the logic of the django-admin and manage.py utilities.
@@ -25,21 +32,22 @@ class ManagementUtility(management.ManagementUtility):
     Given the command-line arguments, this figures out which subcommand is
     being run, creates a parser appropriate to that command, and runs it.
     """
-    try:
-      subcommand = self.argv[1]
-    except IndexError:
-      subcommand = 'help'  # Display help if no arguments were given.
-
     # Preprocess options to extract --settings and --pythonpath.
     # These options could affect the commands that are available, so they
     # must be processed early.
     #parser = CommandParser(None, usage="%(prog)s subcommand [options] [args]", add_help=False)
-    parser = ArgumentParser()
+    #
+    preconfig = PreconfigLoader.load()
+    if preconfig:
+      parser = preconfig.get_parser()
+    else:
+      parser = ArgumentParser()
     parser.add_argument('--settings')
     parser.add_argument('--pythonpath')
     parser.add_argument('args', nargs='*')  # catch-all
+    options, args = parser.parse_known_args(self.argv[1:])
+    subcommand = get_subcommand(options.args)
     try:
-      options, args = parser.parse_known_args(self.argv[1:])
       handle_default_options(options)
     except CommandError:
       pass  # Ignore any option errors at this point.
@@ -88,15 +96,22 @@ class ManagementUtility(management.ManagementUtility):
       sys.stdout.write(self.main_help_text() + '\n')
     else:
       command = self.fetch_command(subcommand)
-
+      '''
       if getattr(command, 'allow_unknown_args', False):
         argv = self.argv
       else:
-        preconfig = PreconfigLoader.load()
-        parser = preconfig.get_parser()
+        #preconfig = PreconfigLoader.load()
+        #parser = preconfig.get_parser()
+
         preconf_opts = get_parser_options(parser)
+        print 'preconf opts:', preconf_opts
         supported_opts = get_command_options(command)
+        print 'supported:', supported_opts
         ignorable = preconf_opts - supported_opts
+        print 'ignorable:', ignorable
+        options, args = parser.parse_known_args(self.argv[1:])
+        print 'opts:', options
+        print 'args:', args
         argv = []
         for item in self.argv:
           if item.startswith('-'):
@@ -104,7 +119,8 @@ class ManagementUtility(management.ManagementUtility):
             if key in ignorable:
               continue
           argv.append(item)
-      command.run_from_argv(argv)
+      '''
+      command.run_from_argv(self.argv)
 
 def execute_from_command_line(argv=None):
   """
