@@ -179,7 +179,7 @@ class Command(BaseCommand):
         'Are you sure you want to do this?\n\n'
         "Type 'yes' to continue, or 'no' to cancel: "
       )
-      if input(''.join(message)) != 'yes':
+      if raw_input(''.join(message)) != 'yes':
         raise CommandError("Collecting static files cancelled.")
 
     collected = self.collect()

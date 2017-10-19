@@ -269,6 +269,15 @@ class Settings:
     logger.info('Loading global settings')
     self.load_settings_module(global_settings, explicit=False)
 
+  def load_local_settings(self):
+    " loads local settings "
+    logger.info('Loading local settings')
+    try:
+      import settings as local_settings
+      self.load_settings_module(local_settings)
+    except:
+      pass
+
   def __init__(self, settings_module):
     mode = 'dynamic' if settings_module == '__dynamic__' else 'static'
     logger.info('\n*** Initializing Settings (%s mode) ***' % mode)
@@ -295,6 +304,7 @@ class Settings:
       self.load_dynamic_settings()
     else:
       self.load_static_settings()
+    self.load_local_settings()
 
     if not self.SECRET_KEY:
       raise ImproperlyConfigured("The SECRET_KEY setting must not be empty.")
