@@ -1,4 +1,5 @@
 import ast
+from contextlib import contextmanager
 import imp
 import importlib
 import logging
@@ -28,6 +29,15 @@ TUPLE_SETTINGS = (
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.INFO)
 #logger.addHandler(handler)
+
+@contextmanager
+def local_path():
+  orig = sys.path
+  sys.path = []
+  if 'PROJECT_ROOT' in os.environ:
+    sys.path.append(os.environ['PROJECT_ROOT'])
+  yield
+  sys.path = orig
 
 class LazySettings(LazyObject):
   
@@ -272,11 +282,12 @@ class Settings:
   def load_local_settings(self):
     " loads local settings "
     logger.info('Loading local settings')
-    try:
-      import settings as local_settings
-      self.load_settings_module(local_settings)
-    except:
-      pass
+    with local_path():
+      try:
+        import settings as local_settings
+        self.load_settings_module(local_settings)
+      except:
+        pass
 
   def __init__(self, settings_module):
     mode = 'dynamic' if settings_module == '__dynamic__' else 'static'
