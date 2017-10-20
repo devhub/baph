@@ -142,7 +142,6 @@ class Command(BaseCommand):
     }
 
   def handle(self, **options):
-    print 'handle:', options
     self.set_options(**options)
 
     message = ['\n']
