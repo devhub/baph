@@ -4,7 +4,6 @@ import time
 
 from django.conf import settings
 from django.core.cache import get_cache
-from django.core.management import call_command
 from django.db import DEFAULT_DB_ALIAS, connections, transaction
 from django import test
 from django.test.testcases import connections_support_transactions
@@ -12,6 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm import sessionmaker
 
+from baph.core.management import call_command
 from baph.db.orm import ORM
 from .signals import add_timing
 
@@ -230,9 +230,8 @@ class BaphFixtureMixin(object):
         params = {
             'verbosity': 0,
             'database': None,
-            'skip_validation': True,
-            'commit': False,
-            }
+            #'skip_checks': True,
+        }
         start = time.time()
         call_command('loaddata', *fixtures, **params)
         if PRINT_TEST_TIMINGS:
@@ -243,7 +242,7 @@ class BaphFixtureMixin(object):
         params = {
             'verbosity': 0,
             'interactive': False,
-            }
+        }
         start = time.time()
         call_command('flush', **params)
         if PRINT_TEST_TIMINGS:

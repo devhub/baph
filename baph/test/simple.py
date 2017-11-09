@@ -4,7 +4,6 @@ import unittest as real_unittest
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.core.management import call_command
 from django.test import _doctest as doctest, runner
 from django.test.simple import OutputChecker, DocTestRunner, get_tests #, build_suite #, build_test
 from django.test.utils import setup_test_environment, teardown_test_environment
@@ -15,6 +14,7 @@ from sqlalchemy import inspect, create_engine
 from sqlalchemy.orm.session import Session
 from sqlalchemy.schema import CreateSchema, DropSchema
 
+from baph.core.management import call_command
 from baph.db.models import get_app, get_apps
 from baph.db.orm import ORM, Base
 from baph.utils.importing import import_any_module

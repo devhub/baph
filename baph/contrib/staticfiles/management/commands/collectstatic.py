@@ -3,6 +3,8 @@ from collections import OrderedDict
 
 from django.contrib.staticfiles.finders import get_finders
 from django.contrib.staticfiles.storage import staticfiles_storage
+print 'storage:', staticfiles_storage
+
 from django.core.files.storage import FileSystemStorage
 from django.core.management.color import no_style
 from django.utils.functional import cached_property
@@ -242,18 +244,27 @@ class Command(BaseCommand):
     """
     Check if the target file should be deleted if it already exists.
     """
+    '''
+    print 'delete file:', path
+    print '  prefixed:', prefixed_path
+    print '  source:', source_storage
+    '''
     if self.storage.exists(prefixed_path):
       try:
         # When was the target file modified last time?
         target_last_modified = self.storage.get_modified_time(prefixed_path)
-      except (OSError, NotImplementedError, AttributeError):
+        #print '  target last modified:', target_last_modified
+      except (OSError, NotImplementedError, AttributeError) as e:
         # The storage doesn't support get_modified_time() or failed
+        #print '  failed!', e
         pass
       else:
         try:
           # When was the source file modified last time?
           source_last_modified = source_storage.get_modified_time(path)
+          #print '  source last modified:', source_last_modified
         except (OSError, NotImplementedError, AttributeError):
+          #print '  failed'
           pass
         else:
           # The full path of the target file

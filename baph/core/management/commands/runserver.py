@@ -1,13 +1,11 @@
 from cStringIO import StringIO
 import mimetools
-#import pyinotify
 
 from django.contrib.staticfiles.management.commands import runserver
 from django.core.servers.basehttp import WSGIRequestHandler
 
 from baph.core.management.new_base import BaseCommand
 from baph.core.management.validation import get_validation_errors
-from baph.utils import autoreload
 
 
 class Message(mimetools.Message):
@@ -39,16 +37,3 @@ WSGIRequestHandler.MessageClass = Message
 
 class Command(BaseCommand, runserver.Command):
   pass
-
-  '''
-  def run(self, *args, **options):
-    """
-    Runs the server, using the autoreloader if needed
-    """
-    use_reloader = options.get('use_reloader')
-
-    if use_reloader:
-      autoreload.main(self.inner_run, args, options)
-    else:
-      self.inner_run(*args, **options)
-  '''

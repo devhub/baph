@@ -80,6 +80,7 @@ class OutputWrapper(TextIOBase):
     self._out.write(style_func(msg))
 
 class BaseCommand(base.BaseCommand):
+  _called_from_command_line = False
   allow_unknown_args = False
 
   def __init__(self, stdout=None, stderr=None, no_color=False, *args, **kwargs):
@@ -289,7 +290,7 @@ class BaseCommand(base.BaseCommand):
       self.stdout = OutputWrapper(options['stdout'])
     if options.get('stderr'):
       self.stderr = OutputWrapper(options['stderr'], self.stderr.style_func)
-
+    '''
     saved_locale = None
     if not self.leave_locale_alone:
       # Deactivate translations, because django-admin creates database
@@ -298,7 +299,7 @@ class BaseCommand(base.BaseCommand):
       from django.utils import translation
       saved_locale = translation.get_language()
       translation.deactivate_all()
-
+    '''
     try:
       all_output = ''
       funcs = (self.pre_handle, self.handle, self.post_handle)
@@ -308,8 +309,11 @@ class BaseCommand(base.BaseCommand):
           self.stdout.write(output)
           all_output += output
     finally:
+      pass
+      '''
       if saved_locale is not None:
         translation.activate(saved_locale)
+      '''
     return all_output
 
   def pre_handle(self, *args, **options):
@@ -352,3 +356,34 @@ class BaseCommand(base.BaseCommand):
     if display_num_errors:
       self.stdout.write("%s error%s found" 
         % (num_errors, num_errors != 1 and 's' or ''))
+
+class LabelCommand(BaseCommand):
+  """
+  A management command which takes one or more arbitrary arguments
+  (labels) on the command line, and does something with each of
+  them.
+  Rather than implementing ``handle()``, subclasses must implement
+  ``handle_label()``, which will be called once for each label.
+  If the arguments should be names of installed applications, use
+  ``AppCommand`` instead.
+  """
+  label = 'label'
+  missing_args_message = "Enter at least one %s." % label
+
+  def add_arguments(self, parser):
+    parser.add_argument('args', metavar=self.label, nargs='+')
+
+  def handle(self, *labels, **options):
+    output = []
+    for label in labels:
+      label_output = self.handle_label(label, **options)
+      if label_output:
+        output.append(label_output)
+    return '\n'.join(output)
+
+  def handle_label(self, label, **options):
+    """
+    Perform the command's actions for ``label``, which will be the
+    string as given on the command line.
+    """
+    raise NotImplementedError('subclasses of LabelCommand must provide a handle_label() method')

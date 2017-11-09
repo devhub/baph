@@ -6,7 +6,7 @@ from django.core.management import call_command
 from django.core.management.color import no_style
 from django.utils.importlib import import_module
 
-from baph.core.management.base import NoArgsCommand, CommandError
+from baph.core.management.new_base import BaseCommand, CommandError
 from baph.core.management.sql import emit_post_sync_signal
 from baph.db import ORM, DEFAULT_DB_ALIAS
 from baph.db.models import signals, get_apps, get_models
@@ -15,21 +15,25 @@ from baph.db.models import signals, get_apps, get_models
 orm = ORM.get()
 Base = orm.Base
 
-class Command(NoArgsCommand):
-    option_list = NoArgsCommand.option_list + (
-        make_option('--noinput', action='store_false', dest='interactive', default=True,
-            help='Tells Django to NOT prompt the user for input of any kind.'),
-        make_option('--database', action='store', dest='database',
-            default=DEFAULT_DB_ALIAS, help='Nominates a database to flush. '
-                'Defaults to the "default" database.'),
-    )
+class Command(BaseCommand):
     help = "Executes ``sqlflush`` on the current database."
 
-    def handle_noargs(self, **options):
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--noinput', action='store_false', dest='interactive', default=True,
+            help='Tells Django to NOT prompt the user for input of any kind.'
+        )
+        parser.add_argument(
+            '--database', action='store', dest='database',
+            default=DEFAULT_DB_ALIAS,
+            help='Nominates a database to flush. Defaults to the "default" database.'
+        )
+
+    def handle(self, **options):
         #db = options.get('database', DEFAULT_DB_ALIAS)
         #connection = connections[db]
-        verbosity = int(options.get('verbosity', 1))
-        interactive = options.get('interactive')
+        verbosity = options['verbosity']
+        interactive = options['interactive']
 
         self.style = no_style()
 

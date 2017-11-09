@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from collections import defaultdict, OrderedDict
 import os
 import sys
 
@@ -6,9 +7,12 @@ import django
 from django.conf import settings
 from django.core import management
 from django.core.exceptions import ImproperlyConfigured
+from django.core.management import get_commands, load_command_class
+from django.utils import autoreload
 
 import baph
-from baph.core.management.base import handle_default_options, CommandError
+from baph.core.management.base import (
+  BaseCommand, CommandError, handle_default_options)
 from baph.core.preconfig.loader import PreconfigLoader
 from .utils import get_command_options, get_parser_options
 
@@ -19,6 +23,57 @@ def get_subcommand(args):
     if arg and arg[0] != '-':
       return arg
   return 'help'
+
+def call_command(command_name, *args, **options):
+  preconfig = PreconfigLoader.load()
+  values = preconfig.load_values()
+
+  if isinstance(command_name, BaseCommand):
+    command = command_name
+    command_name = command.__class__.__module__.split('.')[-1]
+  else:
+    # load the command object by name
+    try:
+      app_name = get_commands()[command_name]
+    except KeyError:
+      raise CommandError("Unknown command: %r" % command_name)
+
+    if isinstance(app_name, BaseCommand):
+      # If the command is already loaded, use it directly
+      command = app_name
+    else:
+      command = load_command_class(app_name, command_name)
+
+  parser = command.create_parser('', command_name)
+  opt_mapping = {
+    min(s_opt.option_strings).lstrip('-').replace('-', '_'): s_opt.dest
+    for s_opt in parser._actions if s_opt.option_strings
+  }
+
+  arg_options = {
+    opt_mapping.get(key, key): value
+    for key, value in options.items()
+  }
+  defaults = parser.parse_args(args)
+  defaults = dict(defaults._get_kwargs(), **arg_options)
+  #stealth_options = set(command.base_stealth_options + command.stealth_options)
+  dest_parameters = {action.dest for action in parser._actions}
+  #valid_options = (dest_parameters | stealth_options).union(opt_mapping)
+  valid_options = dest_parameters.union(opt_mapping)
+  unknown_options = set(options) - valid_options
+  if unknown_options:
+    raise TypeError(
+      "Unknown option(s) for %s command: %s. "
+      "Valid options are: %s." % (
+        command_name,
+        ', '.join(sorted(unknown_options)),
+        ', '.join(sorted(valid_options)),
+      )
+    )
+  args = defaults.pop('args', ())
+  if 'skip_checks' not in options:
+    defaults['skip_checks'] = True
+  return command.execute(*args, **defaults)
 
 class ManagementUtility(management.ManagementUtility):
   """
@@ -65,7 +120,7 @@ class ManagementUtility(management.ManagementUtility):
       # flag on the command class because we haven't located it yet.
       if subcommand == 'runserver' and '--noreload' not in self.argv:
         try:
-          autoreload.check_errors(django.setup)()
+          autoreload.check_errors(baph.setup)()
         except Exception:
           # The exception will be raised later in the child process
           # started by the autoreloader. Pretend it didn't happen by
@@ -96,30 +151,6 @@ class ManagementUtility(management.ManagementUtility):
       sys.stdout.write(self.main_help_text() + '\n')
     else:
       command = self.fetch_command(subcommand)
-      '''
-      if getattr(command, 'allow_unknown_args', False):
-        argv = self.argv
-      else:
-        #preconfig = PreconfigLoader.load()
-        #parser = preconfig.get_parser()
-
-        preconf_opts = get_parser_options(parser)
-        print 'preconf opts:', preconf_opts
-        supported_opts = get_command_options(command)
-        print 'supported:', supported_opts
-        ignorable = preconf_opts - supported_opts
-        print 'ignorable:', ignorable
-        options, args = parser.parse_known_args(self.argv[1:])
-        print 'opts:', options
-        print 'args:', args
-        argv = []
-        for item in self.argv:
-          if item.startswith('-'):
-            key = item.split('=')[0]
-            if key in ignorable:
-              continue
-          argv.append(item)
-      '''
       command.run_from_argv(self.argv)
 
 def execute_from_command_line(argv=None):
