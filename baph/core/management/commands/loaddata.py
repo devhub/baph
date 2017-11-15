@@ -100,9 +100,6 @@ class Command(BaseCommand):
       )
 
     def handle(self, *fixture_labels, **options):
-      print 'handle:'
-      print '  fixture labels:', fixture_labels
-      print '  options:', options
       self.ignore = options['ignore']
       self.using = options['database']
       self.app_label = options['app_label']
@@ -226,7 +223,6 @@ class Command(BaseCommand):
                     using=self.using, ignorenonexistent=self.ignore)
 
                 for obj in objects:
-                    print 'OBJ:', obj
                     objects_in_fixture += 1
                     # TODO: implement routing
                     if True: #router.allow_syncdb(self.using, obj.object.__class__):
