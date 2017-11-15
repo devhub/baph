@@ -40,7 +40,15 @@ def local_path():
   yield
   sys.path = orig
 
+class SettingsMeta(type):
+  def __new__(cls, name, bases, attrs):
+    # overwrite __module__ so django translation utils will
+    # check the correct location for translation files
+    attrs['__module__'] = 'django.conf'
+    return super(SettingsMeta, cls).__new__(cls, name, bases, attrs)
+
 class LazySettings(LazyObject):
+  __metaclass__ = SettingsMeta
   
   def _setup(self, name=None):
     settings_module = os.environ.get(ENVIRONMENT_VARIABLE)
