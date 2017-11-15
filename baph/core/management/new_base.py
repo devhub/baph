@@ -249,12 +249,13 @@ class BaseCommand(base.BaseCommand):
     self._called_from_command_line = True
     parser = self.create_parser(argv[0], argv[1])
     options, args = parser.parse_known_args(argv[2:])
-
     cmd_options = vars(options)
-    supported_opts = get_parser_options(parser)
-    preconfig_opts = self.preconfig.all_flags
-    ignorable_opts = preconfig_opts - supported_opts
-    args = self.strip_ignorable_args(args, ignorable_opts)
+
+    if self.preconfig:
+      supported_opts = get_parser_options(parser)
+      preconfig_opts = self.preconfig.all_flags
+      ignorable_opts = preconfig_opts - supported_opts
+      args = self.strip_ignorable_args(args, ignorable_opts)
 
     if self.allow_unknown_args:
       # pass unknown args to the subcommand
