@@ -6,6 +6,8 @@ from django.contrib.auth import (SESSION_KEY, BACKEND_SESSION_KEY,
     load_backend, user_logged_in)
 #from django.contrib.auth.models import AnonymousUser
 
+default_app_config = 'baph.auth.apps.AuthConfig'
+
 
 def login(request, user):
     '''Persist a user id and a backend in the request. This way a user doesn't
