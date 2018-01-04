@@ -11,4 +11,18 @@ def replace_settings_class():
   from baph.conf import settings
   conf.settings = settings
 
+def apply_patches():
+  import os
+  from importlib import import_module
+
+  patch_dir = os.path.join(os.path.dirname(__file__), 'patches')
+  for mod_name in os.listdir(patch_dir):
+    filename = os.path.join(patch_dir, mod_name)
+    with open(filename, 'rt') as fp:
+      src = fp.read()
+    code = compile(src, filename, 'exec')
+    mod = import_module(mod_name)
+    exec(code, mod.__dict__)
+
 replace_settings_class()
+apply_patches()

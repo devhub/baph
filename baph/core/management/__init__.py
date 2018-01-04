@@ -11,6 +11,7 @@ from django.core.management import get_commands, load_command_class
 from django.utils import autoreload
 
 import baph
+from baph.apps import apps
 from baph.core.management.base import (
   BaseCommand, CommandError, handle_default_options)
 from baph.core.preconfig.loader import PreconfigLoader

@@ -3,6 +3,7 @@ import mimetools
 
 from django.contrib.staticfiles.management.commands import runserver
 from django.core.servers.basehttp import WSGIRequestHandler
+from django.utils import autoreload
 
 from baph.core.management.new_base import BaseCommand
 from baph.core.management.validation import get_validation_errors
@@ -36,4 +37,6 @@ WSGIRequestHandler.MessageClass = Message
 
 
 class Command(BaseCommand, runserver.Command):
-  pass
+  def inner_run(self, *args, **kwargs):
+    autoreload.raise_last_exception()
+    super(BaseCommand, self).inner_run(*args, **kwargs)

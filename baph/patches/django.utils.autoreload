@@ -1,0 +1,30 @@
+import six
+
+
+def check_errors(fn):
+  def wrapper(*args, **kwargs):
+    global _exception
+    try:
+      fn(*args, **kwargs)
+    except Exception:
+      _exception = sys.exc_info()
+
+      et, ev, tb = _exception
+
+      if getattr(ev, 'filename', None) is None:
+        # get the filename from the last item in the stack
+        filename = traceback.extract_tb(tb)[-1][0]
+      else:
+        filename = ev.filename
+
+      if filename not in _error_files:
+        _error_files.append(filename)
+
+      raise
+
+  return wrapper
+
+def raise_last_exception():
+  global _exception
+  if _exception is not None:
+    six.reraise(*_exception)
