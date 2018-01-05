@@ -1,2 +1,2 @@
 recursive-include baph *.py *.json *.html *.txt
-graft patches
+graft baph/patches
