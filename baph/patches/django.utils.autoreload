@@ -1,6 +1,8 @@
 import six
 
 
+_exception = None
+
 def check_errors(fn):
   def wrapper(*args, **kwargs):
     global _exception
