@@ -284,7 +284,7 @@ class BaseCommand(base.BaseCommand):
     controlled by the ``requires_system_checks`` attribute, except if
     force-skipped).
     """
-    if options['no_color']:
+    if 'no_color' in options and options['no_color']:
       self.style = no_style()
       self.stderr.style_func = None
     if options.get('stdout'):
