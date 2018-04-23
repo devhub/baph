@@ -611,7 +611,8 @@ class CacheMixin(object):
           # the fields which trigger this pointer were not changed
           continue
         cache_key = raw_key % data
-        _, ident = identity_key(instance=self)
+        ident_key = identity_key(instance=self) 
+        _, ident = ident_key[:2]
         if len(ident) > 1:
           ident = ','.join(map(str, ident))
         else:
