@@ -6,8 +6,8 @@ from sqlalchemy.orm.attributes import instance_dict
 from sqlalchemy.orm.collections import MappedCollection
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.session import object_session
-from sqlalchemy.orm.util import identity_key
 
+from baph.db.models.utils import identity_key
 from baph.db.orm import ORM
 from baph.utils.collections import duck_type_collection
 
@@ -19,7 +19,7 @@ def reload_object(instance):
   """
   Reloads an instance with the correct polymorphic subclass
   """
-  cls, pk_vals = identity_key(instance=instance)
+  (cls, pk_vals) = identity_key(instance=instance)
   mapper = inspect(cls)
   pk_cols = [col.key for col in mapper.primary_key]
   pk = dict(zip(pk_cols, pk_vals))
@@ -38,7 +38,7 @@ def get_polymorphic_subclass(instance):
   the polymorphic map of the base class. for non-polymorphic classes, it
   returns the class
   """
-  cls, pk = identity_key(instance=instance)
+  (cls, pk) = identity_key(instance=instance)
   base_mapper = inspect(cls)
   if base_mapper.polymorphic_on is None:
     # this is not a polymorphic class
@@ -148,7 +148,7 @@ class CloneEngine(object):
   def user_id(self):
     if not self.user:
       return None
-    cls, pk = identity_key(instance=self.user)
+    (cls, pk) = identity_key(instance=self.user)
     if len(pk) > 1:
       raise Exception('chown cannot used for multi-column user pks. To '
         'specify ownership for a user with a multi-column pk, add the '
@@ -218,8 +218,7 @@ class CloneEngine(object):
 
   def clone_obj(self, instance, ruleset=None, rule_keys=None, cast_to=None):
     is_root = self.root is None
-
-    base_cls, pk = identity_key(instance=instance)
+    (base_cls, pk) = identity_key(instance=instance)
     if (base_cls, pk) in self.registry:
       # we already cloned this
       return self.registry[(base_cls, pk)]

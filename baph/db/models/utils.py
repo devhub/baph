@@ -2,7 +2,12 @@ import types
 
 from sqlalchemy import inspect
 from sqlalchemy.ext.declarative.clsregistry import _class_resolver
+from sqlalchemy.orm.util import identity_key as new_identity_key
 
+
+def identity_key(*args, **kwargs):
+  """ returns a 2-tuple identity key, not the 3-tuple in newer SQLA """
+  return new_identity_key(*args, **kwargs)[:2]
 
 def has_inherited_table(cls):
     # TODO: a fix in sqla 0.9 should make this unnecessary, check it
