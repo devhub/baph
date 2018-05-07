@@ -1,6 +1,6 @@
 import copy
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, Column
 from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm.attributes import instance_dict
 from sqlalchemy.orm.collections import MappedCollection
@@ -65,10 +65,17 @@ def get_cloning_rules(cls):
 
 def get_default_excludes(cls):
   """
-  By default, exclude pks and fks
+  By default, exclude pks, fks, and query_expressions
   """
   mapper = inspect(cls)
+  exclude_props = set()
   exclude_cols = set()
+
+  for attr in mapper.column_attrs:
+    # exclude column properties which do not refer to actual columns
+    # ie query_expressions
+    if not any(isinstance(col, Column) for col in attr.columns):
+      exclude_props.add(attr.key)
 
   if mapper.polymorphic_on is not None:
     # do not copy the polymorphic discriminator. it will be set automatically
@@ -86,7 +93,7 @@ def get_default_excludes(cls):
 
   props = map(mapper.get_property_by_column, exclude_cols)
   keys = set(prop.key for prop in props)
-  return keys
+  return exclude_props | keys
 
 def get_default_columns(cls):
   """
