@@ -147,7 +147,9 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
     def pk_as_query_filters(self, force=False):
         " returns a filter expression for the primary key of the instance "
         " suitable for use with Query.filter() "
-        cls, pk_values = identity_key(instance=self)
+        ident = identity_key(instance=self)
+        (cls, pk_values) = ident[:2]
+
         if None in pk_values and not force:
             return None
         items = zip(self.pk_attrs, pk_values)

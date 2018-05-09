@@ -228,7 +228,8 @@ class Command(BaseCommand):
                     if True: #router.allow_syncdb(self.using, obj.object.__class__):
                         loaded_objects_in_fixture += 1
                         self.models.add(type(obj))
-                        cls, key = identity_key(instance=obj)
+                        ident = identity_key(instance=obj)
+                        (cls, key) = ident[:2]
                         if any(part is None for part in key):
                             # we can't generate an explicit key with this info
                             session.add(obj)
