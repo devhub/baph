@@ -157,7 +157,7 @@ class QueryLoggerMixin(object):
         optional = True
       else:
         optional = False
-      if results[0] == query:
+      if all(query[i] in ('*', results[0][i]) for i in range(len(query))):
         results.pop(0)
         continue
       if optional:
