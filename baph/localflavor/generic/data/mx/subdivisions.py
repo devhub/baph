@@ -15,7 +15,7 @@ STATES = (
   ('CHP', _('Chiapas')),
   ('COA', _('Coahuila')),
   ('COL', _('Colima')),
-  ('CMX', _('Ciudad de México'))
+  ('CMX', _('Ciudad de México')),
   ('DUR', _('Durango')),
   ('GRO', _('Guerrero')),
   ('GUA', _('Guanajuato')),
