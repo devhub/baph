@@ -27,9 +27,9 @@ from baph.utils.importing import import_any_module, import_attr
 
 COUNTRY_DIVISIONS = {
     'province': ['ar', 'be', 'ca', 'es', 'nl', 'za'],
-    'state': ['at', 'au', 'br', 'ch', 'de', 'in_', 'mx', 'us'],
+    'state': ['at', 'au', 'br', 'ch', 'de', 'in_', 'us'],
     'department': ['co'],
-    'generic': ['bo', 'cl', 'cr', 'do', 'ec', 'es', 'gt', 'it', 'ni', 'pa',
+    'generic': ['bo', 'cl', 'cr', 'do', 'ec', 'es', 'gt', 'it', 'ni', 'mx', 'pa',
                 'pe', 'py', 'ru', 'sv', 'uy'],
     }
 COUNTRY_STATES = COUNTRY_DIVISIONS['state']
