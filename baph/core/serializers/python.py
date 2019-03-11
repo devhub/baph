@@ -1,9 +1,9 @@
 from django.utils.encoding import smart_text, is_protected_type
-from sqlalchemy.orm.util import identity_key
 
 from baph.core.serializers import base
 from baph.db import DEFAULT_DB_ALIAS
 from baph.db.models import get_apps
+from baph.db.models.utils import identity_key
 from baph.db.orm import Base
 
 
