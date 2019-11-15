@@ -4,7 +4,7 @@ from __future__ import unicode_literals
 from django.utils.translation import ugettext_lazy as _
 
 
-SUBDIVISIONS = ('STATES', 'AREAN_COUNCIL', 'LOCAL_GOVERMENT_AREA')
+SUBDIVISIONS = ('STATES', 'AREA_COUNCIL', 'LOCAL_GOVERMENT_AREA')
 
 STATES = (
     ('FC', 'Abuja Federal Capital Territory'),
