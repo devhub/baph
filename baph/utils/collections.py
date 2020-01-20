@@ -43,8 +43,8 @@ def flatten(l):
                 l.pop(i)
                 i -= 1
                 break
-        else:
-            l[i:i+1] = l[i]
+            else:
+                l[i:i+1] = l[i]
         i += 1
     return ltype(l)
 
