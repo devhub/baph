@@ -9,6 +9,7 @@ setup(name='baph',
       install_requires=[
           'Coffin',
           'Django >= 1.5',
+          'funcy',
           'SQLAlchemy >= 0.9.0',
           'python-dotenv == 0.7.1',
           'functools32 == 3.2.3.post2',
