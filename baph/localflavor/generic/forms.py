@@ -30,8 +30,8 @@ COUNTRY_DIVISIONS = {
     'state': ['at', 'au', 'br', 'ch', 'de', 'in_', 'us'],
     'department': ['co'],
     'generic': ['gb', 'bo', 'cl', 'cr', 'do', 'ec', 'es',
-                'gt', 'id_', 'it', 'kr', 'ni', 'mx', 'pa',
-                'pe', 'py', 'ru', 'sv', 'uy'],
+                'gt', 'id_', 'it', 'kr', 'ni', 'ng', 'mx',
+                'pa', 'pe', 'py', 'ru', 'sv', 'uy'],
 }
 COUNTRY_STATES = COUNTRY_DIVISIONS['state']
 COUNTRY_PROVINCES = COUNTRY_DIVISIONS['province']
