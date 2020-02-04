@@ -3,3 +3,4 @@
 .*.sw?
 build
 docs/build
+ENV/
