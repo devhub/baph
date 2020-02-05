@@ -1,33 +1,33 @@
 from __future__ import absolute_import
+
 from collections import defaultdict
 from importlib import import_module
 import sys
 
 from django.conf import settings
-from django.forms import ValidationError
-from sqlalchemy import event, inspect, Column, and_
+from sqlalchemy import and_, event, inspect
 from sqlalchemy.ext.associationproxy import ASSOCIATION_PROXY
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta, declared_attr
-from sqlalchemy.ext.declarative.base import (_as_declarative, _add_attribute)
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative.base import _add_attribute, _as_declarative
 from sqlalchemy.ext.declarative.clsregistry import add_class
-from sqlalchemy.ext.hybrid import HYBRID_PROPERTY, HYBRID_METHOD
-from sqlalchemy.orm import mapper, object_session, class_mapper, attributes
+from sqlalchemy.ext.hybrid import HYBRID_METHOD, HYBRID_PROPERTY
+from sqlalchemy.orm import attributes, mapper, object_session
 from sqlalchemy.orm.interfaces import MANYTOONE
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.util import has_identity, identity_key
 from sqlalchemy.schema import ForeignKeyConstraint
-from sqlalchemy.util import classproperty
 
 from baph.db import ORM
 from baph.db.models import signals
 from baph.db.models.loading import get_model, register_models
-from baph.db.models.mixins import CacheMixin, ModelPermissionMixin, GlobalMixin
+from baph.db.models.mixins import CacheMixin, GlobalMixin, ModelPermissionMixin
 from baph.db.models.options import Options
-from baph.db.models.utils import class_resolver, key_to_value
+from baph.db.models.utils import key_to_value
 from baph.utils.functional import cachedclassproperty
-from baph.utils.importing import safe_import, remove_class
+from baph.utils.importing import remove_class
+from baph.utils.module_loading import import_string
 
 
 @compiles(ForeignKeyConstraint)
@@ -36,18 +36,19 @@ def set_default_schema(constraint, compiler, **kw):
         in foreign key declarations, because innodb (at least, perhaps others)
         requires explicit schemas when declaring a FK which crosses schemas """
     remote_table = list(constraint._elements.values())[0].column.table
-   
+
     if remote_table.schema is None:
         default_schema = remote_table.bind.url.database
         constraint_schema = list(constraint.columns)[0].table.schema
         if constraint_schema not in (default_schema, None):
-            """ if the constraint schema is not the default, we need to 
+            """ if the constraint schema is not the default, we need to
                 add a schema before formatting the table """
             remote_table.schema = default_schema
             value = compiler.visit_foreign_key_constraint(constraint, **kw)
             remote_table.schema = None
             return value
     return compiler.visit_foreign_key_constraint(constraint, **kw)
+
 
 def constructor(self, **kwargs):
     cls = type(self)
@@ -77,8 +78,9 @@ def constructor(self, **kwargs):
     for k in kwargs:
         if not hasattr(cls, k):
             raise TypeError('%r is an invalid keyword argument for %s' %
-                (k, cls.__name__))
+                            (k, cls.__name__))
         setattr(self, k, kwargs[k])
+
 
 @event.listens_for(mapper, 'mapper_configured')
 def set_polymorphic_base_mapper(mapper_, class_):
@@ -86,6 +88,7 @@ def set_polymorphic_base_mapper(mapper_, class_):
         polymorphic_map = defaultdict(lambda: mapper_)
         polymorphic_map.update(mapper_.polymorphic_map)
         mapper_.polymorphic_map = polymorphic_map
+
 
 class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
 
@@ -153,12 +156,12 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
         if None in pk_values and not force:
             return None
         items = zip(self.pk_attrs, pk_values)
-        return and_(attr==value for attr, value in items)
+        return and_(attr == value for attr, value in items)
 
     def update(self, data):
         for key, value in data.iteritems():
             if hasattr(self, key) and getattr(self, key) != value:
-                setattr(self, key, value)       
+                setattr(self, key, value)
 
     def delete(self):
         if has_identity(self):
@@ -173,7 +176,7 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
         elif isinstance(value, list):
             return [self.dictify(v) for v in value]
         elif isinstance(value, dict):
-            return {k:self.dictify(v) for k,v in value.items()}
+            return {k: self.dictify(v) for k, v in value.items()}
         else:
             return value
 
@@ -202,12 +205,11 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
     def save(self, commit=False):
         session = object_session(self)
         if not session:
-            from baph.db.orm import ORM
             orm = ORM.get()
             session = orm.sessionmaker()
 
         if commit:
-            if not self in session:
+            if self not in session:
                 session.add(self)
             session.commit()
 
@@ -233,6 +235,7 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
                 changed.append(attr.key)
         return changed
 
+
 @event.listens_for(Session, 'before_flush')
 def before_flush(session, flush_context, instances):
     for obj in session.new:
@@ -240,31 +243,33 @@ def before_flush(session, flush_context, instances):
     for obj in session.dirty:
         obj._before_flush(session, add=False)
 
+
 def normalize_args(args):
-  """
-  Normalizes SQLA args into (args, kwargs) for easier processing
-  """
-  _args = ()
-  _kwargs = {}
-  if not args:
-    pass
-  elif isinstance(args, dict):
-    _kwargs = args.copy()
-  elif isinstance(args, tuple):
-    if isinstance(args[-1], dict):
-      _args = args[:-1]
-      _kwargs = args[-1]
+    """
+    Normalizes SQLA args into (args, kwargs) for easier processing
+    """
+    _args = ()
+    _kwargs = {}
+    if not args:
+        pass
+    elif isinstance(args, dict):
+        _kwargs = args.copy()
+    elif isinstance(args, tuple):
+        if isinstance(args[-1], dict):
+            _args = args[:-1]
+            _kwargs = args[-1]
+        else:
+            _args = args[:]
     else:
-      _args = args[:]
-  else:
-    # unsupported format
-    raise ValueError('invalid args format: %s' % type(args))
-  return (_args, _kwargs)
+        # unsupported format
+        raise ValueError('invalid args format: %s' % type(args))
+    return (_args, _kwargs)
+
 
 class ModelBase(type):
 
     def __init__(cls, name, bases, attrs):
-        #print '%s.__init__(%s)' % (name, cls)
+        # print('%s.__init__(%s)' % (name, cls))
         found = False
         registry = cls._decl_class_registry
         if name in registry:
@@ -280,13 +285,13 @@ class ModelBase(type):
         type.__init__(cls, name, bases, attrs)
 
     def __new__(cls, name, bases, attrs):
-        #print '%s.__new__(%s)' % (name, cls)
+        # print('%s.__new__(%s)' % (name, cls))
         req_sub = attrs.pop('__requires_subclass__', False)
 
         super_new = super(ModelBase, cls).__new__
 
         parents = [b for b in bases if isinstance(b, ModelBase) and
-            not (b.__name__ == 'Base' and b.__mro__ == (b, object))]
+                   not (b.__name__ == 'Base' and b.__mro__ == (b, object))]
         if not parents:
             return super_new(cls, name, bases, attrs)
 
@@ -306,28 +311,28 @@ class ModelBase(type):
 
         if getattr(meta, 'app_label', None) is None:
             model_module = sys.modules[new_class.__module__]
-            kwargs = {"app_label": model_module.__name__.rsplit('.',1)[0]}
+            kwargs = {"app_label": model_module.__name__.rsplit('.', 1)[0]}
         else:
             kwargs = {}
 
         new_class.add_to_class('_meta', Options(meta, **kwargs))
         if base_meta:
-            for k,v in vars(base_meta).items():
+            for k, v in vars(base_meta).items():
                 if not getattr(new_class._meta, k, None):
                     setattr(new_class._meta, k, v)
 
         if new_class._meta.swappable:
             if not new_class._meta.swapped:
                 # class is swappable, but hasn't been swapped out, so we create
-                # an alias to the base class, rather than trying to create a new
-                # class under a second name
-                base_cls  = bases[0]
+                # an alias to the base class, rather than trying to create a
+                # new class under a second name
+                base_cls = bases[0]
                 base_cls.add_to_class('_meta', new_class._meta)
                 register_models(base_cls._meta.app_label, base_cls)
                 return base_cls
 
             # class has been swapped out
-            model = safe_import(new_class._meta.swapped, [new_class.__module__])
+            model = import_string(new_class._meta.swapped)
 
             for b in bases:
                 if not getattr(b, '__mapper__', None):
@@ -346,21 +351,21 @@ class ModelBase(type):
             return model
 
         if attrs.get('__tablename__') and not attrs.get('__abstract__', None):
-          # build the table_args for the current model
-          #print '[%s]' % name
-          base_args = getattr(settings, 'BAPH_DEFAULT_TABLE_ARGS', ())
-          _, kwargs = normalize_args(base_args)
-          for p in reversed(parents):
-            if not hasattr(p, '__table_args__'):
-              continue
-            _, _kwargs = normalize_args(p.__table_args__)
+            # build the table_args for the current model
+            # print('[%s]' % name)
+            base_args = getattr(settings, 'BAPH_DEFAULT_TABLE_ARGS', ())
+            _, kwargs = normalize_args(base_args)
+            for p in reversed(parents):
+                if not hasattr(p, '__table_args__'):
+                    continue
+                _, _kwargs = normalize_args(p.__table_args__)
+                kwargs.update(_kwargs)
+            table_args = attrs.pop('__table_args__', None)
+            # print('  old:', table_args)
+            args, _kwargs = normalize_args(table_args)
             kwargs.update(_kwargs)
-          table_args = attrs.pop('__table_args__', None)
-          #print '  old:', table_args
-          args, _kwargs = normalize_args(table_args)
-          kwargs.update(_kwargs)
-          attrs['__table_args__'] = args + (kwargs,)
-          #print '  new:', attrs['__table_args__']
+            attrs['__table_args__'] = args + (kwargs,)
+            # print('  new:', attrs['__table_args__'])
 
         # Add all attributes to the class.
         for obj_name, obj in attrs.items():
@@ -419,7 +424,7 @@ class ModelBase(type):
         try:
             if cls.__mapper__.polymorphic_on is not None:
                 return cls.__mapper__.primary_base_mapper.class_.resource_name
-        except:
+        except Exception:
             pass
         return cls._meta.object_name
 
@@ -428,26 +433,30 @@ class ModelBase(type):
         try:
             if cls.__mapper__.polymorphic_on is not None:
                 return cls.__mapper__.primary_base_mapper.class_
-        except:
+        except Exception:
             pass
         return cls
 
 
 def get_declarative_base(**kwargs):
-    return declarative_base(cls=Model, 
+    return declarative_base(
+        cls=Model,
         metaclass=ModelBase,
         constructor=constructor,
-        **kwargs)
+        **kwargs
+    )
+
 
 @event.listens_for(mapper, 'after_insert')
 @event.listens_for(mapper, 'after_update')
 @event.listens_for(mapper, 'after_delete')
 def kill_cache(mapper, connection, target):
-  if not getattr(settings, 'CACHE_ENABLED', False):
-    return
-  if not target.is_cacheable:
-    return
-  target.kill_cache()
+    if not getattr(settings, 'CACHE_ENABLED', False):
+        return
+    if not target.is_cacheable:
+        return
+    target.kill_cache()
+
 
 @event.listens_for(Session, 'before_flush')
 def check_global_status(session, flush_context, instances):
@@ -464,4 +473,3 @@ def check_global_status(session, flush_context, instances):
                 if parent and parent.is_globalized():
                     target.globalize(commit=False)
                     break
-
