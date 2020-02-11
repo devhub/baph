@@ -4,7 +4,7 @@ boto
 # Coffin
 git+git://github.com/dcramer/coffin.git
 cssutils
-Django == 1.5
+Django == 1.11.28
 # django-piston
 django-localflavor
 hg+http://bitbucket.org/malept/django-piston
