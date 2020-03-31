@@ -1,10 +1,11 @@
 from datetime import datetime
 
 from django.conf import settings
-from baph.utils.module_loading import import_string
 from django.contrib.auth import (SESSION_KEY, BACKEND_SESSION_KEY,
-    load_backend, user_logged_in)
-#from django.contrib.auth.models import AnonymousUser
+                                 load_backend, user_logged_in)
+
+from baph.utils.module_loading import import_string
+
 
 default_app_config = 'baph.auth.apps.AuthConfig'
 
@@ -19,8 +20,8 @@ def login(request, user):
     if hasattr(request, 'orm'):
         session = request.orm.sessionmaker()
     else:
-        from .models import orm
-        session = orm.sessionmaker()
+        from baph.db import ORM
+        session = ORM.get().sessionmaker()
     if user is None:
         user = request.user
     # TODO: It would be nice to support different login methods, like signed
