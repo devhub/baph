@@ -693,7 +693,12 @@ class CacheMixin(object):
           if not v:
             cache.set(key, int(time.time()))
           else:
-            cache.incr(key)
+            try:
+              # attempt an increment of the key value
+              cache.incr(key)
+            except ValueError:
+              # if the key no longer exists, set a new key
+              cache.set(key, int(time.time()))
 
 class ModelPermissionMixin(object):
 
