@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from cssutils import parseString, replaceUrls, resolveImports, ser
 from django.conf import settings
 import os
 import re
-from urllib import pathname2url
-from urlparse import urlsplit
+from six.moves.urllib.request import pathname2url
+from six.moves.urllib.parse import urlsplit
 
 
 def get_recursive_imports(sheet, base=None):

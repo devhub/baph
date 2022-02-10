@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from django.utils.functional import SimpleLazyObject
 
 from . import get_user as _get_user

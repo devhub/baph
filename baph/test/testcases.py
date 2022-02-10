@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 from collections import defaultdict
 import json
 import time
@@ -208,8 +210,8 @@ class BaphFixtureMixin(object):
     @classmethod
     def print_timings(cls):
         total = cls.test_end_time - cls.test_start_time
-        print '\n%s timings:' % cls.__name__
-        print '  %d test(s) run, totalling %.03fs' % (cls.tests_run, total)
+        print('\n%s timings:' % cls.__name__)
+        print('  %d test(s) run, totalling %.03fs' % (cls.tests_run, total))
         if not cls.timings:
             return
         items = sorted(cls.timings.items())
@@ -222,8 +224,8 @@ class BaphFixtureMixin(object):
                 keys[i] = '  %s' % end
         max_key_len = max(len(k) for k in keys)
         for i, (k, v) in enumerate(items):
-            print '  %s: %d calls, totalling %.03fs (%.02f%%)' % (
-                keys[i].ljust(max_key_len), len(v), sum(v), 100.0*sum(v)/total)
+            print('  %s: %d calls, totalling %.03fs (%.02f%%)' % (
+                keys[i].ljust(max_key_len), len(v), sum(v), 100.0*sum(v)/total))
 
     @classmethod
     def load_fixtures(cls, *fixtures):
@@ -376,13 +378,13 @@ class MemcacheMixin(object):
     def assertCacheKeyCreated(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
-        self.assertNotIn(raw_key, self._initial(cache_alias).keys())
+        self.assertNotIn(raw_key, list(self._initial(cache_alias).keys()))
         self.assertIn(raw_key, cache.get_all_keys())
 
     def assertCacheKeyNotCreated(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
-        self.assertNotIn(raw_key, self._initial(cache_alias).keys())
+        self.assertNotIn(raw_key, list(self._initial(cache_alias).keys()))
         self.assertNotIn(raw_key, cache.get_all_keys())
 
     def assertCacheKeyIncremented(self, key, version=None, cache_alias=None):
@@ -403,28 +405,28 @@ class MemcacheMixin(object):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
         current_value = cache.get(key, version=version)
-        self.assertIn(raw_key, self._initial(cache_alias).keys())
+        self.assertIn(raw_key, list(self._initial(cache_alias).keys()))
         self.assertEqual(current_value, None)
 
     def assertCacheKeyNotInvalidated(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
         current_value = cache.get(key, version=version)
-        self.assertIn(raw_key, self._initial(cache_alias).keys())
+        self.assertIn(raw_key, list(self._initial(cache_alias).keys()))
         self.assertNotEqual(current_value, None)
 
     def assertPointerKeyInvalidated(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
         current_value = cache.get(key, version=version)
-        self.assertIn(raw_key, self._initial(cache_alias).keys())
+        self.assertIn(raw_key, list(self._initial(cache_alias).keys()))
         self.assertEqual(current_value, 0)
 
     def assertPointerKeyNotInvalidated(self, key, version=None, cache_alias=None):
         cache = get_cache(cache_alias) if cache_alias else self.cache
         raw_key = cache.make_key(key, version=version)
         current_value = cache.get(key, version=version)
-        self.assertIn(raw_key, self._initial(cache_alias).keys())
+        self.assertIn(raw_key, list(self._initial(cache_alias).keys()))
         self.assertNotEqual(current_value, 0)
 
 

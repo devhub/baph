@@ -1,6 +1,8 @@
+from __future__ import absolute_import
 import random
 import string
 import time
+from six.moves import range
 
 
 def random_string(size=16, chars=None):

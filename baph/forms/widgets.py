@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from django.forms.widgets import TextInput, DateInput, DateTimeInput, TimeInput
 
 class HTML5EmailInput(TextInput):

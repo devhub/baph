@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 #from baph.sites.models import get_current_site
+from __future__ import absolute_import
 from coffin.shortcuts import render_to_string
 from django import forms
 from django.contrib.auth.forms import SetPasswordForm as BaseSetPasswordForm

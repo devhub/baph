@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from argparse import ArgumentParser
 from collections import defaultdict, OrderedDict
 import os

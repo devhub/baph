@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 import decorator
 import logging
 import time
@@ -6,6 +7,7 @@ import time
 from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.contrib.auth.decorators import user_passes_test
 from django.http import HttpResponseRedirect
+from six.moves import zip
 
 
 def check_perm(resource, action, simple=True, extra_keys={}, filters={}):
@@ -23,8 +25,8 @@ def check_perm(resource, action, simple=True, extra_keys={}, filters={}):
     def check_perm_closure(f, request, *args, **kwargs):
 
         if not kwargs:
-            keys = f.func_code.co_varnames[1:] #item 0 is 'request'
-            kwargs = dict(zip(keys,args))
+            keys = f.__code__.co_varnames[1:] #item 0 is 'request'
+            kwargs = dict(list(zip(keys,args)))
             args = []
 
         for url_key, db_key in extra_keys.items():
@@ -68,6 +70,6 @@ def print_timing(func):
         t1 = time.time()
         res = func(*arg)
         t2 = time.time()
-        logging.debug('%s took %0.3f ms' % (func.func_name, (t2-t1)*1000.0))
+        logging.debug('%s took %0.3f ms' % (func.__name__, (t2-t1)*1000.0))
         return res
     return wrapper

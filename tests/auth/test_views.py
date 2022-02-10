@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.auth.models import orm, User
 from baph.test.base import BaseTestCase
 from django.conf import settings

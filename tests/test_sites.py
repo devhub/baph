@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.sites.models import get_current_site, orm, RequestSite, Site
 from baph.test.base import TestCase
 from django.conf import settings

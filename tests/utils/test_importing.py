@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.utils.importing import (
     import_all_attrs, import_any_attr, import_any_module, import_attr)
 from baph.test.base import TestCase

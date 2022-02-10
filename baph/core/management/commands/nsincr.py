@@ -1,5 +1,8 @@
+from __future__ import absolute_import
+from __future__ import print_function
 from baph.core.cache.utils import CacheNamespace
 from baph.core.management.base import NoArgsCommand
+from six.moves import input
 
 
 def build_options_list(namespaces):
@@ -15,16 +18,16 @@ def build_options_list(namespaces):
   return options
 
 def print_options(options):
-  print '\n%s  %s %s' % ('id', 'name'.ljust(16), 'attrs')
+  print('\n%s  %s %s' % ('id', 'name'.ljust(16), 'attrs'))
   for i, (ns, name, attr, type, models) in enumerate(options):
     names = sorted([model.__name__ for model in models])
-    print '%s   %s %s' % (i, name.ljust(16), attr)
-    print '    invalidates: %s' % names
+    print('%s   %s %s' % (i, name.ljust(16), attr))
+    print('    invalidates: %s' % names)
 
 def get_value_for_attr(attr):
   msg = 'Enter the value for %r (ENTER to cancel): ' % attr
   while True:
-    value = raw_input(msg).strip()
+    value = input(msg).strip()
     if not value:
       return None
     return value
@@ -33,7 +36,7 @@ def get_option(options):
   name_map = {opt[1].lower(): i for i, opt in enumerate(options)}
   msg = '\nIncrement which ns key? (ENTER to list, Q to quit): '
   while True:
-    value = raw_input(msg).strip().lower()
+    value = input(msg).strip().lower()
     if not value:
       print_options(options)
       continue
@@ -49,22 +52,22 @@ def get_option(options):
       # string reference
       index = name_map[value]
     else:
-      print 'Invalid option: %r' % value
+      print('Invalid option: %r' % value)
       continue
 
     if index >= len(options):
-      print 'Invalid index: %r' % index
+      print('Invalid index: %r' % index)
       continue
 
     return options[index]
 
 def increment_version_key(cache, key):
   version = cache.get(key)
-  print '  current value of %s: %s' % (key, version)
+  print('  current value of %s: %s' % (key, version))
   version = version + 1 if version else 1
   cache.set(key, version)
   version = cache.get(key)
-  print '  new value of %s: %s' % (key, version)
+  print('  new value of %s: %s' % (key, version))
 
 
 class Command(NoArgsCommand):
@@ -115,7 +118,7 @@ class Command(NoArgsCommand):
       try:
         result = self.main()
       except KeyboardInterrupt:
-        print ''
+        print('')
         break
       if result is None:
         break

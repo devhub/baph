@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from hashlib import sha1
 import random
 

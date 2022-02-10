@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.db.models import Model
 from baph.db.orm import ORM
 from baph.db.types import UUID

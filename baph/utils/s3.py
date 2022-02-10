@@ -28,11 +28,13 @@ Classes
 -------
 '''
 
+from __future__ import absolute_import
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 from cStringIO import StringIO
 from django.conf import settings
 from PIL import Image
+import six
 
 # Amazon S3 connection
 connection = S3Connection(settings.AWS_ACCESS_KEY_ID,
@@ -54,7 +56,7 @@ class Bucket(object):
         return self.bucket.get_key(key) is not None
 
     def __getitem__(self, key):
-        if not isinstance(key, basestring):
+        if not isinstance(key, six.string_types):
             raise TypeError('key is not a string')
         item = self.bucket.get_key(key)
         if not item:
@@ -66,7 +68,7 @@ class Bucket(object):
             item.close()
 
     def __delitem__(self, key):
-        if not isinstance(key, basestring):
+        if not isinstance(key, six.string_types):
             raise TypeError('key is not a string')
         item = self.bucket.get_key(key)
         if not item:
@@ -144,7 +146,7 @@ class ImageBucket(Bucket):
         if self.img_type is None:
             img = Image.open(image)
             format = img.format.lower()
-            types = [k for k, v in self.__pil_types.iteritems() if v == format]
+            types = [k for k, v in six.iteritems(self.__pil_types) if v == format]
             if len(types) > 0:
                 img_type = types[0]
             else:

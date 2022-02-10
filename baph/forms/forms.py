@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from django import forms
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.datastructures import SortedDict
@@ -14,6 +15,8 @@ from sqlalchemy.sql.expression import _BinaryExpression, _Label
 from baph.auth.models import Organization
 from baph.db import types, ORM
 from baph.forms import fields
+from six.moves import map
+import six
 
 
 FIELD_MAP = {
@@ -270,9 +273,7 @@ class BaseSQLAModelForm(forms.forms.BaseForm):
         return save_instance(self, self.instance, self._meta.fields,
                              fail_message, commit, self._meta.exclude)
         
-class SQLAModelForm(BaseSQLAModelForm):
-    __metaclass__ = SQLAModelFormMetaclass
-
+class SQLAModelForm(six.with_metaclass(SQLAModelFormMetaclass, BaseSQLAModelForm)):
     def clean_unique_field(self, key, **kwargs):
         orm = ORM.get()
         value = self.cleaned_data[key]
@@ -290,7 +291,7 @@ class SQLAModelForm(BaseSQLAModelForm):
             # if all filter keys exist on the base mapper, query the base class
             # if the base class is missing any properties, query the 
             # polymorphic subclass explicitly
-            if all(map(mapper.has_property, filters.keys())):
+            if all(map(mapper.has_property, list(filters.keys()))):
                 model = mapper.class_
 
         session = orm.sessionmaker()

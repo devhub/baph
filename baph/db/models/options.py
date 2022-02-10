@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import re
 
 from django.conf import settings
@@ -15,6 +16,7 @@ from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from baph.db import types
 from baph.db.models.fields import Field
 from baph.utils.text import camel_case_to_spaces
+import six
 
 
 DEFAULT_NAMES = ('model_name', 'model_name_plural',
@@ -164,7 +166,7 @@ class Options(object):
             # Any leftover attributes must be invalid.
             if meta_attrs != {}:
                 raise TypeError("'class Meta' got invalid attribute(s): %s" 
-                    % ','.join(meta_attrs.keys()))
+                    % ','.join(list(meta_attrs.keys())))
 
         # initialize params that depend on other params being set
         if self.model_name_plural is None:
@@ -192,8 +194,8 @@ class Options(object):
                 base_model_name = base._meta.base_model_name
                 base_model_name_plural = base._meta.base_model_name_plural
                 break
-        self.base_model_name = unicode(base_model_name)
-        self.base_model_name_plural = unicode(base_model_name_plural)
+        self.base_model_name = six.text_type(base_model_name)
+        self.base_model_name_plural = six.text_type(base_model_name_plural)
 
         del self.meta
 

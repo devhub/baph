@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.auth.models import orm, User
 from baph.piston.models import Consumer
 from baph.test.oauth import OAuthTestCase

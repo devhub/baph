@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 from sqlalchemy.orm import configure_mappers
 
 from baph.core.management.base import NoArgsCommand
@@ -15,9 +17,9 @@ class Command(NoArgsCommand):
         self.validate(display_num_errors=True)
         #configure_mappers()
         
-        print '\nPost-Validation Tables:'
+        print('\nPost-Validation Tables:')
         for table in Base.metadata.tables:
-            print '\t', table
+            print('\t', table)
         """
         print '\nPost-Validation Class Registry:'
         for k,v in sorted(Base._decl_class_registry.items()):

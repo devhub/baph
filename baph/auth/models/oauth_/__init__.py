@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from django.conf import settings
 from oauth import oauth
 from sqlalchemy import (Column, DateTime, ForeignKey, Integer, String,

@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+from __future__ import absolute_import
 import os.path
 import re
 
@@ -8,7 +9,7 @@ from django.utils import six
 # backport of Python 3.4's glob.escape
 
 if six.PY3:
-    from glob import escape as glob_escape
+    from .glob import escape as glob_escape
 else:
     _magic_check = re.compile('([*?[])')
 

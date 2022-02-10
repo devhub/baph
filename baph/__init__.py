@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 def setup():
   from baph.apps import apps
   from baph.conf import settings

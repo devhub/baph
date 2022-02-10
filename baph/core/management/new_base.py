@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import inspect
 import os
 import sys
@@ -14,6 +15,7 @@ from django.utils.six import StringIO
 from baph.core.preconfig.loader import PreconfigLoader
 from baph.core.management.utils import get_command_options, get_parser_options
 from .base import CommandError
+from six.moves import zip
 
 
 LEGACY_OPT_KWARGS = ('nargs', 'help', 'action', 'dest', 'default',
@@ -143,7 +145,7 @@ class BaseCommand(base.BaseCommand):
     for option in self.option_list:
       args = option._long_opts + option._short_opts
       getter = attrgetter(*LEGACY_OPT_KWARGS)
-      kwargs = dict(zip(LEGACY_OPT_KWARGS, getter(option)))
+      kwargs = dict(list(zip(LEGACY_OPT_KWARGS, getter(option))))
       if kwargs.get('type', None):
         kwargs['type'] = LEGACY_OPT_TYPES[kwargs['type']]
       kwargs = {k: v for k, v in kwargs.items() if v is not None}

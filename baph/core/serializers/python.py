@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from django.utils.encoding import smart_text, is_protected_type
 
 from baph.core.serializers import base
@@ -5,6 +6,7 @@ from baph.db import DEFAULT_DB_ALIAS
 from baph.db.models import get_apps
 from baph.db.models.utils import identity_key
 from baph.db.orm import Base
+import six
 
 
 class Serializer(base.Serializer):
@@ -54,7 +56,7 @@ def Deserializer(object_list, **options):
         #m2m_data = {}
 
         # Handle each field
-        for (field_name, field_value) in d.iteritems():
+        for (field_name, field_value) in six.iteritems(d):
             if isinstance(field_value, str):
                 field_value = smart_unicode(field_value, 
                     options.get("encoding", settings.DEFAULT_CHARSET), 

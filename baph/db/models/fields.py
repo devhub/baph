@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import collections
 from itertools import tee
 from types import FunctionType
@@ -18,6 +19,7 @@ from baph.core.validators import MaxLengthValidator
 from baph.db import types
 from baph.forms import fields
 from baph.utils.collections import duck_type_collection
+from six.moves import map
 
 
 def get_related_class_from_attr(attr):
@@ -154,7 +156,7 @@ class Field(object):
         if form_class is None:
           form_class = fields.NullCharField
         field = form_class(**defaults)
-        field.validators = map(self.modify_validator, field.validators)
+        field.validators = list(map(self.modify_validator, field.validators))
         return field
 
     def clean(self, value):

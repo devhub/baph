@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import json
 import pprint
 
@@ -51,7 +53,7 @@ class Command(BaseCommand):
       if len(settings) != 1:
         raise CommandError('--scalar can only be used when requesting '
           'a single setting')
-      output = json.dumps(settings.values().pop())
+      output = json.dumps(list(settings.values()).pop())
     else:
       # return a dict of key/value pairs
       output = json.dumps(settings, sort_keys=True)
@@ -59,4 +61,4 @@ class Command(BaseCommand):
     if pretty:
       pprint.pprint(output)
     else:
-      print output
+      print(output)

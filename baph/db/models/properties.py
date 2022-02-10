@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import itertools
 
 from django.template.defaultfilters import slugify
@@ -8,6 +9,7 @@ from sqlalchemy.orm import attributes
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.session import object_session
 from sqlalchemy.orm.util import has_identity
+import six
 
 
 class AutoSlugField(ColumnProperty):
@@ -19,7 +21,7 @@ class AutoSlugField(ColumnProperty):
     self.populate_from = kwargs.pop('populate_from', None)
     self.index_sep = kwargs.pop('sep', '-')
     self.unique_with = kwargs.pop('unique_with', ())
-    if isinstance(self.unique_with, basestring):
+    if isinstance(self.unique_with, six.string_types):
       self.unique_with = (self.unique_with,)
 
     self.slugify = kwargs.pop('slugify', slugify)

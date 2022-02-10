@@ -1,8 +1,10 @@
+from __future__ import absolute_import
 import types
 
 from sqlalchemy import inspect
 from sqlalchemy.ext.declarative.clsregistry import _class_resolver
 from sqlalchemy.orm.util import identity_key as new_identity_key
+import six
 
 
 def identity_key(*args, **kwargs):
@@ -28,7 +30,7 @@ def class_resolver(cls):
     appropriate SQLA class
     """
     from baph.db.orm import Base
-    if isinstance(cls, basestring):
+    if isinstance(cls, six.string_types):
         # string reference
         cls = Base._decl_class_registry[cls]
     if isinstance(cls, types.FunctionType):

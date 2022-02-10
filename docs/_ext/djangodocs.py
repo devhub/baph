@@ -1,5 +1,6 @@
 """Sphinx plugins for Django documentation."""
 
+from __future__ import absolute_import
 from baph.utils.importing import import_any_module
 from django.utils.importlib import import_module
 json = import_any_module(['json', 'simplejson', 'django.utils.simplejson'])
@@ -222,7 +223,7 @@ class DjangoStandaloneHTMLBuilder(StandaloneHTMLBuilder):
             return
         self.info(bold("writing templatebuiltins.js..."))
         try:
-            xrefs = self.env.reftargets.keys()
+            xrefs = list(self.env.reftargets.keys())
             templatebuiltins = dict([('ttags', [n for (t, n) in xrefs
                                                 if t == 'ttag']),
                                      ('tfilters', [n for (t, n) in xrefs

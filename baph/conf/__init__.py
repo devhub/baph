@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import ast
 from contextlib import contextmanager
 import imp
@@ -13,6 +14,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.utils.functional import LazyObject, empty
 
 from baph.core.preconfig.loader import PreconfigLoader
+import six
 
 
 ENVIRONMENT_VARIABLE = "DJANGO_SETTINGS_MODULE"
@@ -47,9 +49,7 @@ class SettingsMeta(type):
     attrs['__module__'] = 'django.conf'
     return super(SettingsMeta, cls).__new__(cls, name, bases, attrs)
 
-class LazySettings(LazyObject):
-  __metaclass__ = SettingsMeta
-  
+class LazySettings(six.with_metaclass(SettingsMeta, LazyObject)):
   def _setup(self, name=None):
     settings_module = os.environ.get(ENVIRONMENT_VARIABLE)
     if not settings_module:
@@ -222,7 +222,7 @@ class Settings:
       content = fp.read()
     node = ast.parse(content, path)
     code = compile(node, path, 'exec')
-    exec code in module.__dict__
+    exec(code, module.__dict__)
 
   def load_module_settings(self, module_name):
     msg = '  %s' % module_name

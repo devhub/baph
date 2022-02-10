@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import funcy as f
 
 from baph.auth.models.permission import Permission

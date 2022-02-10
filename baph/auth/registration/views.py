@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 '''Views which allow users to create and activate accounts.'''
+from __future__ import absolute_import
 from coffin.shortcuts import render_to_response, redirect
 from coffin.template import RequestContext
 from django.conf import settings as django_settings

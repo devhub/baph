@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from baph.auth.models import User
 from baph.auth.registration import forms
 from baph.auth.registration.models import RegistrationProfile

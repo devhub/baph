@@ -28,6 +28,8 @@ from baph.db.models.utils import key_to_value, identity_key
 from baph.utils.functional import cachedclassproperty
 from baph.utils.importing import remove_class
 from baph.utils.module_loading import import_string
+import six
+from six.moves import zip
 
 
 @compiles(ForeignKeyConstraint)
@@ -153,11 +155,11 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
         (cls, pk_values) = identity_key(instance=self)
         if None in pk_values and not force:
             return None
-        items = zip(self.pk_attrs, pk_values)
+        items = list(zip(self.pk_attrs, pk_values))
         return and_(attr == value for attr, value in items)
 
     def update(self, data):
-        for key, value in data.iteritems():
+        for key, value in six.iteritems(data):
             if hasattr(self, key) and getattr(self, key) != value:
                 setattr(self, key, value)
 
@@ -185,7 +187,7 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
 
         :rtype: :class:`dict`
         '''
-        __dict__ = dict([(key, val) for key, val in self.__dict__.iteritems()
+        __dict__ = dict([(key, val) for key, val in six.iteritems(self.__dict__)
                          if not key.startswith('_sa_')])
         if len(__dict__) == 0:
             for attr in inspect(type(self)).column_attrs:
@@ -272,7 +274,7 @@ class ModelBase(type):
         registry = cls._decl_class_registry
         if name in registry:
             found = True
-        elif cls in registry.values():
+        elif cls in list(registry.values()):
             found = True
             add_class(name, cls)
 

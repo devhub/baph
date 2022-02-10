@@ -1,4 +1,5 @@
 from __future__ import unicode_literals
+from __future__ import absolute_import
 from datetime import datetime, timedelta
 
 from django.core.urlresolvers import reverse
@@ -182,7 +183,7 @@ class RegistrationViewsTests(TestCase):
                                           'tos': 'on'})
 
         # And should now be signed out
-        self.failIf(len(self.client.session.keys()) > 0)
+        self.failIf(len(list(self.client.session.keys())) > 0)
 
     def test_signup_view_success(self):
         """

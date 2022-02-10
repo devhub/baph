@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 from baph.db.orm import ORM
 from django.core.management.base import BaseCommand
 
@@ -13,5 +15,5 @@ class Command(BaseCommand):
         tables = [(table.schema or default_schema, table.name)
             for table in Base.metadata.tables.values()]
         for table in sorted(tables):
-            print '.'.join(table)
+            print('.'.join(table))
 

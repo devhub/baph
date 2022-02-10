@@ -1,9 +1,12 @@
+from __future__ import absolute_import
+from __future__ import print_function
 import os
 from collections import OrderedDict
 
 from django.contrib.staticfiles.finders import get_finders
 from django.contrib.staticfiles.storage import staticfiles_storage
-print 'storage:', staticfiles_storage
+from six.moves import input
+print('storage:', staticfiles_storage)
 
 from django.core.files.storage import FileSystemStorage
 from django.core.management.color import no_style
@@ -180,7 +183,7 @@ class Command(BaseCommand):
         'Are you sure you want to do this?\n\n'
         "Type 'yes' to continue, or 'no' to cancel: "
       )
-      if raw_input(''.join(message)) != 'yes':
+      if input(''.join(message)) != 'yes':
         raise CommandError("Collecting static files cancelled.")
 
     collected = self.collect()

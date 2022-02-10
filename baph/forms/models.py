@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import warnings
 
 from baph.db import types
@@ -12,6 +13,7 @@ from sqlalchemy.ext.associationproxy import AssociationProxy
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.sql.expression import _BinaryExpression, _Label
+import six
 
 
 FIELD_MAP = {
@@ -228,5 +230,5 @@ class BaseModelForm(BaseForm):
                                              object_data, error_class,
                                              label_suffix, empty_permitted)
 
-class ModelForm(BaseModelForm):
-    __metaclass__ = ModelFormMetaclass
+class ModelForm(six.with_metaclass(ModelFormMetaclass, BaseModelForm)):
+    pass

@@ -1,5 +1,7 @@
+from __future__ import absolute_import
 from contextlib import contextmanager
 import time
+import six
 
 
 try:
@@ -108,7 +110,7 @@ class CacheNamespace(object):
       return self.default_value
     if self.default_func is None:
       return None
-    if isinstance(self.default_func, basestring):
+    if isinstance(self.default_func, six.string_types):
       self.default_func = import_string(self.default_func)
     if not callable(self.default_func):
       raise Exception('default_func %r is not callable')

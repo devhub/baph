@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.auth.models import AnonymousUser, orm, User
 from baph.test.base import BaseTestCase
 from django.conf import settings
 from django.core import mail
+import six
 
 
 class AuthTestCase(BaseTestCase):
@@ -52,7 +54,7 @@ class AuthTestCase(BaseTestCase):
         self.assertTrue(u.is_authenticated())
         self.assertFalse(u.is_staff)
         self.assertFalse(u.is_superuser)
-        self.assertEqual(unicode(u), u'testuser')
+        self.assertEqual(six.text_type(u), u'testuser')
         self.assertEqual(u.get_full_name(), u'¡ π')
 
         u2 = User.create_user(u'testuser2', 'test2@example.com',

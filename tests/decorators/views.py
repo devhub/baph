@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.decorators.json import JSONify, render_to_json
 from django.http import HttpResponse, HttpResponseRedirect
 

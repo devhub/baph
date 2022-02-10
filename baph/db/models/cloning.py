@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import copy
 
 from sqlalchemy import inspect, Column
@@ -10,6 +11,8 @@ from sqlalchemy.orm.session import object_session
 from baph.db.models.utils import identity_key
 from baph.db.orm import ORM
 from baph.utils.collections import duck_type_collection
+from six.moves import map
+from six.moves import zip
 
 
 orm = ORM.get()
@@ -22,7 +25,7 @@ def reload_object(instance):
   (cls, pk_vals) = identity_key(instance=instance)
   mapper = inspect(cls)
   pk_cols = [col.key for col in mapper.primary_key]
-  pk = dict(zip(pk_cols, pk_vals))
+  pk = dict(list(zip(pk_cols, pk_vals)))
   session = object_session(instance)
   session.expunge(instance)
   instance = session.query(cls) \
@@ -91,7 +94,7 @@ def get_default_excludes(cls):
       # do not copy foreign key columns
       exclude_cols.update(fkc.columns)
 
-  props = map(mapper.get_property_by_column, exclude_cols)
+  props = list(map(mapper.get_property_by_column, exclude_cols))
   keys = set(prop.key for prop in props)
   return exclude_props | keys
 
