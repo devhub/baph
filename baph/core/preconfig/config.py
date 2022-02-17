@@ -225,7 +225,8 @@ class Preconfiguration(object):
       else:
         raise ValueError('Invalid scope %r (must be "package" or "module")')
       self.arg_map[name] = opt
-    self.module_options = sorted(modules, key=lambda x: x.order)
+
+    self.module_options = sorted(modules, key=lambda x: str(x.order))
     self.package_options = packages
 
   def add_to_parser(self, parser):
