@@ -4,7 +4,6 @@ be executed through ``django-admin.py`` or ``manage.py``).
 
 """
 from __future__ import absolute_import
-from cStringIO import StringIO
 from optparse import make_option, OptionParser
 import os
 import sys
@@ -14,7 +13,7 @@ import django
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management.color import color_style
 #from django.utils.encoding import force_str
-#from django.utils.six import StringIO
+from django.utils.six import StringIO
 
 from baph.core.preconfig.loader import PreconfigLoader
 
