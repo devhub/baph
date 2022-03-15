@@ -44,7 +44,7 @@ def django_config_to_sqla_config(config):
         'database': config.get('NAME', None),
         'query': config.get('OPTIONS', None),
         }
-    for k, v in params.items():
+    for k, v in list(params.items()):
         if not v:
             del params[k]
     return params
