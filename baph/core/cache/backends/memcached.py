@@ -217,5 +217,6 @@ class BaphMemcachedCache(MemcachedCache):
         return keys
 
     def flush_all(self):
-        for server in self.servers:
-            server.flush_all()
+        self.clear()
+        #for server in self.servers:
+        #    server.flush_all()

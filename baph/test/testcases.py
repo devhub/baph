@@ -442,6 +442,7 @@ class MemcacheTestCase(MemcacheMixin, TestCase):
     def _fixture_setup(self):
         super(MemcacheTestCase, self)._fixture_setup()
         self.cache.flush_all()
+        time.sleep(1)  # to prevent new cache operations from interrupting flush
 
     def setUp(self, objs={}, counts={}):
         self.initial = {}
@@ -451,6 +452,7 @@ class MemcacheLSTestCase(MemcacheMixin, LiveServerTestCase):
     def _fixture_setup(self):
         super(MemcacheLSTestCase, self)._fixture_setup()
         self.cache.flush_all()
+        time.sleep(1)  # to prevent new cache operations from interrupting flush
 
     def setUp(self, objs={}, counts={}):
         self.initial = {}

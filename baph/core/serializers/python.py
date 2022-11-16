@@ -1,12 +1,13 @@
 from __future__ import absolute_import
-from django.utils.encoding import smart_text, is_protected_type
+
+import six
 
 from baph.core.serializers import base
 from baph.db import DEFAULT_DB_ALIAS
 from baph.db.models import get_apps
 from baph.db.models.utils import identity_key
 from baph.db.orm import Base
-import six
+from baph.utils.encoding import smart_unicode
 
 
 class Serializer(base.Serializer):
@@ -57,13 +58,14 @@ def Deserializer(object_list, **options):
 
         # Handle each field
         for (field_name, field_value) in six.iteritems(d):
-            if isinstance(field_value, str):
+            if isinstance(field_value, bytes):
                 field_value = smart_unicode(field_value, 
                     options.get("encoding", settings.DEFAULT_CHARSET), 
                     strings_only=True)
             data[field_name] = field_value
 
         yield Model(**data)
+
 
 def _get_model(model_identifier):
     """

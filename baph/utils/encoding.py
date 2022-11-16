@@ -1,10 +1,21 @@
 # backport from django 1.6
-from __future__ import unicode_literals
-
 from __future__ import absolute_import
-import six.moves.html_entities
+from __future__ import unicode_literals
 import re
+
+import six.moves.html_entities
 from six import unichr
+
+if six.PY3:
+    from django.utils.encoding import force_bytes
+    from django.utils.encoding import smart_bytes
+    from django.utils.encoding import force_str as force_unicode
+    from django.utils.encoding import smart_str as smart_unicode
+else:
+    from django.utils.encoding import force_str as force_bytes
+    from django.utils.encoding import smart_str as smart_bytes
+    from django.utils.encoding import force_unicode
+    from django.utils.encoding import smart_unicode
 
 
 def unescape(text):
