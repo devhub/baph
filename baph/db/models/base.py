@@ -72,9 +72,12 @@ def constructor(self, **kwargs):
             continue
         default = col.default.arg
         if callable(default):
-            setattr(self, attr.key, default({}))
+            value = default({})
         else:
-            setattr(self, attr.key, default)
+            value = default
+        # set defaults directly to self.__dict__ to avoid triggering
+        # event listeners
+        self.__dict__[attr.key] = value
 
     # now load in the kwargs values
     for k in kwargs:
