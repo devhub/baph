@@ -2,6 +2,8 @@ from __future__ import absolute_import
 from hashlib import sha1
 import random
 
+from six import ensure_binary
+
 
 # port from userena
 def generate_sha1(string, salt=None):
@@ -20,7 +22,7 @@ def generate_sha1(string, salt=None):
 
     """
     if not salt:
-        salt = sha1(str(random.random())).hexdigest()[:5]
-    hash = sha1(salt+str(string)).hexdigest()
+        salt = sha1(ensure_binary(str(random.random()))).hexdigest()[:5]
+    hash = sha1(ensure_binary(salt)+ensure_binary(string)).hexdigest()
 
     return (salt, hash)

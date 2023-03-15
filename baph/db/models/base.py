@@ -77,7 +77,8 @@ def constructor(self, **kwargs):
             value = default
         # set defaults directly to self.__dict__ to avoid triggering
         # event listeners
-        self.__dict__[attr.key] = value
+        #self.__dict__[attr.key] = value
+        setattr(self, attr.key, value)
 
     # now load in the kwargs values
     for k in kwargs:
