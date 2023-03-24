@@ -201,7 +201,9 @@ class Settings:
         return None
       if not loader.is_package(package):
         raise ValueError('%r is not a package' % package)
-      self.package_paths[package] = loader.filename
+      fullpath = loader.get_filename()
+      path, filename = fullpath.rsplit('/', 1)
+      self.package_paths[package] = path
     return self.package_paths[package]
 
   @staticmethod
