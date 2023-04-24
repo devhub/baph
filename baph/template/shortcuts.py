@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.utils.importing import import_attr
+import six
 base_render_to_response = import_attr(['coffin.shortcuts'],
                                       ['render_to_response'])
 RequestContext = import_attr(['coffin.template'], 'RequestContext')
@@ -34,7 +36,7 @@ def render_to_string(template_or_template_name, dictionary=None, request=None):
     request_context = RequestContext(request) if request else None
     if isinstance(template_or_template_name, (list, tuple)):
         template = select_template(template_or_template_name)
-    elif isinstance(template_or_template_name, basestring):
+    elif isinstance(template_or_template_name, six.string_types):
         template = get_template(template_or_template_name)
     else:
         # assume it's a template

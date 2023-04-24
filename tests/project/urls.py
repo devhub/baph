@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from django.conf.urls.defaults import (
     include, patterns, handler404 as default_handler404,
     handler500 as default_handler500)

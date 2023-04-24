@@ -5,6 +5,7 @@
 
 Forms and validation code for user registration.
 '''
+from __future__ import absolute_import
 from hashlib import sha1 as sha_constructor
 import random
 
@@ -18,6 +19,7 @@ from baph.auth.registration import settings
 from baph.auth.registration.managers import SignupManager
 from baph.auth.utils import generate_sha1
 from baph.db.orm import ORM
+import six
 
 
 orm = ORM.get()
@@ -188,7 +190,7 @@ class SignupFormOnlyEmail(SignupForm):
         """ Generate a random username before falling back to parent signup form """
         session = orm.sessionmaker()
         while True:
-            username = unicode(sha_constructor(str(random.random())).hexdigest()[:5])
+            username = six.text_type(sha_constructor(six.ensure_binary(str(random.random()))).hexdigest()[:5])
             user = session.query(User).filter(User.username==username).first()
             if not user:
                 break
@@ -211,7 +213,7 @@ class ChangeEmailForm(forms.Form):
         """
         super(ChangeEmailForm, self).__init__(*args, **kwargs)
         if not isinstance(user, User):
-            raise TypeError, "user must be an instance of %s" % User._meta.model_name
+            raise TypeError("user must be an instance of %s" % User._meta.model_name)
         else: self.user = user
 
     def clean_email(self):

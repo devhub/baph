@@ -13,6 +13,7 @@ http://code.djangoproject.com/ticket/5446/
 Attachment: country_and_language_fields_trunk.4.patch
 '''
 from __future__ import unicode_literals
+from __future__ import absolute_import
 from itertools import chain
 
 from django import forms

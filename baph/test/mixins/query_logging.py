@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 from importlib import import_module
 import inspect
 
@@ -116,7 +118,7 @@ class QueryLogger(object):
     info = self.process_stack()
     self.queries.append((stmt, params, info))
     if self.emit:
-      print '\n[QUERY]:', self.queries[-1]
+      print('\n[QUERY]:', self.queries[-1])
 
   @property
   def count(self):

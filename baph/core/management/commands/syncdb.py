@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import print_function
 from optparse import make_option
 import traceback
 
@@ -163,13 +165,13 @@ class Command(NoArgsCommand):
             all_tables.index(get_tablename(x[1])))
 
         if verbosity >= 3:
-            print 'Schema Manifest:\n'
+            print('Schema Manifest:\n')
             for schema in schema_manifest:
-                print '\t%s\n' % schema
-            print 'Model/Table Manifest\n'
+                print('\t%s\n' % schema)
+            print('Model/Table Manifest\n')
             for app_name, model in table_manifest:
-                print '\t%s.%s (%s)\n' % (app_name, model._meta.object_name, 
-                    get_tablename(model)) 
+                print('\t%s.%s (%s)\n' % (app_name, model._meta.object_name, 
+                    get_tablename(model))) 
 
         # create any missing schemas
         if verbosity >= 1:

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from django.core.serializers.base import Serializer as BaseSerializer
 from django.utils import six
 from sqlalchemy import inspect

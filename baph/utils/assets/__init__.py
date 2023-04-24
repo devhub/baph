@@ -54,6 +54,7 @@ Functions
 ---------
 '''
 
+from __future__ import absolute_import
 from ..importing import import_attr
 import gzip
 import os

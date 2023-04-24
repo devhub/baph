@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.test.base import TestCase
 from baph.utils.collections import OrderedDefaultDict
+import six
 
 
 class OrderedDefaultDictTestCase(TestCase):
@@ -25,5 +27,5 @@ class OrderedDefaultDictTestCase(TestCase):
             ('will-exist3', 7),
             ('will-exist4', 8),
         ]
-        self.assertEqual(d.items(), expected_items)
-        self.assertEqual([i for i in d.iteritems()], expected_items)
+        self.assertEqual(list(d.items()), expected_items)
+        self.assertEqual([i for i in six.iteritems(d)], expected_items)

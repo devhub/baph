@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from sqlalchemy import Column, Integer, Unicode
 from sqlalchemy.ext.associationproxy import association_proxy
 

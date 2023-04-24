@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import print_function
 from copy import deepcopy
 from optparse import make_option
 import sys
@@ -22,6 +24,7 @@ from baph.core.management.new_base import BaseCommand
 from baph.db import DEFAULT_DB_ALIAS
 from baph.db.models import signals, get_apps, get_models
 from baph.db.orm import ORM
+from six.moves import input
 
 
 post_syncdb = Signal(providing_args=["class", "app", "created_models", 
@@ -92,13 +95,13 @@ class Command(BaseCommand):
     db_info = orm.settings_dict
     is_test_db = db_info.get('TEST', False)
     if not is_test_db:
-      print 'Database "%s" cannot be purged because it is not a test ' \
+      print('Database "%s" cannot be purged because it is not a test ' \
             'database.\nTo flag this as a test database, set TEST to ' \
-            'True in the database settings.' % db
+            'True in the database settings.' % db)
       sys.exit()
 
     if interactive:
-      confirm = raw_input('\nYou have requested a purge of database ' \
+      confirm = input('\nYou have requested a purge of database ' \
           '"%s" (%s). This will IRREVERSIBLY DESTROY all data ' \
           'currently in the database, and DELETE ALL TABLES AND ' \
           'SCHEMAS. Are you sure you want to do this?\n\n' \

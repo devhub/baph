@@ -6,6 +6,7 @@
 .. moduleauthor:: Mark Lee <markl@evomediagroup.com>
 '''
 
+from __future__ import absolute_import
 from baph.db.orm import ORM
 from functools import wraps
 

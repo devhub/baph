@@ -1,5 +1,6 @@
 # Django settings for project project.
 
+from __future__ import absolute_import
 import os
 
 DEBUG = True

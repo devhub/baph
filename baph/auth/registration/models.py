@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import datetime
 
 from coffin.shortcuts import render_to_string

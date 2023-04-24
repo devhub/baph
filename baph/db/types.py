@@ -6,6 +6,8 @@
 .. moduleauthor:: Mark Lee <markl@evomediagroup.com>
 .. moduleauthor:: Gerald Thibault <jt@evomediagroup.com>
 '''
+from __future__ import absolute_import
+import six
 try:
     import json
 except ImportError:
@@ -82,7 +84,7 @@ class Json(types.TypeDecorator):
         if value is None:
             return None
         #return json.dumps(value)
-        return unicode(json.dumps(value))
+        return six.text_type(json.dumps(value))
 
     def process_result_value(self, value, dialect):
         if not value:
@@ -191,7 +193,7 @@ class TZAwareDateTime(types.TypeDecorator):
     def process_bind_param(self, value, dialect):
         if value is None:
             return None
-        if isinstance(value, basestring):
+        if isinstance(value, six.string_types):
             value = value.replace('T', ' ').replace('Z', '+00:00')
             p = re.compile('([0-9: -]+)\.?([0-9]*)([\+-][0-9]{2}:?[0-9]{2})?')
             dt, ms, tz = p.match(value).groups()

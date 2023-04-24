@@ -1,9 +1,9 @@
+from __future__ import absolute_import
 from __future__ import unicode_literals
-
 import os.path
 import re
 
-from django.utils import six
+import six
 
 # backport of Python 3.4's glob.escape
 

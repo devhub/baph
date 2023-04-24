@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.auth.models import User
 from baph.auth.registration.models import RegistrationProfile
 from baph.db.orm import ORM
@@ -9,6 +10,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core import mail, management
 from django.utils.hashcompat import sha_constructor
+import six
 
 
 class RegistrationModelTests(BaseTestCase):
@@ -72,7 +74,7 @@ class RegistrationModelTests(BaseTestCase):
         self.assertEqual(ct, 1)
         self.assertEqual(profile.user.id, new_user.id)
         self.assertRegexpMatches(profile.activation_key, '^[a-f0-9]{40}$')
-        self.assertEqual(unicode(profile),
+        self.assertEqual(six.text_type(profile),
                          u'Registration information for alice')
 
     def test_activation_email(self):

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from importlib import import_module
 import json
 
@@ -7,6 +8,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.utils.translation import ugettext_lazy as _
 
 from baph.utils.collections import duck_type_collection
+import six
 
 
 def coerce_to_list(value):
@@ -19,7 +21,7 @@ def coerce_to_list(value):
         return list(value)
     if isinstance(value, dict):
         # this has no ordering, so will probably break things
-        return value.items()
+        return list(value.items())
     if isinstance(value, set):
         # this has no ordering, so will probably break things
         return list(value)
@@ -29,7 +31,7 @@ class NullCharField(forms.CharField):
     " CharField that does not cast None to '' "
     def to_python(self, value):
         "Returns a Unicode object."
-        if isinstance(value, basestring):
+        if isinstance(value, six.string_types):
             value = value.strip()
         if value in validators.EMPTY_VALUES:
             return None
@@ -66,7 +68,7 @@ class MultiObjectField(forms.Field):
             raise forms.ValidationError(
                 _('Expected %s, got %s') % (expected_class, found_class))
 
-        values = data.itervalues() if isinstance(data, dict) else iter(data)
+        values = six.itervalues(data) if isinstance(data, dict) else iter(data)
         for v in values:
             self.validate_collection(v, collection_class)
 
@@ -99,16 +101,16 @@ class JsonField(forms.CharField):
     def __init__(self, *args, **kwargs):
         content_length_func = kwargs.pop('content_length_func', None)
         super(JsonField, self).__init__(*args, **kwargs)
-        if isinstance(content_length_func, basestring):
+        if isinstance(content_length_func, six.string_types):
             module, func_name = content_length_func.rsplit('.', 1)
             module = import_module(module)
             content_length_func = getattr(module, func_name)
         self.content_length_func = content_length_func
 
     def _as_string(self, value):
-        if isinstance(value, basestring):
+        if isinstance(value, six.string_types):
             return value
-        return unicode(value)
+        return six.text_type(value)
 
     def _get_content_length(self, value):
         """
@@ -127,7 +129,7 @@ class JsonField(forms.CharField):
                 raise forms.ValidationError(_('Max length for this field is '
                     '%s bytes') % self.max_length)
 
-        if isinstance(value, basestring):
+        if isinstance(value, six.string_types):
             try:
                 value = json.loads(value)
             except:
@@ -144,7 +146,7 @@ class ListField(JsonField):
       """
       Clean a single value in a list
       """
-      if self.strip and isinstance(value, basestring):
+      if self.strip and isinstance(value, six.string_types):
         return value.strip()
       return value
 

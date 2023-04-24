@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import collections
 from itertools import tee
 from types import FunctionType
@@ -18,6 +19,7 @@ from baph.core.validators import MaxLengthValidator
 from baph.db import types
 from baph.forms import fields
 from baph.utils.collections import duck_type_collection
+from six.moves import map
 
 
 def get_related_class_from_attr(attr):
@@ -80,6 +82,21 @@ class Field(object):
         else:
             self.creation_counter = Field.creation_counter
             Field.creation_counter += 1
+
+    def __eq__(self, other):
+        # Needed for @total_ordering
+        if isinstance(other, Field):
+            return self.creation_counter == other.creation_counter
+        return NotImplemented
+
+    def __lt__(self, other):
+        # This is needed because bisect does not take a comparison function.
+        if isinstance(other, Field):
+            return self.creation_counter < other.creation_counter
+        return NotImplemented
+
+    def __hash__(self):
+        return hash(self.creation_counter)
 
     @property
     def unique(self):
@@ -154,7 +171,7 @@ class Field(object):
         if form_class is None:
           form_class = fields.NullCharField
         field = form_class(**defaults)
-        field.validators = map(self.modify_validator, field.validators)
+        field.validators = list(map(self.modify_validator, field.validators))
         return field
 
     def clean(self, value):

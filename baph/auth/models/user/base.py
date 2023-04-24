@@ -1,5 +1,6 @@
+from __future__ import absolute_import
 from datetime import datetime
-import urllib
+import six.moves.urllib.request, six.moves.urllib.parse, six.moves.urllib.error
 
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
@@ -154,7 +155,7 @@ class BaseUser(AbstractBaseUser):
 
         :rtype: :class:`str`
         '''
-        return '/users/%s/' % urllib.quote(smart_str(self.username))
+        return '/users/%s/' % six.moves.urllib.parse.quote(smart_str(self.username))
 
     def get_full_name(self):
         '''Retrieves the first_name plus the last_name, with a space in

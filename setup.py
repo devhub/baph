@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from distutils.core import setup
 from setuptools import find_packages
 
@@ -12,7 +13,7 @@ setup(name='baph',
           'funcy',
           'SQLAlchemy >= 0.9.0',
           'python-dotenv == 0.7.1',
-          'functools32 == 3.2.3.post2',
+          'functools32 == 3.2.3.post2; python_version < "3.0"',
           'chainmap == 1.0.2',
       ],
       include_package_data=True,

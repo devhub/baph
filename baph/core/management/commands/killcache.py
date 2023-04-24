@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 from collections import defaultdict
 import json
 import os
@@ -10,11 +12,11 @@ from sqlalchemy import inspect
 from sqlalchemy import *
 from sqlalchemy.exc import ResourceClosedError
 from sqlalchemy.orm import lazyload, contains_eager, class_mapper
-from sqlalchemy.orm.util import identity_key
 from sqlalchemy.sql import compiler
 
 from baph.core.management.base import BaseCommand #NoArgsCommand
 from baph.db.orm import ORM
+from six.moves import input
 
 
 success_msg = make_style(fg='green')
@@ -34,35 +36,35 @@ def get_cacheable_models():
             yield k
 
 def lookup_model():
-    name = raw_input('Enter model name ("L" to list): ')
+    name = input('Enter model name ("L" to list): ')
     name = name.lower()
     for k,v in Base._decl_class_registry.items():
         if k.startswith('_'):
             continue
         if name == 'l':
-            print '\t%s' % k, v._meta.cache_detail_keys
+            print('\t%s' % k, v._meta.cache_detail_keys)
         if name == k.lower():
             return v
     if name != 'l':
-        print 'Invalid choice: %s' % name
+        print('Invalid choice: %s' % name)
 
 def prompt_for_model_name():
     while True:
-        cmd = raw_input('\nKill cache for which model? '
+        cmd = input('\nKill cache for which model? '
                         '(ENTER to list, Q to quit): ')
         if cmd in ('q', 'Q'):
             return None
         if not cmd:
             for name in get_cacheable_models():
-                print '    %s' % name
+                print('    %s' % name)
             continue
         return cmd
 
 def prompt_for_pk(model):
-    print 'Enter the primary key components:'
+    print('Enter the primary key components:')
     pk = []
     for col in class_mapper(model).primary_key:
-        v = raw_input('    %s: ' % col.name)
+        v = input('    %s: ' % col.name)
         pk.append(v)
     return tuple(pk)
 
@@ -82,7 +84,7 @@ class Command(BaseCommand):
         else:
             pks = None
 
-        print ''
+        print('')
         while True:
             if not model_name:
                 model_name = prompt_for_model_name()
@@ -90,7 +92,7 @@ class Command(BaseCommand):
                 # quit
                 break
             if not model_name in Base._decl_class_registry:
-                print error_msg('Invalid model name: %s' % model_name)
+                print(error_msg('Invalid model name: %s' % model_name))
                 model_name = None
                 continue
             model = Base._decl_class_registry[model_name]
@@ -101,13 +103,13 @@ class Command(BaseCommand):
             
             session = orm.sessionmaker()
             for pk in pks:
-                print info_msg('\nLooking up %r with pk=%s' % (model_name, pk))
+                print(info_msg('\nLooking up %r with pk=%s' % (model_name, pk)))
                 obj = session.query(model).get(pk)
                 if not obj:
-                    print error_msg('  No %s found with PK %s' % (model_name, pk))
+                    print(error_msg('  No %s found with PK %s' % (model_name, pk)))
                     continue
 
-                print success_msg('  Found object: %r' % obj)
+                print(success_msg('  Found object: %r' % obj))
 
                 caches = defaultdict(lambda: {
                     'cache_keys': set(),
@@ -125,13 +127,13 @@ class Command(BaseCommand):
                         caches[alias]['version_keys'].add(version_key)
 
                 for alias, keys in caches.items():
-                    print info_msg('Processing keys on cache %r' % alias)
+                    print(info_msg('Processing keys on cache %r' % alias))
                     cache = get_cache(alias)
                     for key in keys['cache_keys']:
-                        print '  Killing cache key: %r' % key
+                        print('  Killing cache key: %r' % key)
                     cache.delete_many(keys['cache_keys'])
                     for key in keys['version_keys']:
-                        print '  Incrementing version key: %r' % key
+                        print('  Incrementing version key: %r' % key)
                         cache.incr(key)
 
             model_name = None

@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+from __future__ import print_function
 from copy import deepcopy
 import sys
 import unittest as real_unittest
@@ -230,7 +232,7 @@ class BaphTestSuiteRunner(runner.DiscoverRunner):
         conflicts = schemas.intersection(existing_schemas)
         if conflicts:
             for c in conflicts:
-                print 'drop schema %s;' % c
+                print('drop schema %s;' % c)
             sys.exit('The following schemas are already present: %s. ' \
                 'TestRunner cannot proceeed' % ','.join(conflicts))
         

@@ -10,6 +10,7 @@
 from __future__ import absolute_import
 
 from baph.utils.importing import import_any_module, import_attr
+import six
 render_to_response = import_attr(['coffin.shortcuts'], 'render_to_response')
 from django.http import (
     HttpResponse, HttpResponseRedirect, HttpResponseForbidden)
@@ -68,7 +69,7 @@ class JSONify(object):
     def __init__(self, alternate_renderer=None, method=False, **kwargs):
         if alternate_renderer is None:
             self.renderer = self.render
-        elif isinstance(alternate_renderer, basestring):
+        elif isinstance(alternate_renderer, six.string_types):
             # assume Jinja2 template
             self.renderer = self.render_jinja
             self.template = alternate_renderer
@@ -96,7 +97,7 @@ class JSONify(object):
             return func_handler
 
     def _handler(self, data, request):
-        if isinstance(data, basestring):
+        if isinstance(data, six.string_types):
             data = {
                 'content': data,
             }

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 try:
     from coffin.conf.urls.defaults import *
 except:

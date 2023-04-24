@@ -9,6 +9,7 @@ http://code.djangoproject.com/ticket/5446/
 Attachment: country_and_language_fields_trunk.4.patch
 '''
 
+from __future__ import absolute_import
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils.translation import ugettext as _

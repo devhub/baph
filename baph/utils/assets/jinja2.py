@@ -27,7 +27,7 @@ class AssetExtension(Extension):
     def parse(self, parser):
         stream = parser.stream
 
-        tag = stream.next()
+        tag = next(stream)
         if stream.current.test('string'):
             path = parser.parse_primary()
         else:
@@ -35,7 +35,7 @@ class AssetExtension(Extension):
 "%s" requires path to asset file, relative to STATICFILES_URL''' % tag.value,
                                       tag.lineno)
         while not parser.stream.current.type == 'block_end':
-            parser.stream.next()
+            next(parser.stream)
         result = self.call_method(self.build_method, args=[path])
         return nodes.Output([nodes.MarkSafe(result)]).set_lineno(tag.lineno)
 

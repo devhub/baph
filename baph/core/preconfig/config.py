@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import argparse
 from functools import partial
 import itertools
@@ -9,6 +10,8 @@ from dotenv.main import load_dotenv, dotenv_values
 from baph.utils.collections import flatten
 from .options import PackageOption, ModuleOption
 from .utils import with_empty
+from six.moves import map
+from six.moves import range
 
 
 def templatize(key):
@@ -115,7 +118,7 @@ class Preconfiguration(object):
   @property
   def package_tpls(self):
     " returns the package name templates "
-    packages = [self.package] + map(templatize, self.package_args)
+    packages = [self.package] + list(map(templatize, self.package_args))
     return packages
 
   @property
@@ -222,7 +225,8 @@ class Preconfiguration(object):
       else:
         raise ValueError('Invalid scope %r (must be "package" or "module")')
       self.arg_map[name] = opt
-    self.module_options = sorted(modules, key=lambda x: x.order)
+
+    self.module_options = sorted(modules, key=lambda x: str(x.order))
     self.package_options = packages
 
   def add_to_parser(self, parser):

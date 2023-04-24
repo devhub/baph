@@ -11,6 +11,7 @@ Based on <http://djangosnippets.org/snippets/880/>, which was based on
 Foundation License, version 2 <http://python.org/psf/license/>`_.
 '''
 
+from __future__ import absolute_import
 from django.conf import settings
 from django.http import HttpResponseRedirect
 

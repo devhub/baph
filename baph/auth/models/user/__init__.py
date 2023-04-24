@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from datetime import datetime
 
 from django.contrib.auth.signals import user_logged_in

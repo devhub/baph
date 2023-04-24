@@ -1,8 +1,21 @@
 # backport from django 1.6
+from __future__ import absolute_import
 from __future__ import unicode_literals
-
-import htmlentitydefs
 import re
+
+import six.moves.html_entities
+from six import unichr
+
+if six.PY3:
+    from django.utils.encoding import force_bytes
+    from django.utils.encoding import smart_bytes
+    from django.utils.encoding import force_str as force_unicode
+    from django.utils.encoding import smart_str as smart_unicode
+else:
+    from django.utils.encoding import force_str as force_bytes
+    from django.utils.encoding import smart_str as smart_bytes
+    from django.utils.encoding import force_unicode
+    from django.utils.encoding import smart_unicode
 
 
 def unescape(text):
@@ -27,7 +40,7 @@ def unescape(text):
         else:
             # named entity
             try:
-                text = unichr(htmlentitydefs.name2codepoint[text[1:-1]])
+                text = unichr(six.moves.html_entities.name2codepoint[text[1:-1]])
             except KeyError:
                 pass
         return text # leave as is

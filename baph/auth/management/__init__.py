@@ -1,4 +1,6 @@
 from __future__ import unicode_literals
+from __future__ import absolute_import
+from __future__ import print_function
 import getpass
 import locale
 import unicodedata
@@ -84,14 +86,17 @@ def _get_all_permissions(opts):
         
 def create_permissions(app, created_models, verbosity, db=DEFAULT_DB_ALIAS,
                        **kwargs):
+    pkg, _ = app.__name__.rsplit('.', 1)
     app_models = []
     for k, v in vars(app).items():
         if k not in orm.Base._decl_class_registry:
             continue
-        if v not in orm.Base._decl_class_registry.values():
+        if v not in list(orm.Base._decl_class_registry.values()):
             continue
-        if hasattr(app, '__package__') and app.__package__ + '.models' != v.__module__:
+        if pkg + '.models' != v.__module__:
             continue
+        #if hasattr(app, '__package__') and app.__package__ + '.models' != v.__module__:
+        #    continue
         app_models.append( (k,v) )
     if not app_models:
         return
@@ -143,8 +148,8 @@ def create_permissions(app, created_models, verbosity, db=DEFAULT_DB_ALIAS,
 
     if verbosity >= 2:
         for perm in perms:
-            print("Adding permission '%s:%s'" % (perm['resource'],
-                                                 perm['codename']))
+            print(("Adding permission '%s:%s'" % (perm['resource'],
+                                                 perm['codename'])))
 
 '''
 def create_superuser(app, created_models, verbosity, db, **kwargs):

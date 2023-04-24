@@ -1,15 +1,18 @@
+from __future__ import absolute_import
 import copy
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, Column
 from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm.attributes import instance_dict
 from sqlalchemy.orm.collections import MappedCollection
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.session import object_session
-from sqlalchemy.orm.util import identity_key
 
+from baph.db.models.utils import identity_key
 from baph.db.orm import ORM
 from baph.utils.collections import duck_type_collection
+from six.moves import map
+from six.moves import zip
 
 
 orm = ORM.get()
@@ -19,10 +22,10 @@ def reload_object(instance):
   """
   Reloads an instance with the correct polymorphic subclass
   """
-  cls, pk_vals = identity_key(instance=instance)
+  (cls, pk_vals) = identity_key(instance=instance)
   mapper = inspect(cls)
   pk_cols = [col.key for col in mapper.primary_key]
-  pk = dict(zip(pk_cols, pk_vals))
+  pk = dict(list(zip(pk_cols, pk_vals)))
   session = object_session(instance)
   session.expunge(instance)
   instance = session.query(cls) \
@@ -38,7 +41,7 @@ def get_polymorphic_subclass(instance):
   the polymorphic map of the base class. for non-polymorphic classes, it
   returns the class
   """
-  cls, pk = identity_key(instance=instance)
+  (cls, pk) = identity_key(instance=instance)
   base_mapper = inspect(cls)
   if base_mapper.polymorphic_on is None:
     # this is not a polymorphic class
@@ -65,10 +68,17 @@ def get_cloning_rules(cls):
 
 def get_default_excludes(cls):
   """
-  By default, exclude pks and fks
+  By default, exclude pks, fks, and query_expressions
   """
   mapper = inspect(cls)
+  exclude_props = set()
   exclude_cols = set()
+
+  for attr in mapper.column_attrs:
+    # exclude column properties which do not refer to actual columns
+    # ie query_expressions
+    if not any(isinstance(col, Column) for col in attr.columns):
+      exclude_props.add(attr.key)
 
   if mapper.polymorphic_on is not None:
     # do not copy the polymorphic discriminator. it will be set automatically
@@ -84,9 +94,9 @@ def get_default_excludes(cls):
       # do not copy foreign key columns
       exclude_cols.update(fkc.columns)
 
-  props = map(mapper.get_property_by_column, exclude_cols)
+  props = list(map(mapper.get_property_by_column, exclude_cols))
   keys = set(prop.key for prop in props)
-  return keys
+  return exclude_props | keys
 
 def get_default_columns(cls):
   """
@@ -148,7 +158,7 @@ class CloneEngine(object):
   def user_id(self):
     if not self.user:
       return None
-    cls, pk = identity_key(instance=self.user)
+    (cls, pk) = identity_key(instance=self.user)
     if len(pk) > 1:
       raise Exception('chown cannot used for multi-column user pks. To '
         'specify ownership for a user with a multi-column pk, add the '
@@ -218,8 +228,7 @@ class CloneEngine(object):
 
   def clone_obj(self, instance, ruleset=None, rule_keys=None, cast_to=None):
     is_root = self.root is None
-
-    base_cls, pk = identity_key(instance=instance)
+    (base_cls, pk) = identity_key(instance=instance)
     if (base_cls, pk) in self.registry:
       # we already cloned this
       return self.registry[(base_cls, pk)]

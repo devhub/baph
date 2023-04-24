@@ -1,9 +1,12 @@
+from __future__ import absolute_import
 import argparse
 import imp
 import inspect
 import itertools
 import os
 import sys
+import six
+from six.moves import range
 
 
 PRECONFIG_MODULE_NAME = 'preconfig'
@@ -136,7 +139,7 @@ class Preconfigurator(object):
     " os.environ values must be strings "
     if value is None:
       value = ''
-    elif not isinstance(value, basestring):
+    elif not isinstance(value, six.string_types):
       value = str(value)
     os.environ[key] = value
 

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.localflavor.generic import COUNTRIES
 from baph.localflavor.generic.forms import (
     CountryField, LanguageField, StateProvinceField, StateProvinceSelect,

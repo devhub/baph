@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import json
 import logging
 
@@ -10,13 +11,15 @@ from sqlalchemy.orm import lazyload
 from baph.db import ORM
 from baph.db.models.loading import cache
 from baph.db.models.utils import class_resolver, column_to_attr, key_to_value
+import six
+from six.moves import zip
 
 
 logger = logging.getLogger('authorization')
 
 def convert_filter(k, cls=None):
     """Convert a string filter into a column-based filter"""
-    if not isinstance(k, basestring):
+    if not isinstance(k, six.string_types):
         raise Exception('convert_filters keys must be strings')
     frags = k.split('.')
     attr = frags.pop()
@@ -402,7 +405,7 @@ class UserPermissionMixin(object):
                 # exact filter
                 values = p.value.split(',')
 
-            data = zip(keys, values)
+            data = list(zip(keys, values))
             
             filters = []
             for key, value in data:

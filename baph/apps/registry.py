@@ -1,7 +1,13 @@
+from __future__ import absolute_import
 import threading
 from collections import Counter, OrderedDict, defaultdict
 
-from functools32 import lru_cache
+from six import PY2
+
+if PY2:
+    from functools32 import lru_cache
+else:
+    from functools import lru_cache
 
 from .config import AppConfig
 
@@ -80,7 +86,7 @@ class Apps(object):
     Imports applications and returns an iterable of app configs.
     """
     self.check_apps_ready()
-    return self.app_configs.values()
+    return list(self.app_configs.values())
 
   @lru_cache(maxsize=None)
   def get_models(self, include_auto_created=False,

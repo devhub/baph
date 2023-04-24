@@ -16,6 +16,7 @@ from __future__ import absolute_import
 
 from collections import defaultdict, OrderedDict
 
+from six import PY2
 from sqlalchemy.ext.associationproxy import _AssociationDict
 from sqlalchemy.util import duck_type_collection as sqla_duck_type_collection
 
@@ -49,10 +50,13 @@ def flatten(l):
     return ltype(l)
 
 
-class OrderedDefaultDict(defaultdict, OrderedDict):
-    '''A :class:`dict` subclass with the characteristics of both
-    :class:`~collections.defaultdict` and :class:`~collections.OrderedDict`.
-    '''
-    def __init__(self, default_factory, *args, **kwargs):
-        defaultdict.__init__(self, default_factory)
-        OrderedDict.__init__(self, *args, **kwargs)
+if PY2:
+    class OrderedDefaultDict(defaultdict, OrderedDict):
+        '''A :class:`dict` subclass with the characteristics of both
+        :class:`~collections.defaultdict` and :class:`~collections.OrderedDict`.
+        '''
+        def __init__(self, default_factory, *args, **kwargs):
+            defaultdict.__init__(self, default_factory)
+            OrderedDict.__init__(self, *args, **kwargs)
+else:
+    OrderedDefaultDict = defaultdict

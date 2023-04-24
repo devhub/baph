@@ -16,7 +16,7 @@ from sqlalchemy.orm import attributes, mapper, object_session
 from sqlalchemy.orm.interfaces import MANYTOONE
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.session import Session
-from sqlalchemy.orm.util import has_identity, identity_key
+from sqlalchemy.orm.util import has_identity
 from sqlalchemy.schema import ForeignKeyConstraint
 
 from baph.db import ORM
@@ -24,10 +24,12 @@ from baph.db.models import signals
 from baph.db.models.loading import get_model, register_models
 from baph.db.models.mixins import CacheMixin, GlobalMixin, ModelPermissionMixin
 from baph.db.models.options import Options
-from baph.db.models.utils import key_to_value
+from baph.db.models.utils import key_to_value, identity_key
 from baph.utils.functional import cachedclassproperty
 from baph.utils.importing import remove_class
 from baph.utils.module_loading import import_string
+import six
+from six.moves import zip
 
 
 @compiles(ForeignKeyConstraint)
@@ -70,9 +72,13 @@ def constructor(self, **kwargs):
             continue
         default = col.default.arg
         if callable(default):
-            setattr(self, attr.key, default({}))
+            value = default({})
         else:
-            setattr(self, attr.key, default)
+            value = default
+        # set defaults directly to self.__dict__ to avoid triggering
+        # event listeners
+        #self.__dict__[attr.key] = value
+        setattr(self, attr.key, value)
 
     # now load in the kwargs values
     for k in kwargs:
@@ -150,16 +156,14 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
     def pk_as_query_filters(self, force=False):
         " returns a filter expression for the primary key of the instance "
         " suitable for use with Query.filter() "
-        ident = identity_key(instance=self)
-        (cls, pk_values) = ident[:2]
-
+        (cls, pk_values) = identity_key(instance=self)
         if None in pk_values and not force:
             return None
-        items = zip(self.pk_attrs, pk_values)
+        items = list(zip(self.pk_attrs, pk_values))
         return and_(attr == value for attr, value in items)
 
     def update(self, data):
-        for key, value in data.iteritems():
+        for key, value in six.iteritems(data):
             if hasattr(self, key) and getattr(self, key) != value:
                 setattr(self, key, value)
 
@@ -187,7 +191,7 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
 
         :rtype: :class:`dict`
         '''
-        __dict__ = dict([(key, val) for key, val in self.__dict__.iteritems()
+        __dict__ = dict([(key, val) for key, val in six.iteritems(self.__dict__)
                          if not key.startswith('_sa_')])
         if len(__dict__) == 0:
             for attr in inspect(type(self)).column_attrs:
@@ -274,7 +278,7 @@ class ModelBase(type):
         registry = cls._decl_class_registry
         if name in registry:
             found = True
-        elif cls in registry.values():
+        elif cls in list(registry.values()):
             found = True
             add_class(name, cls)
 

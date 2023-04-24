@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import functools
 
 
@@ -13,7 +14,7 @@ class memoize(object):
 
     def __call__(self, *args, **kwargs):
         instance = args[0]
-        key = (self.func, type(instance), args[1:], frozenset(kwargs.items()))
+        key = (self.func, type(instance), args[1:], frozenset(list(kwargs.items())))
         try:
             res = self.cache[key]
         except KeyError:

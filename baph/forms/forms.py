@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from django import forms
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.datastructures import SortedDict
@@ -14,6 +15,8 @@ from sqlalchemy.sql.expression import _BinaryExpression, _Label
 from baph.auth.models import Organization
 from baph.db import types, ORM
 from baph.forms import fields
+from six.moves import map
+import six
 
 
 FIELD_MAP = {
@@ -77,17 +80,17 @@ def model_to_dict(instance, fields=None, exclude=None):
     data = {}
     unloaded_attrs = inspect(instance).unloaded
     for f in opts.fields:
-        if f.name in unloaded_attrs:
-            if issubclass(f.data_type, orm.Base):
-                # skip relations that haven't been loaded yet
-                continue
-        if not getattr(f, 'editable', False):
-            continue
-        if fields and not f.name in fields:
-            continue
-        if exclude and f.name in exclude:
-            continue
-        data[f.name] = getattr(instance, f.name)
+      if f.name in unloaded_attrs:
+        if issubclass(f.data_type, orm.Base):
+          # skip relations that haven't been loaded yet
+          continue
+      if not getattr(f, 'editable', False):
+        continue
+      if fields and not f.name in fields:
+        continue
+      if exclude and f.name in exclude:
+        continue
+      data[f.name] = getattr(instance, f.name)
     return data
 
 def fields_for_model(model, fields=None, exclude=None, widgets=None, 
@@ -109,13 +112,13 @@ def fields_for_model(model, fields=None, exclude=None, widgets=None,
             continue
 
         if issubclass(f.data_type, Base):
-            # TODO: Auto-generate fields, control via 'fields' param
-            if fields is not None and f.name in fields:
-                # manually included field
-                pass
-            else:
-                # skip relations unless manually requested
-                continue
+          # TODO: Auto-generate fields, control via 'fields' param
+          if fields is not None and f.name in fields:
+            # manually included field
+            pass
+          else:
+            # skip relations unless manually requested
+            continue
 
         kwargs = {}
         if widgets and f.name in widgets:
@@ -200,6 +203,7 @@ class SQLAModelFormMetaclass(type):
         except NameError:
             parents = None
         declared_fields = forms.forms.get_declared_fields(bases, attrs, False)
+
         new_class = super(SQLAModelFormMetaclass, cls) \
             .__new__(cls, name, bases, attrs)
         if not parents:
@@ -207,6 +211,7 @@ class SQLAModelFormMetaclass(type):
 
         if 'media' not in attrs:
             new_class.media = forms.widgets.media_property(new_class)
+
         opts = new_class._meta = SQLAModelFormOptions(getattr(new_class, 'Meta', None))
         if opts.model:
             # If a model is defined, extract form fields from it.
@@ -227,30 +232,31 @@ class BaseSQLAModelForm(forms.forms.BaseForm):
         opts = self._meta
         exclude = list(opts.exclude)
         if opts.model is None:
-            raise ValueError('ModelForm has no model class specified.')
+          raise ValueError('ModelForm has no model class specified.')
         self.nested = nested
         if self.nested:
-            exclude.extend(opts.exclude_on_nested)
+          exclude.extend(opts.exclude_on_nested)
         if instance is None:
-            exclude.extend(opts.exclude_on_create)
-            self.instance = opts.model()
-            object_data = {}
+          exclude.extend(opts.exclude_on_create)
+          self.instance = opts.model()
+          object_data = {}
         else:
-            self.instance = instance
-            object_data = model_to_dict(instance, opts.fields, exclude)
-            if has_identity(instance):
-                exclude.extend(opts.exclude_on_update)
-            else:
-                exclude.extend(opts.exclude_on_create)
+          self.instance = instance
+          object_data = model_to_dict(instance, opts.fields, exclude)
+          if has_identity(instance):
+            exclude.extend(opts.exclude_on_update)
+          else:
+            exclude.extend(opts.exclude_on_create)
 
         if initial is not None:
-            object_data.update(initial)
+          object_data.update(initial)
         object_data.update(data)
+
         super(BaseSQLAModelForm, self).__init__(object_data, files, auto_id, prefix)
 
         for k in exclude:
-            if k in self.fields:
-                del self.fields[k]
+          if k in self.fields:
+            del self.fields[k]
 
     def save(self, commit=False):
         """
@@ -267,9 +273,7 @@ class BaseSQLAModelForm(forms.forms.BaseForm):
         return save_instance(self, self.instance, self._meta.fields,
                              fail_message, commit, self._meta.exclude)
         
-class SQLAModelForm(BaseSQLAModelForm):
-    __metaclass__ = SQLAModelFormMetaclass
-
+class SQLAModelForm(six.with_metaclass(SQLAModelFormMetaclass, BaseSQLAModelForm)):
     def clean_unique_field(self, key, **kwargs):
         orm = ORM.get()
         value = self.cleaned_data[key]
@@ -287,7 +291,7 @@ class SQLAModelForm(BaseSQLAModelForm):
             # if all filter keys exist on the base mapper, query the base class
             # if the base class is missing any properties, query the 
             # polymorphic subclass explicitly
-            if all(map(mapper.has_property, filters.keys())):
+            if all(map(mapper.has_property, list(filters.keys()))):
                 model = mapper.class_
 
         session = orm.sessionmaker()

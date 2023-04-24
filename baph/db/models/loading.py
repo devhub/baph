@@ -214,7 +214,7 @@ class AppCache(object):
             else:
                 app_list = []
         else:
-            app_list = self.app_models.values()
+            app_list = list(self.app_models.values())
             """
             if only_installed:
                 app_list = [self.app_models.get(app_label, SortedDict())

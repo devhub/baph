@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 from optparse import make_option
 
 from django.conf import settings
@@ -10,6 +11,7 @@ from baph.core.management.new_base import BaseCommand, CommandError
 from baph.core.management.sql import emit_post_sync_signal
 from baph.db import ORM, DEFAULT_DB_ALIAS
 from baph.db.models import signals, get_apps, get_models
+from six.moves import input
 
 
 orm = ORM.get()
@@ -48,7 +50,7 @@ class Command(BaseCommand):
         #sql_list = sql_flush(self.style, connection, only_django=True)
 
         if interactive:
-            confirm = raw_input("""You have requested a flush of the database.
+            confirm = input("""You have requested a flush of the database.
 This will IRREVERSIBLY DESTROY all data currently in the database,
 and return each table to the state it was in after syncdb.
 Are you sure you want to do this?

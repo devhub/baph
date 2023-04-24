@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from django.core.urlresolvers import set_urlconf, RegexURLPattern
 
 from baph.utils.module_loading import import_string

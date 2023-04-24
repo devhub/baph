@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.db.orm import ORM
 from baph.utils.importing import import_any_module
 from django.conf import settings

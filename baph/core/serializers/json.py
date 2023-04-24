@@ -1,9 +1,6 @@
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-from StringIO import StringIO
-import datetime
-import decimal
 import json
 import sys
 
@@ -11,7 +8,7 @@ from baph.core.serializers.python import Serializer as PythonSerializer
 from baph.core.serializers.python import Deserializer as PythonDeserializer
 from django.core.serializers.base import DeserializationError
 from django.core.serializers.json import DjangoJSONEncoder
-from django.utils import six
+import six
 
 
 class Serializer(PythonSerializer):
@@ -56,6 +53,7 @@ class Serializer(PythonSerializer):
     def getvalue(self):
         # Grand-parent super
         return super(PythonSerializer, self).getvalue()
+
 
 def Deserializer(stream_or_string, **options):
     """

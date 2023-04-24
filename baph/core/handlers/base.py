@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+from __future__ import absolute_import
 import logging
 import sys
 import types
@@ -17,7 +18,7 @@ from .exception import (
     convert_exception_to_response, get_exception_response,
     handle_uncaught_exception,
 )
-from utils import get_resolver
+from .utils import get_resolver
 
 logger = logging.getLogger('django.request')
 

@@ -10,6 +10,7 @@ handled.
 
 """
 
+from __future__ import absolute_import
 from baph.auth.registration.views import activate, register
 from coffin.views.generic.simple import direct_to_template
 from django.conf.urls.defaults import include, patterns, url

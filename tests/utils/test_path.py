@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.test.base import TestCase
 from baph.utils.path import relpath
 import os

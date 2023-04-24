@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.db.orm import ORM
 from baph.decorators.db import sqlalchemy_session
 from baph.test.base import TestCase

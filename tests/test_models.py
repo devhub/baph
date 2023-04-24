@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
 from baph.db.models import CustomPropsModel, Model
 from baph.db.orm import ORM
 from baph.test.base import TestCase
 from sqlalchemy import Column, Integer, String, Unicode
 from sqlalchemy.orm import synonym
+import six
 
 orm = ORM.get()
 
@@ -27,7 +29,7 @@ class TestModelWithProp(orm.Base, Model):
 
     @property
     def unicode_col(self):
-        return unicode(self.str_col)
+        return six.text_type(self.str_col)
 
     def to_dict(self):
         result = super(TestModelWithProp, self).to_dict()

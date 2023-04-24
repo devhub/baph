@@ -1,7 +1,8 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
 from django.core.management import execute_manager
 try:
-    import settings  # Assumed to be in the same directory.
+    from . import settings  # Assumed to be in the same directory.
 except ImportError:
     import sys
     sys.stderr.write('''\

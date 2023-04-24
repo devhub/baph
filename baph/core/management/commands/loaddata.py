@@ -1,4 +1,5 @@
 from __future__ import unicode_literals
+from __future__ import absolute_import
 import glob
 import gzip
 from itertools import product
@@ -26,11 +27,11 @@ from django.utils.datastructures import SortedDict
 from django.utils.functional import cached_property, memoize
 from sqlalchemy.orm.attributes import instance_dict
 from sqlalchemy.orm.session import Session
-from sqlalchemy.orm.util import identity_key
 
 from baph.core.management.new_base import BaseCommand
 from baph.db import DEFAULT_DB_ALIAS
 from baph.db.models import get_app_paths
+from baph.db.models.utils import identity_key
 from baph.db.orm import ORM
 from baph.utils.glob import glob_escape
 
@@ -228,8 +229,7 @@ class Command(BaseCommand):
                     if True: #router.allow_syncdb(self.using, obj.object.__class__):
                         loaded_objects_in_fixture += 1
                         self.models.add(type(obj))
-                        ident = identity_key(instance=obj)
-                        (cls, key) = ident[:2]
+                        (cls, key) = identity_key(instance=obj)
                         if any(part is None for part in key):
                             # we can't generate an explicit key with this info
                             session.add(obj)

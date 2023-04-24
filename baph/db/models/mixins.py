@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from collections import defaultdict
 import datetime
 import logging
@@ -15,10 +16,12 @@ from sqlalchemy.ext.hybrid import hybrid_method
 from sqlalchemy.orm import class_mapper, object_session
 from sqlalchemy.orm.attributes import get_history, instance_dict
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
-from sqlalchemy.orm.util import has_identity, identity_key
+from sqlalchemy.orm.util import has_identity
 
 from baph.db import ORM
+from baph.db.models.utils import identity_key
 from .utils import column_to_attr, class_resolver
+from six.moves import map
 
 
 cache_logger = logging.getLogger('cache')
@@ -611,8 +614,7 @@ class CacheMixin(object):
           # the fields which trigger this pointer were not changed
           continue
         cache_key = raw_key % data
-        ident_key = identity_key(instance=self) 
-        _, ident = ident_key[:2]
+        (_, ident) = identity_key(instance=self) 
         if len(ident) > 1:
           ident = ','.join(map(str, ident))
         else:
@@ -749,7 +751,7 @@ class ModelPermissionMixin(object):
             if new_key in pairs:
                 value = pairs[new_key]
             else:
-                primary_key, value = pairs.items()[0]
+                primary_key, value = list(pairs.items())[0]
             keys.append( (limiter, primary_key, value, col_key, cls_name) )
 
         if not include_parents:

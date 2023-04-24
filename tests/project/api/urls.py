@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 '''URLs for the test API.'''
 
+from __future__ import absolute_import
 from coffin.conf.urls.defaults import include, patterns
 from piston.authentication.oauth import OAuthAuthentication
 from piston.resource import Resource

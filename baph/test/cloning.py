@@ -1,13 +1,15 @@
+from __future__ import absolute_import
 import copy
 import inspect as pyinspect
 
 from sqlalchemy import inspect
 from sqlalchemy.ext.associationproxy import ASSOCIATION_PROXY
 from sqlalchemy.ext.orderinglist import OrderingList
-from sqlalchemy.orm.util import identity_key
 
 from baph.db.models.cloning import *
+from baph.db.models.utils import identity_key
 from baph.utils.collections import duck_type_collection
+from six.moves import zip
 
 
 def is_polymorphic(cls):
@@ -284,7 +286,7 @@ class CloningTestMixin(object):
     elif collection_class == dict:
       # we want to compare objects with matching keys, so we order
       # the objects by key
-      self.assertItemsEqual(old.keys(), new.keys(),
+      self.assertItemsEqual(list(old.keys()), list(new.keys()),
         'mapped collections have different keys')
       old = [i[1] for i in sorted(old.items())]
       new = [i[1] for i in sorted(new.items())]
