@@ -153,10 +153,11 @@ class Command(BaseCommand):
                 self.load_label(fixture_label)
         '''
         session = orm.sessionmaker()
-        session.close()
+        #session.close()
         for fixture_label in fixture_labels:
           self.load_label(fixture_label)
-        session.commit()
+        #session.commit()
+        session.flush()
 
         # Since we disabled constraint checks, we must manually check for
         # any invalid keys that might have been added

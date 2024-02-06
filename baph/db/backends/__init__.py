@@ -99,8 +99,14 @@ class DatabaseWrapper(object):
         self.engine = load_engine(settings_dict)
         self.Base = get_declarative_base(bind=self.engine)
         self.session_factory = sessionmaker(bind=self.engine)
+
+        if getattr(settings, 'USE_TRANSACTIONS', False):
+            kw = {'scopefunc': scopefunc}
+        else:
+            kw = {}
+        
         self.sessionmaker = scoped_session(sessionmaker(
-            bind=self.engine, autoflush=False))
+            bind=self.engine, autoflush=False), **kw)
         # TODO: uncomment line below once transactional tests are ready
         #    bind=self.engine, autoflush=False), scopefunc=scopefunc)
     '''

@@ -21,7 +21,10 @@ class SQLAlchemyMiddleware(object):
     def process_response(self, request, response):
         if hasattr(request, 'orm'):
             session = request.orm.sessionmaker()
-            session.close()
+            if response.status_code >= 400:
+                session.expunge_all()
+
+            session.flush()
         return response
 
     def process_exception(self, request, exception):
