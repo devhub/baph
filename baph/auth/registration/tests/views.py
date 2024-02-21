@@ -38,7 +38,7 @@ class RegistrationViewsTests(TestCase):
         #                     reverse('baph_profile_detail', kwargs={'username': user.username}))
 
         user = session.query(User).filter_by(email='alice@example.com').first()
-        session.close()
+        #session.close()
         self.failUnless(user.is_active)
 
     def test_activation_expired_retry(self):
@@ -61,7 +61,7 @@ class RegistrationViewsTests(TestCase):
         self.assertContains(response, "Request a new activation link")
 
         user = session.query(User).filter_by(email='alice@example.com').first()
-        session.close()
+        #session.close()
         self.failUnless(not user.is_active)
         auth_settings.BAPH_ACTIVATION_RETRY = False
 
@@ -86,12 +86,12 @@ class RegistrationViewsTests(TestCase):
         # We must reload the object from database to get the new key
         user = session.query(User).filter_by(email='alice@example.com').first()
         new_key = user.signup.activation_key
-        session.close()
+        #session.close()
         self.assertContains(response, "Account re-activation succeded")
 
         self.failIfEqual(old_key, new_key)
         user = session.query(User).filter_by(email='alice@example.com').first()
-        session.close()
+        #session.close()
         self.failUnless(not user.is_active)
 
         self.failUnlessEqual(len(mail.outbox), 2)
@@ -103,7 +103,7 @@ class RegistrationViewsTests(TestCase):
 
         session = orm.sessionmaker()
         user = session.query(User).filter_by(email='alice@example.com').first()
-        session.close()
+        #session.close()
         self.failUnless(user.is_active)
         auth_settings.BAPH_ACTIVATION_RETRY = False
 
@@ -384,7 +384,7 @@ class RegistrationViewsTests(TestCase):
         # Check that the new password is set.
         session = orm.sessionmaker()
         john = session.query(User).filter_by(username='john').first()
-        session.close()
+        #session.close()
         self.failUnless(john.check_password(new_password))
 
     '''
