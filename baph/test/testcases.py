@@ -358,7 +358,7 @@ class MemcacheMixin(object):
         self.assertNotEqual(current_value, 0)
 
 
-class LiveServerTestCase(test.LiveServerTestCase, TransactionTestCase):
+class LiveServerTestCase(test.LiveServerTestCase, TestCase):
     pass
 
 
