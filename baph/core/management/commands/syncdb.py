@@ -13,7 +13,7 @@ from sqlalchemy.schema import CreateSchema, DropSchema, CreateTable
 from baph.core.management.base import NoArgsCommand
 from baph.core.management.sql import emit_post_sync_signal
 from baph.db import DEFAULT_DB_ALIAS
-from baph.db.models import signals, get_apps, get_models
+from baph.db.models import get_apps, get_models
 from baph.db.orm import ORM, Base
 
 

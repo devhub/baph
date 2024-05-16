@@ -69,6 +69,7 @@ def get_deferred_updates(session):
             deferred.append((type(obj), filters, update))
     return deferred
 
+
 class Command(BaseCommand):
     help = 'Installs the named fixture(s) in the database.'
     missing_args_message = ("No database fixture specified. Please provide "
@@ -76,49 +77,49 @@ class Command(BaseCommand):
                             "line.")
     
     def add_arguments(self, parser):
-      parser.add_argument(
-        'args', metavar='fixture', nargs='+', help='Fixture labels.')
-      parser.add_argument(
-        '--database', action='store', dest='database',
-        default=DEFAULT_DB_ALIAS, 
-        help='Nominates a specific database to load fixtures into. '
+        parser.add_argument(
+            'args', metavar='fixture', nargs='+', help='Fixture labels.')
+        parser.add_argument(
+            '--database', action='store', dest='database',
+            default=DEFAULT_DB_ALIAS, 
+            help='Nominates a specific database to load fixtures into. '
              'Defaults to the "default" database.'
-      )
-      parser.add_argument(
-        '--app', action='store', dest='app_label', default=None,
-        help='Only look for fixtures in the specified app.',
-      )
-      parser.add_argument(
-        '--ignorenonexistent', '-i', action='store_true',
-        dest='ignore', default=False, help='Ignores entries in the '
-            'serialized data for fields that do not currently exist '
-            'on the model.'
-      )
-      parser.add_argument(
-        '--format', action='store', dest='format', default=None,
-        help='Format of serialized data when reading from stdin.',
-      )
+        )
+        parser.add_argument(
+            '--app', action='store', dest='app_label', default=None,
+            help='Only look for fixtures in the specified app.',
+        )
+        parser.add_argument(
+            '--ignorenonexistent', '-i', action='store_true',
+            dest='ignore', default=False, help='Ignores entries in the '
+                'serialized data for fields that do not currently exist '
+                'on the model.'
+        )
+        parser.add_argument(
+            '--format', action='store', dest='format', default=None,
+            help='Format of serialized data when reading from stdin.',
+        )
 
     def handle(self, *fixture_labels, **options):
-      self.ignore = options['ignore']
-      self.using = options['database']
-      self.app_label = options['app_label']
-      self.verbosity = options['verbosity']
-      #self.excluded_models, self.excluded_apps = parse_apps_and_model_labels(options['exclude'])
-      self.format = options['format']
+        self.ignore = options['ignore']
+        self.using = options['database']
+        self.app_label = options['app_label']
+        self.verbosity = options['verbosity']
+        #self.excluded_models, self.excluded_apps = parse_apps_and_model_labels(options['exclude'])
+        self.format = options['format']
 
-      '''
-      with transaction.atomic(using=self.using):
+        '''
+        with transaction.atomic(using=self.using):
           self.loaddata(fixture_labels)
 
-      # Close the DB connection -- unless we're still in a transaction. This
-      # is required as a workaround for an  edge case in MySQL: if the same
-      # connection is used to create tables, load data, and query, the query
-      # can return incorrect results. See Django #7572, MySQL #37735.
-      if transaction.get_autocommit(self.using):
+        # Close the DB connection -- unless we're still in a transaction. This
+        # is required as a workaround for an  edge case in MySQL: if the same
+        # connection is used to create tables, load data, and query, the query
+        # can return incorrect results. See Django #7572, MySQL #37735.
+        if transaction.get_autocommit(self.using):
           connections[self.using].close()
-      '''
-      self.loaddata(fixture_labels)
+        '''
+        self.loaddata(fixture_labels)
 
     def loaddata(self, fixture_labels):
         #connection = connections[self.using]
@@ -343,35 +344,35 @@ class Command(BaseCommand):
 
     @cached_property
     def fixture_dirs(self):
-      """
-      Return a list of fixture directories.
+        """
+        Return a list of fixture directories.
 
-      The list contains the 'fixtures' subdirectory of each installed
-      application, if it exists, the directories in FIXTURE_DIRS, and the
-      current directory.
-      """
-      dirs = []
-      fixture_dirs = settings.FIXTURE_DIRS
-      if len(fixture_dirs) != len(set(fixture_dirs)):
-        raise ImproperlyConfigured("settings.FIXTURE_DIRS contains "
-                                  "duplicates.")
-      for path in get_app_paths():
-        app_dir = os.path.join(os.path.dirname(path), 'fixtures')
-        if app_dir in fixture_dirs:
-          raise ImproperlyConfigured(
-            "'%s' is a default fixture directory for the '%s' app "
-            "and cannot be listed in settings.FIXTURE_DIRS." 
-            % (app_dir, app_label)
-          )
+        The list contains the 'fixtures' subdirectory of each installed
+        application, if it exists, the directories in FIXTURE_DIRS, and the
+        current directory.
+        """
+        dirs = []
+        fixture_dirs = settings.FIXTURE_DIRS
+        if len(fixture_dirs) != len(set(fixture_dirs)):
+            raise ImproperlyConfigured("settings.FIXTURE_DIRS contains "
+                                       "duplicates.")
+        for path in get_app_paths():
+            app_dir = os.path.join(os.path.dirname(path), 'fixtures')
+            if app_dir in fixture_dirs:
+                raise ImproperlyConfigured(
+                    "'%s' is a default fixture directory for the '%s' app "
+                    "and cannot be listed in settings.FIXTURE_DIRS." 
+                    % (app_dir, app_label)
+                )
 
-        if self.app_label and app_label != self.app_label:
-            continue
-        if os.path.isdir(app_dir):
-          dirs.append(app_dir)
-      dirs.extend(list(fixture_dirs))
-      dirs.append('')
-      dirs = [upath(os.path.abspath(os.path.realpath(d))) for d in dirs]
-      return dirs
+            if self.app_label and app_label != self.app_label:
+                continue
+            if os.path.isdir(app_dir):
+                dirs.append(app_dir)
+        dirs.extend(list(fixture_dirs))
+        dirs.append('')
+        dirs = [upath(os.path.abspath(os.path.realpath(d))) for d in dirs]
+        return dirs
 
     def parse_name(self, fixture_name):
         """

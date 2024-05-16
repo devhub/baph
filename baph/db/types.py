@@ -82,7 +82,7 @@ class Json(types.TypeDecorator):
         if value is None:
             return None
         #return json.dumps(value)
-        return unicode(json.dumps(value))
+        return json.dumps(value)
 
     def process_result_value(self, value, dialect):
         if not value:

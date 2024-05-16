@@ -6,6 +6,7 @@ from django.utils.encoding import force_unicode
 from django.utils.functional import cached_property
 from django.utils.translation import (string_concat, get_language, activate,
     deactivate_all)
+import six
 from sqlalchemy import inspect, Integer
 from sqlalchemy.orm import configure_mappers
 from sqlalchemy.ext.hybrid import HYBRID_PROPERTY, HYBRID_METHOD
@@ -192,8 +193,8 @@ class Options(object):
                 base_model_name = base._meta.base_model_name
                 base_model_name_plural = base._meta.base_model_name_plural
                 break
-        self.base_model_name = unicode(base_model_name)
-        self.base_model_name_plural = unicode(base_model_name_plural)
+        self.base_model_name = six.text_type(base_model_name)
+        self.base_model_name_plural = six.text_type(base_model_name_plural)
 
         del self.meta
 

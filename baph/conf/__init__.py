@@ -11,6 +11,7 @@ from chainmap import ChainMap
 from django.conf import global_settings
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.functional import LazyObject, empty
+import six
 
 from baph.core.preconfig.loader import PreconfigLoader
 
@@ -47,8 +48,7 @@ class SettingsMeta(type):
     attrs['__module__'] = 'django.conf'
     return super(SettingsMeta, cls).__new__(cls, name, bases, attrs)
 
-class LazySettings(LazyObject):
-  __metaclass__ = SettingsMeta
+class LazySettings(six.with_metaclass(SettingsMeta, LazyObject)):
   
   def _setup(self, name=None):
     settings_module = os.environ.get(ENVIRONMENT_VARIABLE)
@@ -164,6 +164,10 @@ class Settings:
       if setting.isupper():
         setting_value = getattr(module, setting)
         self.apply_setting(setting, setting_value, explicit)
+    if hasattr(module, 'apply'):
+      # call the apply func, passing the current settings dict
+      module.apply(self.__dict__)
+
     self.actions = self.actions.parents
     logger.info(msg.ljust(64) + 'SUCCESS')
 
@@ -201,7 +205,9 @@ class Settings:
         return None
       if not loader.is_package(package):
         raise ValueError('%r is not a package' % package)
-      self.package_paths[package] = loader.filename
+      fullpath = loader.get_filename()
+      path, filename = fullpath.rsplit('/', 1)
+      self.package_paths[package] = path
     return self.package_paths[package]
 
   @staticmethod
@@ -222,7 +228,7 @@ class Settings:
       content = fp.read()
     node = ast.parse(content, path)
     code = compile(node, path, 'exec')
-    exec code in module.__dict__
+    exec(code, module.__dict__)
 
   def load_module_settings(self, module_name):
     msg = '  %s' % module_name

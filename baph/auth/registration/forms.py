@@ -211,7 +211,7 @@ class ChangeEmailForm(forms.Form):
         """
         super(ChangeEmailForm, self).__init__(*args, **kwargs)
         if not isinstance(user, User):
-            raise TypeError, "user must be an instance of %s" % User._meta.model_name
+            raise TypeError("user must be an instance of %s" % User._meta.model_name)
         else: self.user = user
 
     def clean_email(self):
