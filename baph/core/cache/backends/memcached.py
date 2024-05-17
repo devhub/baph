@@ -67,10 +67,8 @@ class MemcacheServer(object):
         self.server = server
         self.settings = dict(self.get_stats('settings'))
         if self.settings.get('lru_crawler') == 'yes':
-            print('LRU CRAWLER')
             self._get_keys = self.get_keys_from_metadump
         else:
-            print('CACHEDUMP')
             self._get_keys = self.get_keys_from_cachedump
 
     @property
