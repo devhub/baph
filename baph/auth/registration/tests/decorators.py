@@ -27,7 +27,7 @@ class DecoratorTests(TestCase):
         # Test if the redirected url contains 'https'. Couldn't use
         # ``assertRedirects`` here because the redirected to page is
         # non-existant.
-        self.assertTrue('https' in str(response))
+        self.assertTrue('https' in response['location'])
 
         # Set back to the old settings
         auth_settings.BAPH_USE_HTTPS = False

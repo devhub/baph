@@ -11,6 +11,7 @@ import random
 from django import forms
 from django.contrib.auth import authenticate
 from django.utils.translation import ugettext_lazy as _
+import six
 from sqlalchemy.orm import joinedload
 
 from baph.auth.models import User, Organization
@@ -188,7 +189,7 @@ class SignupFormOnlyEmail(SignupForm):
         """ Generate a random username before falling back to parent signup form """
         session = orm.sessionmaker()
         while True:
-            username = unicode(sha_constructor(str(random.random())).hexdigest()[:5])
+            username = six.text_type(sha_constructor(str(random.random()).encode('utf8')).hexdigest()[:5])
             user = session.query(User).filter(User.username==username).first()
             if not user:
                 break

@@ -332,6 +332,7 @@ class RegistrationViewsTests(TestCase):
 
     def test_change_email_view(self):
         """ A ``GET`` to the change e-mail view. """
+        auth_settings.BAPH_AUTH_WITHOUT_USERNAMES = False
         response = self.client.get(reverse('baph_email_change'))
 
         # Anonymous user should not be able to view the profile page
@@ -349,6 +350,7 @@ class RegistrationViewsTests(TestCase):
 
         self.assertTemplateUsed(response,
                                 'registration/email_form.html')
+        auth_settings.BAPH_AUTH_WITHOUT_USERNAMES = True
 
     def test_change_valid_email_view(self):
         """ A ``POST`` with a valid e-mail address """
@@ -369,8 +371,10 @@ class RegistrationViewsTests(TestCase):
         self.failUnless(response.context['form'],
                         PasswordChangeForm)
 
+    #@override_settings(BAPH_AUTH_WITHOUT_USERNAMES=False)
     def test_change_password_view_success(self):
         """ A valid ``POST`` to the password change view """
+        auth_settings.BAPH_AUTH_WITHOUT_USERNAMES = False
         self.client.login(identification='john', password='blowfish')
 
         new_password = 'suckfish'
