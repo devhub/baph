@@ -8,6 +8,14 @@ from six.moves import html_parser
 
 
 try:
+    from collections import MutableMapping
+except ImportError:
+    import collections
+    import collections.abc
+    collections.MutableMapping = collections.abc.MutableMapping
+    collections.Mapping = collections.abc.Mapping
+
+try:
     HTMLParseError = html_parser.HTMLParseError
 except AttributeError:
     # create a dummy class for Python 3.5+ where it's been removed
