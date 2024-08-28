@@ -81,6 +81,21 @@ class Field(object):
             self.creation_counter = Field.creation_counter
             Field.creation_counter += 1
 
+    def __eq__(self, other):
+        # Needed for @total_ordering
+        if isinstance(other, Field):
+            return self.creation_counter == other.creation_counter
+        return NotImplemented
+
+    def __lt__(self, other):
+        # This is needed because bisect does not take a comparison function.
+        if isinstance(other, Field):
+            return self.creation_counter < other.creation_counter
+        return NotImplemented
+
+    def __hash__(self):
+        return hash(self.creation_counter)
+
     @property
     def unique(self):
         return self._unique or self.primary_key
@@ -154,7 +169,7 @@ class Field(object):
         if form_class is None:
           form_class = fields.NullCharField
         field = form_class(**defaults)
-        field.validators = map(self.modify_validator, field.validators)
+        field.validators = list(map(self.modify_validator, field.validators))
         return field
 
     def clean(self, value):

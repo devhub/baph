@@ -1,7 +1,10 @@
 import threading
 from collections import Counter, OrderedDict, defaultdict
 
-from functools32 import lru_cache
+try:
+    from functools32 import lru_cache
+except ImportError:
+    from functools import lru_cache
 
 from .config import AppConfig
 

@@ -296,7 +296,11 @@ class ModelBase(type):
             return super_new(cls, name, bases, attrs)
 
         module = attrs.pop('__module__')
-        new_class = super_new(cls, name, bases, {'__module__': module})
+        new_attrs = {'__module__': module}
+        classcell = attrs.pop('__classcell__', None)
+        if classcell is not None:
+            new_attrs['__classcell__'] = classcell
+        new_class = super_new(cls, name, bases, new_attrs)
 
         # check the class registry to see if we created this already
         if name in new_class._decl_class_registry:
@@ -350,29 +354,23 @@ class ModelBase(type):
                     remove_class(b, name)
             return model
 
-        if attrs.get('__tablename__') and not attrs.get('__abstract__', None):
-            # build the table_args for the current model
-            # print('[%s]' % name)
-            base_args = getattr(settings, 'BAPH_DEFAULT_TABLE_ARGS', ())
-            _, kwargs = normalize_args(base_args)
-            for p in reversed(parents):
-                if not hasattr(p, '__table_args__'):
-                    continue
-                _, _kwargs = normalize_args(p.__table_args__)
-                kwargs.update(_kwargs)
-            table_args = attrs.pop('__table_args__', None)
-            # print('  old:', table_args)
-            args, _kwargs = normalize_args(table_args)
-            kwargs.update(_kwargs)
-            attrs['__table_args__'] = args + (kwargs,)
-            # print('  new:', attrs['__table_args__'])
-
         # Add all attributes to the class.
         for obj_name, obj in attrs.items():
             new_class.add_to_class(obj_name, obj)
 
         if attrs.get('__abstract__', None):
             return new_class
+
+        table = getattr(new_class, '__table__', None)
+        tablename = getattr(table, 'name', None)
+        if tablename != getattr(new_class, '__tablename__', None):
+            base_table_args = getattr(settings, 'BAPH_DEFAULT_TABLE_ARGS', ())
+            args, kwargs = normalize_args(base_table_args)
+            table_args = getattr(new_class, '__table_args__', None)
+            _args, _kwargs = normalize_args(table_args)
+            args = args + _args
+            kwargs.update(_kwargs)
+            new_class.__table_args__ = args + (kwargs,)
 
         signals.class_prepared.send(sender=new_class)
         register_models(new_class._meta.app_label, new_class)

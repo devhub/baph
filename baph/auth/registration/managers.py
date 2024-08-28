@@ -1,6 +1,7 @@
 from datetime import datetime
 import re
 
+import six
 from sqlalchemy.orm import joinedload
 
 from baph.auth.models import User, Organization
@@ -19,7 +20,7 @@ class SignupManager(object):
     @staticmethod
     def create_user(username, email, password, active=False, send_email=True,
                      **kwargs):
-        uname = username.encode('utf-8') if isinstance(username, unicode) else username
+        uname = username.encode('utf-8') if isinstance(username, six.text_type) else username
         salt, activation_key = generate_sha1(uname)
 
         #org_key = Organization._meta.verbose_name

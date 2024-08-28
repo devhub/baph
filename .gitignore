@@ -1,4 +1,5 @@
 *.egg-info
+*.bak
 *.pyc
 .*.sw?
 build

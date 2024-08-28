@@ -2,6 +2,7 @@ from django import forms
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.datastructures import SortedDict
 from django.utils.translation import ugettext_lazy as _
+import six
 from sqlalchemy import *
 from sqlalchemy import inspect
 from sqlalchemy.ext.associationproxy import AssociationProxy
@@ -267,9 +268,8 @@ class BaseSQLAModelForm(forms.forms.BaseForm):
         return save_instance(self, self.instance, self._meta.fields,
                              fail_message, commit, self._meta.exclude)
         
-class SQLAModelForm(BaseSQLAModelForm):
-    __metaclass__ = SQLAModelFormMetaclass
 
+class SQLAModelForm(six.with_metaclass(SQLAModelFormMetaclass, BaseSQLAModelForm)):
     def clean_unique_field(self, key, **kwargs):
         orm = ORM.get()
         value = self.cleaned_data[key]

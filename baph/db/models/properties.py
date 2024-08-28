@@ -1,6 +1,7 @@
 import itertools
 
 from django.template.defaultfilters import slugify
+import six
 
 from sqlalchemy import *
 from sqlalchemy import inspect, func
@@ -19,7 +20,7 @@ class AutoSlugField(ColumnProperty):
     self.populate_from = kwargs.pop('populate_from', None)
     self.index_sep = kwargs.pop('sep', '-')
     self.unique_with = kwargs.pop('unique_with', ())
-    if isinstance(self.unique_with, basestring):
+    if isinstance(self.unique_with, six.string_types):
       self.unique_with = (self.unique_with,)
 
     self.slugify = kwargs.pop('slugify', slugify)

@@ -1,4 +1,5 @@
-from django.utils.encoding import smart_text, is_protected_type
+from django.conf import settings
+from django.utils.encoding import smart_unicode, is_protected_type
 from sqlalchemy.orm.util import identity_key
 
 from baph.core.serializers import base
@@ -55,7 +56,7 @@ def Deserializer(object_list, **options):
 
         # Handle each field
         for (field_name, field_value) in d.iteritems():
-            if isinstance(field_value, str):
+            if isinstance(field_value, bytes):
                 field_value = smart_unicode(field_value, 
                     options.get("encoding", settings.DEFAULT_CHARSET), 
                     strings_only=True)

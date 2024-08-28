@@ -5,6 +5,7 @@ from django import forms
 from django.core import validators
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.translation import ugettext_lazy as _
+import six
 
 from baph.utils.collections import duck_type_collection
 
@@ -108,7 +109,7 @@ class JsonField(forms.CharField):
     def _as_string(self, value):
         if isinstance(value, basestring):
             return value
-        return unicode(value)
+        return six.text_type(value)
 
     def _get_content_length(self, value):
         """
