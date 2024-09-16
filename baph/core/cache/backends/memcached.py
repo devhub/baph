@@ -167,14 +167,6 @@ class BaphMemcachedCache(MemcachedCache):
         self.alias = params.get('ALIAS', None)
         self.servers = [MemcacheServer(s) for s in self._cache.servers]
 
-    def get(self, *args, **kwargs):
-        print('GET:', args, kwargs)
-        return super(BaphMemcachedCache, self).get(*args, **kwargs)
-
-    def set(self, *args, **kwargs):
-        print('SET:', args, kwargs)
-        return super(BaphMemcachedCache, self).set(*args, **kwargs)
-
     def get_all_keys(self):
         keys = set()
         for server in self.servers:
