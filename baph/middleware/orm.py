@@ -18,7 +18,7 @@ class SQLAlchemyMiddleware(object):
         session = ORM.get().sessionmaker()
         if response.status_code >= 400:
             session.expunge_all()
-        session.flush()
+        session.commit()
         session.close()
         return response
 
