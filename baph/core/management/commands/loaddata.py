@@ -100,12 +100,12 @@ class Command(BaseCommand):
       )
 
     def handle(self, *fixture_labels, **options):
-      self.ignore = options['ignore']
+      self.ignore = options.get('ignore')
       self.using = options['database']
-      self.app_label = options['app_label']
+      self.app_label = options.get('app_label')
       self.verbosity = options['verbosity']
       #self.excluded_models, self.excluded_apps = parse_apps_and_model_labels(options['exclude'])
-      self.format = options['format']
+      self.format = options.get('format')
 
       '''
       with transaction.atomic(using=self.using):

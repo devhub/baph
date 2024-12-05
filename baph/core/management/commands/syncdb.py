@@ -1,51 +1,43 @@
 # -*- coding: utf-8 -*-
-from optparse import make_option
-import traceback
+from copy import deepcopy
 
 from django.conf import settings
 from django.core.management import call_command
 from django.core.management.color import no_style
-from django.utils.datastructures import SortedDict
 from django.utils.importlib import import_module
-from sqlalchemy import MetaData, create_engine
-from sqlalchemy.schema import CreateSchema, DropSchema, CreateTable
+from sqlalchemy import create_engine, inspect
+from sqlalchemy.schema import CreateSchema, CreateTable
 
-from baph.core.management.base import NoArgsCommand
+from baph.core.management.new_base import BaseCommand
 from baph.core.management.sql import emit_post_sync_signal
 from baph.db import DEFAULT_DB_ALIAS
-from baph.db.models import signals, get_apps, get_models
+from baph.db.models import get_apps, get_models
 from baph.db.orm import ORM, Base
+from baph.db.utils import get_tablename
 
 
-def get_tablename(obj):
-    if hasattr(obj, '__table__'):
-        " this is a class "
-        table = obj.__table__
-        schema = table.schema or obj.metadata.bind.url.database
-        name = table.name
-    elif hasattr(obj, 'schema'):
-        " this is a table "
-        schema = obj.schema or obj.metadata.bind.url.database
-        name = obj.name
-    else:
-        return None
-    return '%s.%s' % (schema, name)
+class Command(BaseCommand):
+    help = "Create the database tables for all apps in INSTALLED_APPS whose " \
+           "tables haven't already been created."
 
-
-class Command(NoArgsCommand):
-    option_list = NoArgsCommand.option_list + (
-        make_option('--noinput', action='store_false', dest='interactive', default=True,
-            help='Tells Django to NOT prompt the user for input of any kind.'),
-        make_option('--no-initial-data', action='store_false', dest='load_initial_data', default=True,
-            help='Tells Django not to load any initial data after database synchronization.'),
-        make_option('--database', action='store', dest='database',
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--noinput', action='store_false', dest='interactive',
+            default=True,
+            help='Tells Django to NOT prompt the user for input of any kind.'
+        )
+        parser.add_argument(
+            '--no-initial-data', action='store_false', dest='load_initial_data',
+            default=True,
+            help='Tells Django not to load any initial data after database synchronization.'
+        )
+        parser.add_argument(
+            '--database', action='store', dest='database',
             default=DEFAULT_DB_ALIAS, help='Nominates a database to synchronize. '
-                'Defaults to the "default" database.'),
-    )
-    help = "Create the database tables for all apps in INSTALLED_APPS whose tables haven't already been created."
+                'Defaults to the "default" database.'
+        )
 
-    def handle_noargs(self, **options):
-
+    def handle(self, **options):
         verbosity = int(options.get('verbosity'))
         interactive = options.get('interactive')
         show_traceback = options.get('traceback')
@@ -56,6 +48,11 @@ class Command(NoArgsCommand):
         # Import the 'management' module within each installed app, to register
         # dispatcher events.
         for app_name in settings.INSTALLED_APPS:
+            try:
+                import_module('.models', app_name)
+            except ImportError as exc:
+                pass
+
             try:
                 import_module('.management', app_name)
             except ImportError as exc:
@@ -74,39 +71,33 @@ class Command(NoArgsCommand):
 
         db = options.get('database')
         orm = ORM.get(db)
-        engine = orm.engine
-        default_schema = engine.url.database
 
-        # the default db may not exist yet, so we remove it before connecting
-        engine.url.database = None
-        frags = str(engine.url).split('?')
-        tmp_url = frags[0]
-        if len(frags) == 2:
-            if not tmp_url.endswith('/'):
-                # query strings will break this if it doesn't end with a /
-                tmp_url += '/'
-            tmp_url += '?%s' % frags[1]
-        engine.url.database = default_schema
+        default_schema = orm.engine.url.database
+        app_schemas = set(orm.Base.metadata._schemas)
+        app_schemas.add(default_schema)
 
-        tmp_engine = create_engine(tmp_url)
-        tmp_conn = tmp_engine.connect()
-        existing_schemas = set([s[0] for s in tmp_conn.execute('show databases')])
+        url = deepcopy(orm.engine.url)
+        url.database = None
+        engine = create_engine(url)
+        inspector = inspect(engine)
+
+        # get a list of existing schemas
+        existing_schemas = set(inspector.get_schema_names())
+        existing_schemas = app_schemas.intersection(existing_schemas)
         if not default_schema in existing_schemas:
-            tmp_engine.execute(CreateSchema(default_schema))
+            engine.execute(CreateSchema(default_schema))
             existing_schemas.add(default_schema)
-        
-        orm = ORM.get(db)
 
-        # now reconnect with the default_db provided
+        required_schemas = app_schemas - existing_schemas
+
+        engine = orm.engine
         conn = engine.connect()
         Base.metadata.bind = engine
         
         if verbosity >= 3:
             self.stdout.write("Getting existing schemas...\n")
-            for schema in existing_schemas:
+            for schema in existing_schemas or [None]:
                 self.stdout.write("\t%s\n" % schema)
-            else:
-                self.stdout.write("\tNone\n")
 
         existing_tables = []
         if verbosity >= 1:
@@ -127,83 +118,61 @@ class Command(NoArgsCommand):
                 if verbosity >= 3:
                     self.stdout.write("\t%s\n" % cls)
 
-        all_tables = []
+        required_tables = []
         if verbosity >= 1:
             self.stdout.write("Getting required tables...\n")
         for table in Base.metadata.sorted_tables:
             tablename = get_tablename(table)
-            all_tables.append(tablename)
             if verbosity >= 3:
                 self.stdout.write("\t%s\n" % tablename)
+            if tablename not in existing_tables:
+                required_tables.append(table)
 
-        all_models = []
+        required_models = []
         if verbosity >= 1:
             self.stdout.write("Getting required models...\n")
         for app in get_apps():
+            app_name = app.__name__.rsplit('.',1)[0]
             for model in get_models(app, include_auto_created=True):
-                app_name = app.__name__.rsplit('.',1)[0]
-                all_models.append( (app_name, model) )
+                tablename = get_tablename(model)
                 if verbosity >= 3:
-                    self.stdout.write("\t%s.%s\n" % (app_name,model))
-
-        schema_manifest = set()
-        table_manifest = set()
-        if verbosity >= 1:
-            self.stdout.write('Building manifest...\n')
-        for app_name, model in all_models:
-            tablename = get_tablename(model)
-            if tablename in existing_tables:
-                continue
-            table_manifest.add( (app_name, model) )
-            schema = tablename.rsplit('.',1)[0]
-            if schema not in existing_schemas:
-                schema_manifest.add(schema)
-
-        table_manifest = sorted(table_manifest, key=lambda x: 
-            all_tables.index(get_tablename(x[1])))
+                    self.stdout.write("\t%s.%s\n" % (app_name, model.__name__))
+                if tablename not in existing_tables:
+                    required_models.append( (app_name, model) )
 
         if verbosity >= 3:
-            print 'Schema Manifest:\n'
-            for schema in schema_manifest:
-                print '\t%s\n' % schema
-            print 'Model/Table Manifest\n'
-            for app_name, model in table_manifest:
-                print '\t%s.%s (%s)\n' % (app_name, model._meta.object_name, 
-                    get_tablename(model)) 
+            self.stdout.write('Schema Manifest:\n')
+            for schema in required_schemas:
+                self.stdout.write('\t%s\n' % schema)
+            self.stdout.write('Model/Table Manifest\n')
+            for app_name, model in required_models:
+                self.stdout.write('\t%s.%s (%s)\n' % (app_name, model._meta.object_name, 
+                    get_tablename(model)))
 
         # create any missing schemas
         if verbosity >= 1:
             self.stdout.write("Creating schemas ...\n")
-        for schema in schema_manifest:
+        for schema in required_schemas:
             if verbosity >= 3:
                 self.stdout.write("\t%s\n" % schema)
             engine.execute(CreateSchema(schema))
             existing_schemas.add(schema)            
 
         # create any missing tables
-        created_models = set()
-        to_create = []
         if verbosity >= 1:
             self.stdout.write("Creating tables ...\n")
-        for app_name, model in table_manifest:
+        for app_name, model in required_models:
             if verbosity >= 3:
                 self.stdout.write("\tCreating table for model %s.%s\n" 
                     % (app_name, model._meta.object_name))
-            tablename = get_tablename(model)
-            if tablename not in existing_tables:
-                table = model.__table__
-                to_create.append(table)
-                existing_tables.append(tablename)
-            existing_models.append(model)
-            created_models.add(model)
-        orm.Base.metadata.create_all(bind=engine, tables=to_create)
+
+        orm.Base.metadata.create_all(bind=engine, tables=required_tables)
 
         # Send the post_syncdb signal
+        created_models = [x[1] for x in required_models]
         emit_post_sync_signal(created_models, verbosity, interactive, db)
 
         # Load initial_data fixtures (unless that has been disabled)
         if load_initial_data:
             call_command('loaddata', 'initial_data', verbosity=verbosity,
                          database=db, skip_validation=True)
-
-
