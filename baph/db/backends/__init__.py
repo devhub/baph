@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.pool import NullPool
 
 from baph.db import DEFAULT_DB_ALIAS
+from baph.middleware.request import get_request
 
 
 def django_backend_to_sqla_drivername(backend):
@@ -85,8 +86,21 @@ def find_circular_dependencies(metadata):
 
     return rsp
 
+
 def scopefunc():
-    return 'single'
+    if (getattr(settings, 'IS_TEST', False) &
+        getattr(settings, 'USE_TRANSACTIONS', False)):
+        # force sessionmaker to always return the same session regardless
+        # of thread or active request. This means the session will always
+        # be aware of flushes
+        return 'single'
+    else:
+        # scope the session to the active request. without an active request,
+        # the session will be scoped to the thread (default scope), so one
+        # thread will not see pending db operations in another thread until
+        # they are committed (flush wont work)
+        return get_request()
+
 
 class DatabaseWrapper(object):
     def __init__(self, settings_dict, alias=DEFAULT_DB_ALIAS):
@@ -98,61 +112,17 @@ class DatabaseWrapper(object):
         self.alias = alias
         self.engine = load_engine(settings_dict)
         self.Base = get_declarative_base(bind=self.engine)
-        self.session_factory = sessionmaker(bind=self.engine)
+        self.session_factory = sessionmaker(bind=self.engine, autoflush=False)
 
         if getattr(settings, 'USE_TRANSACTIONS', False):
             kw = {'scopefunc': scopefunc}
         else:
             kw = {}
-        
+
         self.sessionmaker = scoped_session(sessionmaker(
             bind=self.engine, autoflush=False), **kw)
         # TODO: uncomment line below once transactional tests are ready
         #    bind=self.engine, autoflush=False), scopefunc=scopefunc)
-    '''
-        self._connection = None
-        #self.session_factory = sessionmaker(bind=self.engine)
-        #self.sessionmaker = scoped_session(sessionmaker(
-        #    bind=self.engine, autoflush=False))
-        self._sessionmaker = None
-        self._session_factory = None
-
-    @property
-    def connection(self):
-        print 'orm.connection called'
-        if self._connection is None:
-            print '  init'
-            #if connections[self.alias].connection is None:
-            #    connections[self.alias].connect()
-            self._connection = connections[self.alias].connection
-            #self._connection = self.engine.connect()
-        print 'returning ', self._connection
-        return self._connection
-
-    @property
-    def sessionmaker(self):
-        connection = connections[self.alias]
-        return connection.sessionmaker
-        print 'orm.sessionmaker called'
-        print connection
-        #assert False
-        if self._sessionmaker is None:
-            print '  init'
-            self._sessionmaker = scoped_session(sessionmaker(
-                bind=self.connection, autoflush=False))
-        print 'returning ', self._sessionmaker
-        print '  bind:', self._sessionmaker.bind
-        return self._sessionmaker
-
-    @property
-    def session_factory(self):
-        connection = connections[self.alias]
-        return connection.session_factory
-        if self._session_factory is None:
-            self._session_factory = sessionmaker(
-                bind=self.connection)
-        return self._session_factory
-    '''
 
     def __eq__(self, other):
         return self.alias == other.alias

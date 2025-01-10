@@ -81,7 +81,7 @@ class Command(BaseCommand):
             'args', metavar='fixture', nargs='+', help='Fixture labels.')
         parser.add_argument(
             '--database', action='store', dest='database',
-            default=DEFAULT_DB_ALIAS, 
+            default=DEFAULT_DB_ALIAS,
             help='Nominates a specific database to load fixtures into. '
              'Defaults to the "default" database.'
         )
@@ -101,12 +101,12 @@ class Command(BaseCommand):
         )
 
     def handle(self, *fixture_labels, **options):
-        self.ignore = options['ignore']
+        self.ignore = options.get('ignore')
         self.using = options['database']
-        self.app_label = options['app_label']
+        self.app_label = options.get('app_label')
         self.verbosity = options['verbosity']
         #self.excluded_models, self.excluded_apps = parse_apps_and_model_labels(options['exclude'])
-        self.format = options['format']
+        self.format = options.get('format')
 
         '''
         with transaction.atomic(using=self.using):
@@ -361,7 +361,7 @@ class Command(BaseCommand):
             if app_dir in fixture_dirs:
                 raise ImproperlyConfigured(
                     "'%s' is a default fixture directory for the '%s' app "
-                    "and cannot be listed in settings.FIXTURE_DIRS." 
+                    "and cannot be listed in settings.FIXTURE_DIRS."
                     % (app_dir, app_label)
                 )
 

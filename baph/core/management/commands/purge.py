@@ -24,24 +24,11 @@ from baph.core.management.new_base import BaseCommand
 from baph.db import DEFAULT_DB_ALIAS
 from baph.db.models import get_apps, get_models
 from baph.db.orm import ORM
+from baph.db.utils import get_tablename
 
 
 post_syncdb = Signal(providing_args=["class", "app", "created_models", 
     "verbosity", "interactive", "db"])
-
-def get_tablename(obj):
-    if hasattr(obj, '__table__'):
-        " this is a class "
-        table = obj.__table__
-        schema = table.schema or obj.metadata.bind.url.database
-        name = table.name
-    elif hasattr(obj, 'schema'):
-        " this is a table "
-        schema = obj.schema or obj.metadata.bind.url.database
-        name = obj.name
-    else:
-        return None
-    return '%s.%s' % (schema, name)
 
 
 class Command(BaseCommand):

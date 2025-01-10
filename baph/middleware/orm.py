@@ -10,25 +10,19 @@ from baph.db.orm import ORM
 
 
 class SQLAlchemyMiddleware(object):
-    '''Django middleware which adds an ORM instance to the request object.
-    If the request throws an exception, the current SQL transaction is rolled
-    back.
+    ''' Django middleware which closes the request-bound session
+        If the request throws an exception, the current SQL transaction
+        is rolled back.
     '''
-
-    def process_request(self, request):
-        request.orm = ORM.get()
-
     def process_response(self, request, response):
-        if hasattr(request, 'orm'):
-            session = request.orm.sessionmaker()
-            if response.status_code >= 400:
-                session.expunge_all()
-
-            session.flush()
+        session = ORM.get().sessionmaker()
+        if response.status_code >= 400:
+            session.expunge_all()
+        session.commit()
+        session.close()
         return response
 
     def process_exception(self, request, exception):
-        if hasattr(request, 'orm'):
-            session = request.orm.sessionmaker()
-            session.rollback()
+        session = ORM.get().sessionmaker()
+        session.rollback()
         return None
