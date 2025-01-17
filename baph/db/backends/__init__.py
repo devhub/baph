@@ -112,7 +112,7 @@ class DatabaseWrapper(object):
         self.alias = alias
         self.engine = load_engine(settings_dict)
         self.Base = get_declarative_base(bind=self.engine)
-        self.session_factory = sessionmaker(bind=self.engine, autoflush=False)
+        self.session_factory = sessionmaker(bind=self.engine)
 
         if getattr(settings, 'USE_TRANSACTIONS', False):
             kw = {'scopefunc': scopefunc}
