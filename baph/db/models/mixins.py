@@ -749,7 +749,7 @@ class ModelPermissionMixin(object):
             if new_key in pairs:
                 value = pairs[new_key]
             else:
-                primary_key, value = pairs.items()[0]
+                primary_key, value = list(pairs.items())[0]
             keys.append( (limiter, primary_key, value, col_key, cls_name) )
 
         if not include_parents:

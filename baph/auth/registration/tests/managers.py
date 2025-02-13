@@ -161,6 +161,7 @@ class SignupManagerTests(TestCase):
         expired_user = SignupManager.create_user(**self.user_info)
         expired_user.date_joined -= datetime.timedelta(days=auth_settings.BAPH_ACTIVATION_DAYS + 1)
         expired_user.save()
+        self.session.expunge_all()
 
         deleted_users = SignupManager.delete_expired_users()
 

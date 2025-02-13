@@ -17,7 +17,7 @@ from itertools import chain
 
 from django import forms
 from django.conf import settings
-from django.utils.encoding import force_unicode
+from django.utils.encoding import force_text
 from django.utils.html import escape, conditional_escape
 from django.utils.importlib import import_module
 from django.utils.translation import ugettext_lazy as _
@@ -112,16 +112,16 @@ class StateProvinceSelect(forms.Select):
         '''
 
         def render_option(country, value, label):
-            value = force_unicode(value)
+            value = force_text(value)
             if value in selected_choices:
                 selected_html = u' selected="selected"'
             else:
                 selected_html = u''
             return u'<option class="country-%s" value="%s"%s>%s</option>' % (
                 country.lower(), escape(value), selected_html,
-                conditional_escape(force_unicode(label)))
+                conditional_escape(force_text(label)))
         # Normalize to strings.
-        selected_choices = set([force_unicode(v) for v in selected_choices])
+        selected_choices = set([force_text(v) for v in selected_choices])
         output = []
         for country, options in chain(self.choices, choices):
             for value, label in options:

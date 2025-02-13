@@ -45,7 +45,7 @@ def django_config_to_sqla_config(config):
         'database': config.get('NAME', None),
         'query': config.get('OPTIONS', None),
         }
-    for k, v in params.items():
+    for k, v in list(params.items()):
         if not v:
             del params[k]
     return params
@@ -88,7 +88,7 @@ def find_circular_dependencies(metadata):
 
 
 def scopefunc():
-    if (getattr(settings, 'IS_TEST', False) & 
+    if (getattr(settings, 'IS_TEST', False) &
         getattr(settings, 'USE_TRANSACTIONS', False)):
         # force sessionmaker to always return the same session regardless
         # of thread or active request. This means the session will always
@@ -112,8 +112,17 @@ class DatabaseWrapper(object):
         self.alias = alias
         self.engine = load_engine(settings_dict)
         self.Base = get_declarative_base(bind=self.engine)
-        self.session_factory = sessionmaker(bind=self.engine, autoflush=False)
-        self.sessionmaker = scoped_session(self.session_factory, scopefunc=scopefunc)
+        self.session_factory = sessionmaker(bind=self.engine)
+
+        if getattr(settings, 'USE_TRANSACTIONS', False):
+            kw = {'scopefunc': scopefunc}
+        else:
+            kw = {}
+
+        self.sessionmaker = scoped_session(sessionmaker(
+            bind=self.engine, autoflush=False), **kw)
+        # TODO: uncomment line below once transactional tests are ready
+        #    bind=self.engine, autoflush=False), scopefunc=scopefunc)
 
     def __eq__(self, other):
         return self.alias == other.alias

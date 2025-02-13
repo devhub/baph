@@ -1,5 +1,5 @@
 from django.conf import settings
-from oauth import oauth
+import oauth2 as oauth
 from sqlalchemy import (Column, DateTime, ForeignKey, Integer, String,
                         UniqueConstraint)
 from sqlalchemy.orm import relationship
@@ -30,7 +30,7 @@ class OAuthConsumer(Base):
         '''Creates an oauth.OAuthConsumer object from the DB data.
         :rtype: oauth.OAuthConsumer
         '''
-        return oauth.OAuthConsumer(self.key, self.secret)
+        return oauth.Consumer(self.key, self.secret)
 
 
 class OAuthNonce(Base):

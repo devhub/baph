@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from __future__ import unicode_literals
 
 import logging
@@ -11,13 +12,13 @@ from django.core.exceptions import ImproperlyConfigured, MiddlewareNotUsed
 from django.core.urlresolvers import get_urlconf, set_urlconf, RegexURLResolver
 from django.db import connections, transaction
 from django.utils import six
-from baph.utils.module_loading import import_string
 
+from baph.utils.module_loading import import_string
 from .exception import (
     convert_exception_to_response, get_exception_response,
     handle_uncaught_exception,
 )
-from utils import get_resolver
+from .utils import get_resolver
 
 logger = logging.getLogger('django.request')
 

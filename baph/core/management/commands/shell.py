@@ -1,26 +1,32 @@
 import os
 from optparse import make_option
 
-from baph.core.management.base import NoArgsCommand
+#from baph.core.management.base import NoArgsCommand
+from baph.core.management.new_base import BaseCommand
 
 
-class Command(NoArgsCommand):
-    shells = ['ipython', 'bpython']
+SHELLS = ['ipython', 'bpython']
 
-    option_list = NoArgsCommand.option_list + (
-        make_option('--plain', action='store_true', dest='plain',
-            help='Tells Django to use plain Python, not IPython or bpython.'),
-        make_option('--no-startup', action='store_true', dest='no_startup',
-            help='When using plain Python, ignore the PYTHONSTARTUP '
-                'environment variable and ~/.pythonrc.py script.'),
-        make_option('-i', '--interface', action='store', type='choice',
-            choices=shells, dest='interface', help='Specify an interactive '
-                'interpreter interface. Available options: "ipython" and '
-                '"bpython"'),
-    )
+class Command(BaseCommand):
     help = "Runs a Python interactive interpreter. Tries to use IPython or " \
-        "bpython, if one of them is available."
-    requires_model_validation = True
+           "bpython, if one of them is available."
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--plain', action='store_true', dest='plain',
+            help='Tells Django to use plain Python, not IPython or bpython.'
+        )
+        parser.add_argument(
+            '--no-startup', action='store_true', dest='no_startup',
+            help='When using plain Python, ignore the PYTHONSTARTUP '
+                 'environment variable and ~/.pythonrc.py script.'
+        )
+        parser.add_argument(
+            '-i', '--interface', action='store', choices=SHELLS,
+            dest='interface', help='Specify an interactive '
+                'interpreter interface. Available options: "ipython" and '
+                '"bpython"'
+        )
 
     def ipython(self):
         try:
@@ -45,7 +51,7 @@ class Command(NoArgsCommand):
         bpython.embed()
 
     def run_shell(self, shell=None):
-        available_shells = [shell] if shell else self.shells
+        available_shells = [shell] if shell else SHELLS
 
         for shell in available_shells:
             try:
@@ -54,12 +60,7 @@ class Command(NoArgsCommand):
                 pass
         raise ImportError
 
-    def handle_noargs(self, **options):
-        # XXX: (Temporary) workaround for ticket #1796: force early loading of
-        # all models from installed apps.
-        #from baph.db.models.loading import get_models
-        #get_models()
-
+    def handle(self, **options):
         use_plain = options.get('plain', False)
         no_startup = options.get('no_startup', False)
         interface = options.get('interface', None)

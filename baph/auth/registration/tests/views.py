@@ -38,7 +38,7 @@ class RegistrationViewsTests(TestCase):
         #                     reverse('baph_profile_detail', kwargs={'username': user.username}))
 
         user = session.query(User).filter_by(email='alice@example.com').first()
-        session.close()
+        #session.close()
         self.failUnless(user.is_active)
 
     def test_activation_expired_retry(self):
@@ -61,7 +61,7 @@ class RegistrationViewsTests(TestCase):
         self.assertContains(response, "Request a new activation link")
 
         user = session.query(User).filter_by(email='alice@example.com').first()
-        session.close()
+        #session.close()
         self.failUnless(not user.is_active)
         auth_settings.BAPH_ACTIVATION_RETRY = False
 
@@ -86,12 +86,12 @@ class RegistrationViewsTests(TestCase):
         # We must reload the object from database to get the new key
         user = session.query(User).filter_by(email='alice@example.com').first()
         new_key = user.signup.activation_key
-        session.close()
+        #session.close()
         self.assertContains(response, "Account re-activation succeded")
 
         self.failIfEqual(old_key, new_key)
         user = session.query(User).filter_by(email='alice@example.com').first()
-        session.close()
+        #session.close()
         self.failUnless(not user.is_active)
 
         self.failUnlessEqual(len(mail.outbox), 2)
@@ -103,7 +103,7 @@ class RegistrationViewsTests(TestCase):
 
         session = orm.sessionmaker()
         user = session.query(User).filter_by(email='alice@example.com').first()
-        session.close()
+        #session.close()
         self.failUnless(user.is_active)
         auth_settings.BAPH_ACTIVATION_RETRY = False
 
@@ -332,6 +332,7 @@ class RegistrationViewsTests(TestCase):
 
     def test_change_email_view(self):
         """ A ``GET`` to the change e-mail view. """
+        auth_settings.BAPH_AUTH_WITHOUT_USERNAMES = False
         response = self.client.get(reverse('baph_email_change'))
 
         # Anonymous user should not be able to view the profile page
@@ -349,6 +350,7 @@ class RegistrationViewsTests(TestCase):
 
         self.assertTemplateUsed(response,
                                 'registration/email_form.html')
+        auth_settings.BAPH_AUTH_WITHOUT_USERNAMES = True
 
     def test_change_valid_email_view(self):
         """ A ``POST`` with a valid e-mail address """
@@ -369,8 +371,10 @@ class RegistrationViewsTests(TestCase):
         self.failUnless(response.context['form'],
                         PasswordChangeForm)
 
+    #@override_settings(BAPH_AUTH_WITHOUT_USERNAMES=False)
     def test_change_password_view_success(self):
         """ A valid ``POST`` to the password change view """
+        auth_settings.BAPH_AUTH_WITHOUT_USERNAMES = False
         self.client.login(identification='john', password='blowfish')
 
         new_password = 'suckfish'
@@ -384,7 +388,7 @@ class RegistrationViewsTests(TestCase):
         # Check that the new password is set.
         session = orm.sessionmaker()
         john = session.query(User).filter_by(username='john').first()
-        session.close()
+        #session.close()
         self.failUnless(john.check_password(new_password))
 
     '''

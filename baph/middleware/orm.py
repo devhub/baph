@@ -11,7 +11,7 @@ from baph.db.orm import ORM
 
 class SQLAlchemyMiddleware(object):
     ''' Django middleware which closes the request-bound session
-        If the request throws an exception, the current SQL transaction 
+        If the request throws an exception, the current SQL transaction
         is rolled back.
     '''
     def process_response(self, request, response):

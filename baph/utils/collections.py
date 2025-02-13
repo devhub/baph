@@ -49,6 +49,9 @@ def flatten(l):
     return ltype(l)
 
 
+OrderedDefaultDict = defaultdict
+
+"""
 class OrderedDefaultDict(defaultdict, OrderedDict):
     '''A :class:`dict` subclass with the characteristics of both
     :class:`~collections.defaultdict` and :class:`~collections.OrderedDict`.
@@ -56,3 +59,4 @@ class OrderedDefaultDict(defaultdict, OrderedDict):
     def __init__(self, default_factory, *args, **kwargs):
         defaultdict.__init__(self, default_factory)
         OrderedDict.__init__(self, *args, **kwargs)
+"""
