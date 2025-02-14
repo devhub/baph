@@ -4,6 +4,9 @@ from django.db.utils import ConnectionHandler
 
 DEFAULT_DB_ALIAS = 'default'
 
+def is_transactional_test():
+    return (getattr(settings, 'IS_TEST', False) &
+            getattr(settings, 'USE_TRANSACTIONS', False))
 
 def get_tablename(obj):
     if hasattr(obj, '__table__'):

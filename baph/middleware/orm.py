@@ -7,6 +7,7 @@
 '''
 
 from baph.db.orm import ORM
+from baph.db.utils import is_transactional_test
 
 
 class SQLAlchemyMiddleware(object):
@@ -18,8 +19,13 @@ class SQLAlchemyMiddleware(object):
         session = ORM.get().sessionmaker()
         if response.status_code >= 400:
             session.expunge_all()
-        session.commit()
-        session.close()
+
+        if is_transactional_test():
+            session.flush()
+        else:
+            session.commit()
+            session.close()
+
         return response
 
     def process_exception(self, request, exception):

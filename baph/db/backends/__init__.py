@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.pool import NullPool
 
 from baph.db import DEFAULT_DB_ALIAS
+from baph.db.utils import is_transactional_test
 from baph.middleware.request import get_request
 
 
@@ -88,8 +89,7 @@ def find_circular_dependencies(metadata):
 
 
 def scopefunc():
-    if (getattr(settings, 'IS_TEST', False) &
-        getattr(settings, 'USE_TRANSACTIONS', False)):
+    if is_transactional_test():
         # force sessionmaker to always return the same session regardless
         # of thread or active request. This means the session will always
         # be aware of flushes
