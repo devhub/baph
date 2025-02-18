@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from distutils.core import setup
-from setuptools import find_packages
+from setuptools import find_packages, setup
 
 setup(name='baph',
       version='0.3.4',
