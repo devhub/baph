@@ -163,83 +163,37 @@ class TransactionTestCase(test.TransactionTestCase):
 class TestCase(TransactionTestCase):
     @classmethod
     def setUpClass(cls):
-        #print('BaphTest.setupClass start')
         super(TestCase, cls).setUpClass()
-        if not use_transactions:
-            return
-
-        cls.done = False
-
-        #print('  outer trans begin')
-        cls.outer = cls.session.begin_nested()
-        #print('  outer trans:', cls.outer._state)
-
-        fixtures = getattr(cls, 'persistent_fixtures', getattr(cls, 'fixtures', None))
-
-        if fixtures:
-            try:
-                cls.load_fixtures(*fixtures)
-            except Exception:
-                cls.outer.rollback()
-                raise
-        try:
-            cls.setUpTestData()
-        except Exception:
-            cls.outer.rollback()
-            raise
-
-        cls.inner = cls.session.begin_nested()
-        cls.inner2 = cls.session.begin_nested()
-
-        def restart_transaction(session, trans):
-            #print('restart trans:', id(trans))
-            #print(id(cls.outer), id(cls.inner), id(cls.inner2))
-            #print(cls.outer.is_active, cls.inner.is_active, cls.inner2.is_active)
-            
-            if trans is cls.outer:
-                assert False
-            if not cls.inner.is_active:
-                cls.inner = cls.session.begin_nested()
-                cls.inner2 = cls.session.begin_nested()
-
-            elif not cls.inner2.is_active:
-                cls.inner2 = cls.session.begin_nested()
-                cls.session.expire_all()
-
-        cls.event_params = (cls.session, "after_transaction_end", restart_transaction)
-        event.listen(*cls.event_params)
-        #print('BaphTest.setupClass end')
+        if use_transactions:
+            cls.fixture_nested = cls.session.begin_nested()
 
     @classmethod
     def tearDownClass(cls):
-        #print('BaphTest.teardownClass start')
         if use_transactions:
-            event.remove(*cls.event_params)
-            cls.done = True
-            #print('  outer trans rollback')
             with timer('rollback'):
-                cls.outer.rollback()
+                cls.fixture_nested.rollback()
         super(TestCase, cls).tearDownClass()
-        #print('BaphTest.teardownClass end')
 
     @classmethod
     def setUpTestData(cls):
         """Load initial data for the TestCase"""
         pass
 
+    def setUp(self):
+        super(TestCase, self).setUp()
+        self.test_nested = cls.session.begin_nested()
+
+    def tearDown(self):
+        self.test_nested.rollback()
+        super(TestCase, self).tearDown()
+
     def _fixture_setup(self):
-        if not use_transactions:
-            self.setUpTestData()
-            return super(TestCase, self)._fixture_setup()
+        super(TestCase, self)._fixture_setup()
+        self.setUpTestData()
+        return
 
     def _fixture_teardown(self):
-        #self.session.expunge_all()
-        if not use_transactions:
-            return super(TestCase, self)._fixture_teardown()
-        with timer('rollback'):
-            #print('  inner trans rollback')
-            self.inner.rollback()
-        self.session.expunge_all()
+        super(TestCase, self)._fixture_teardown()
 
 
 class MemcacheMixin(object):
