@@ -65,7 +65,9 @@ class TransactionTestCase(test.TransactionTestCase):
     @classmethod
     def tearDownClass(cls):
         #print('BaphTTest.teardownClass start')
-        cls.session.close()
+        
+        if not use_transactions:
+            cls.session.close()
         if PRINT_TEST_TIMINGS:
             add_timing.disconnect(cls.add_timing)
             cls.test_end_time = timeit.default_timer()
@@ -160,18 +162,28 @@ class TransactionTestCase(test.TransactionTestCase):
         self.assertEqual(items, ordered)
 
 
+def dwelte_instrument(session):
+    def close():
+        raise Exception("whoops")
+    session.close = close
+
 class TestCase(TransactionTestCase):
     @classmethod
     def setUpClass(cls):
+        print("============================ setup class")
         super(TestCase, cls).setUpClass()
         if use_transactions:
             cls.fixture_nested = cls.session.begin_nested()
+            print(cls.fixture_nested)
+        print(cls.session)
 
     @classmethod
     def tearDownClass(cls):
         if use_transactions:
-            with timer('rollback'):
+            if cls.fixture_nested.is_active:
+                print("=============== yeah, the test nested needed to be rolled back")
                 cls.fixture_nested.rollback()
+            cls.session.rollback()
         super(TestCase, cls).tearDownClass()
 
     @classmethod
@@ -180,12 +192,28 @@ class TestCase(TransactionTestCase):
         pass
 
     def setUp(self):
+        print("============================ setup")
         super(TestCase, self).setUp()
-        self.test_nested = cls.session.begin_nested()
+        self.test_nested = self.session.begin_nested()
+
+        def end_savepoint(session, transaction):
+            if not self.test_nested.is_active:
+                self.test_nested = self.session.begin_nested()
+
+        self.end_savepoint_fn = end_savepoint
+        event.listen(self.session, "after_transaction_end", end_savepoint)
+        print(self.session)
 
     def tearDown(self):
+        print("============================ teardown")
+        event.remove(self.session, "after_transaction_end", self.end_savepoint_fn)
         self.test_nested.rollback()
         super(TestCase, self).tearDown()
+
+    def run(self, *args, **kwargs):
+        print("============================ run")
+        super(TestCase, self).run(*args, **kwargs)
+        #print('BaphTest.run end:\n')
 
     def _fixture_setup(self):
         super(TestCase, self)._fixture_setup()
