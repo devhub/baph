@@ -20,11 +20,7 @@ class SQLAlchemyMiddleware(object):
         if response.status_code >= 400:
             session.expunge_all()
 
-        if is_transactional_test():
-            session.flush()
-        else:
-            session.commit()
-            session.close()
+        session.commit()
 
         return response
 
