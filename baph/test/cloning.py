@@ -316,6 +316,8 @@ class CloningTestMixin(object):
       '(initial has %s, clone has %s)'
       % (cls_name, cls_name, len(old), len(new)))
     old, new = self.normalize_collections(old, new)
+    print(old)
+    print(new)
     for old_, new_ in zip(old, new):
       self.compare_objects(old_, new_, path, extra_rules)
 
