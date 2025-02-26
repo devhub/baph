@@ -114,8 +114,7 @@ class TransactionTestCase(test.TransactionTestCase):
         }
         with timer('loaddata'):
             call_command('loaddata', *fixtures, **params)
-        if not use_transactions:
-            cls.session.commit()
+        cls.session.commit()
 
     @classmethod
     def purge_fixtures(cls, *fixtures):
@@ -169,28 +168,33 @@ def dwelte_instrument(session):
 
 class TestCase(TransactionTestCase):
     @classmethod
-    def end_savepoint(cls, session, transaction):
-        if not cls.test_nested.is_active:
-            cls.test_nested = cls.session.begin_nested()
+    def end_fixture_tx(cls, session, transaction):
+        if not cls.fixture_tx.is_active:
+            cls.fixture_tx = cls.session.begin_nested()
+
+    @classmethod
+    def end_test_tx(cls, session, transaction):
+        if not cls.test_tx.is_active:
+            cls.test_tx = cls.session.begin_nested()
 
     @classmethod
     def setUpClass(cls):
         super(TestCase, cls).setUpClass()
         if use_transactions:
-            cls.fixture_nested = cls.session.begin_nested()
-            cls.test_nested = cls.session.begin_nested()
+            cls.fixture_tx = cls.session.begin_nested()
+            cls.test_tx = cls.session.begin_nested()
 
-            event.listen(cls.session, "after_transaction_end", cls.end_savepoint, cls)
+            event.listen(cls.session, "after_transaction_end", cls.end_test_tx, cls)
 
     @classmethod
     def tearDownClass(cls):
         if use_transactions:
-            event.remove(cls.session, "after_transaction_end", cls.end_savepoint)
+            event.remove(cls.session, "after_transaction_end", cls.end_test_tx)
 
-            if cls.test_nested.is_active:
-                cls.test_nested.rollback()
-            if cls.fixture_nested.is_active:
-                cls.fixture_nested.rollback()
+            if cls.test_tx.is_active:
+                cls.test_tx.rollback()
+            if cls.fixture_tx.is_active:
+                cls.fixture_tx.rollback()
 
             cls.session.rollback()
         super(TestCase, cls).tearDownClass()
@@ -202,13 +206,18 @@ class TestCase(TransactionTestCase):
 
     def tearDown(self):
         if use_transactions:
-            self.test_nested.rollback()
+            self.test_tx.rollback()
         super(TestCase, self).tearDown()
 
     def _fixture_setup(self):
+        if use_transactions:
+            event.listen(self.session, "after_transaction_end", self.end_fixture_tx, type(self))
         super(TestCase, self)._fixture_setup()
         self.setUpTestData()
-        return
+        self.session.flush()
+        self.session.expunge_all()
+        if use_transactions:
+            event.remove(self.session, "after_transaction_end", self.end_fixture_tx)
 
     def _fixture_teardown(self):
         super(TestCase, self)._fixture_teardown()

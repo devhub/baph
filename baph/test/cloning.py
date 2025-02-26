@@ -308,8 +308,6 @@ class CloningTestMixin(object):
     return (old, new)
 
   def compare_collections(self, old, new, path, cls_name, extra_rules=None):
-    print([i.path for i in old])
-    print([i.path for i in new])
     self.assertGreater(len(old), 0,
       'Initial %s count is 0. %s cloning cannot be tested'
       % (cls_name, cls_name))
