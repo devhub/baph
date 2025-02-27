@@ -13,5 +13,5 @@ class Command(BaseCommand):
         tables = [(table.schema or default_schema, table.name)
             for table in Base.metadata.tables.values()]
         for table in sorted(tables):
-            print '.'.join(table)
+            print('.'.join(table))
 
