@@ -6,6 +6,7 @@
 .. moduleauthor:: Mark Lee <markl@evomediagroup.com>
 '''
 
+from django.conf import settings
 from baph.db.orm import ORM
 
 
