@@ -19,6 +19,8 @@ class SQLAlchemyMiddleware(object):
         if response.status_code >= 400:
             session.expunge_all()
         session.commit()
+        if not getattr(settings, 'USE_TRANSACTIONS', False):
+            session.close()
         return response
 
     def process_exception(self, request, exception):
