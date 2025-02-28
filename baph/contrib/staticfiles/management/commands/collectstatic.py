@@ -3,8 +3,6 @@ from collections import OrderedDict
 
 from django.contrib.staticfiles.finders import get_finders
 from django.contrib.staticfiles.storage import staticfiles_storage
-print 'storage:', staticfiles_storage
-
 from django.core.files.storage import FileSystemStorage
 from django.core.management.color import no_style
 from django.utils.functional import cached_property

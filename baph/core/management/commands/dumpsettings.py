@@ -59,4 +59,4 @@ class Command(BaseCommand):
     if pretty:
       pprint.pprint(output)
     else:
-      print output
+      print(output)

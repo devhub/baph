@@ -6,6 +6,7 @@
 .. moduleauthor:: Mark Lee <markl@evomediagroup.com>
 '''
 
+from django.conf import settings
 from baph.db.orm import ORM
 
 
@@ -19,7 +20,8 @@ class SQLAlchemyMiddleware(object):
         if response.status_code >= 400:
             session.expunge_all()
         session.commit()
-        session.close()
+        if not getattr(settings, 'USE_TRANSACTIONS', False):
+            session.close()
         return response
 
     def process_exception(self, request, exception):
