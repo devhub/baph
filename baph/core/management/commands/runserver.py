@@ -1,4 +1,9 @@
-import mimetools
+try:
+  # py2
+  from mimetools import Message as MessageBase
+except ImportError:
+  # py3
+  from email.message import Message as MessageBase
 
 from django.contrib.staticfiles.management.commands import runserver
 from django.core.servers.basehttp import WSGIRequestHandler
@@ -8,11 +13,11 @@ from baph.core.management.new_base import BaseCommand
 from baph.core.management.validation import get_validation_errors
 
 
-class Message(mimetools.Message):
+class Message(MessageBase):
 
   def __init__(self, *args, **kwargs):
     self.raw_header_names = set()
-    mimetools.Message.__init__(self, *args, **kwargs)
+    Message.__init__(self, *args, **kwargs)
 
   def isheader(self, line):
     i = line.find(':')
