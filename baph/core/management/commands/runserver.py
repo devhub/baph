@@ -1,4 +1,3 @@
-from cStringIO import StringIO
 import mimetools
 
 from django.contrib.staticfiles.management.commands import runserver
