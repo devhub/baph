@@ -16,7 +16,7 @@ class Message(WSGIRequestHandler.MessageClass):
 
   def __init__(self, *args, **kwargs):
     self.raw_header_names = set()
-    super(Message, self).__init__(self, *args, **kwargs)
+    super(Message, self).__init__(*args, **kwargs)
 
   def isheader(self, line):
     i = line.find(':')
