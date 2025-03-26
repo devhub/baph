@@ -12,11 +12,11 @@ from baph.core.management.new_base import BaseCommand
 from baph.core.management.validation import get_validation_errors
 
 
-class Message(WSGIRequestHandler.MessageClass):
+class Message(object):
 
   def __init__(self, *args, **kwargs):
     self.raw_header_names = set()
-    super(Message, self).__init__(*args, **kwargs)
+    WSGIRequestHandler.MessageClass.__init__(self, *args, **kwargs)
 
   def isheader(self, line):
     i = line.find(':')
