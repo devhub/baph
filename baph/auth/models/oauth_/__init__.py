@@ -11,7 +11,7 @@ from baph.db import ORM
 orm = ORM.get()
 Base = orm.Base
 
-MAX_KEY_LEN = 255
+MAX_KEY_LEN = 32
 MAX_SECRET_LEN = 255
 KEY_LEN = 32
 SECRET_LEN = 32
