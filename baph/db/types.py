@@ -25,6 +25,7 @@ from sqlalchemy.ext.mutable import Mutable
 class Email(types.TypeDecorator):
     impl = types.Unicode
 
+
 class UUID(types.TypeDecorator):
     '''Generic UUID column type for SQLAlchemy. Includes native support for
     PostgreSQL and a MySQL-specific implementation, in addition to the
@@ -75,13 +76,13 @@ class UUID(types.TypeDecorator):
     def is_mutable(self):
         return False
 
+
 class Json(types.TypeDecorator):
     impl = types.Unicode
 
     def process_bind_param(self, value, dialect):
         if value is None:
             return None
-        #return json.dumps(value)
         return json.dumps(value)
 
     def process_result_value(self, value, dialect):
@@ -89,16 +90,23 @@ class Json(types.TypeDecorator):
             return None
         return json.loads(value)
 
+
 JsonType = Json
+
 
 class JsonText(JsonType):
     impl = types.UnicodeText
 
-class List(JsonText):
 
+class List(JsonText):
     @property
     def python_type(self):
         return list
+
+
+class ListVarchar(List):
+    impl = types.Unicode
+
 
 # http://docs.sqlalchemy.org/en/latest/orm/extensions/mutable.html
 
@@ -127,6 +135,7 @@ class MutableDict(Mutable, dict):
 
         dict.__delitem__(self, key)
         self.changed()
+
 
 class MutableList(Mutable, list):
     @classmethod
@@ -180,6 +189,11 @@ class Dict(JsonText):
     @property
     def python_type(self):
         return dict
+
+
+class DictVarchar(Dict):
+    impl = types.Unicode
+
 
 class TZAwareDateTime(types.TypeDecorator):
     impl = types.DateTime
