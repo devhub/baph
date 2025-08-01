@@ -97,6 +97,7 @@ class MemcacheServer(object):
             while line:
                 # readline splits on '\r\n', we still need to split on '\n'
                 item, sep, line = line.partition('\n')
+                item = item.strip()
                 if item == 'END':
                     return lines
                 else:
