@@ -31,11 +31,13 @@ FIELD_MAP = {
     Boolean:        forms.BooleanField,
     types.Json:     fields.JsonField,
     types.List:     fields.ListField,
+    types.ListVarchar: fields.ListField,
     types.Dict:     fields.DictField,
+    types.DictVarchar: fields.DictField,
     types.Email:    forms.EmailField,
     'collection':   fields.MultiObjectField,
     'object':       fields.ObjectField,
-    }
+}
 ALL_FIELDS = '__all__'
 
 orm = ORM.get()
