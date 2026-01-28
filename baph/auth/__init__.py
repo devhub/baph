@@ -10,7 +10,7 @@ from baph.utils.module_loading import import_string
 default_app_config = 'baph.auth.apps.AuthConfig'
 
 
-def login(request, user):
+def login(request, user, update_last_login=True):
     '''Persist a user id and a backend in the request. This way a user doesn't
     have to reauthenticate on every request.
 
@@ -26,8 +26,9 @@ def login(request, user):
         user = request.user
     # TODO: It would be nice to support different login methods, like signed
     # cookies.
-    user.last_login = datetime.now()
-    session.commit()
+    if update_last_login:
+        user.last_login = datetime.now()
+        session.commit()
 
     if SESSION_KEY in request.session:
         if request.session[SESSION_KEY] != user.id:
