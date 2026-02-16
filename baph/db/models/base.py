@@ -16,7 +16,7 @@ from sqlalchemy.orm import attributes, mapper, object_session
 from sqlalchemy.orm.interfaces import MANYTOONE
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
 from sqlalchemy.orm.session import Session
-from sqlalchemy.orm.util import has_identity, identity_key
+from sqlalchemy.orm.util import has_identity
 from sqlalchemy.schema import ForeignKeyConstraint
 
 from baph.db import ORM
@@ -24,7 +24,7 @@ from baph.db.models import signals
 from baph.db.models.loading import get_model, register_models
 from baph.db.models.mixins import CacheMixin, GlobalMixin, ModelPermissionMixin
 from baph.db.models.options import Options
-from baph.db.models.utils import key_to_value
+from baph.db.models.utils import key_to_value, identity_key
 from baph.utils.functional import cachedclassproperty
 from baph.utils.importing import remove_class
 from baph.utils.module_loading import import_string
@@ -150,9 +150,7 @@ class Model(CacheMixin, ModelPermissionMixin, GlobalMixin):
     def pk_as_query_filters(self, force=False):
         " returns a filter expression for the primary key of the instance "
         " suitable for use with Query.filter() "
-        ident = identity_key(instance=self)
-        (cls, pk_values) = ident[:2]
-
+        (cls, pk_values) = identity_key(instance=self)
         if None in pk_values and not force:
             return None
         items = zip(self.pk_attrs, pk_values)

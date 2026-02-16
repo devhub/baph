@@ -15,9 +15,10 @@ from sqlalchemy.ext.hybrid import hybrid_method
 from sqlalchemy.orm import class_mapper, object_session
 from sqlalchemy.orm.attributes import get_history, instance_dict
 from sqlalchemy.orm.properties import ColumnProperty, RelationshipProperty
-from sqlalchemy.orm.util import has_identity, identity_key
+from sqlalchemy.orm.util import has_identity
 
 from baph.db import ORM
+from baph.db.models.utils import identity_key
 from .utils import column_to_attr, class_resolver
 
 
@@ -611,8 +612,7 @@ class CacheMixin(object):
           # the fields which trigger this pointer were not changed
           continue
         cache_key = raw_key % data
-        ident_key = identity_key(instance=self) 
-        _, ident = ident_key[:2]
+        (_, ident) = identity_key(instance=self) 
         if len(ident) > 1:
           ident = ','.join(map(str, ident))
         else:
